@@ -1,0 +1,44 @@
+{
+  "name": "nuxt-app",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@10.13.1+sha512.37ebf1a5c7a30d5fabe0c5df44ee8da4c965ca0c5af3dbab28c3a1681b70a256218d05c81c9c0dcf767ef6b8551eb5b960042b9ed4300c59242336377e01cfad",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "prepare": "simple-git-hooks",
+    "up": "taze latest -I -f",
+    "prettier": "prettier --write .",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@nuxt/image": "1.10.0",
+    "@nuxt/ui": "^3.2.0",
+    "nuxt": "^4.0.0",
+    "vue": "^3.5.17"
+  },
+  "devDependencies": {
+    "@ayingott/eslint-config": "^2.0.5",
+    "@ayingott/prettier-config": "^2.1.5",
+    "eslint": "^9.31.0",
+    "lint-staged": "^16.1.2",
+    "prettier": "^3.6.2",
+    "simple-git-hooks": "^2.13.0",
+    "tailwindcss": "^4.1.11",
+    "taze": "^19.1.0",
+    "vue-router": "latest"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm exec lint-staged"
+  },
+  "lint-staged": {
+    "*": [
+      "eslint --fix",
+      "prettier --write --ignore-unknown"
+    ]
+  },
+  "prettier": "@ayingott/prettier-config"
+}
