@@ -9,7 +9,7 @@
 | 路径 | 职责 | 依赖方向 |
 |---|---|---|
 | `src/` | Vue 页面、组件与浏览器连接管理。 | 依赖 `shared/` |
-| `shared/bp/` | BP 规则：26 步权威顺序、互斥池、BP 进度状态。 | 无外部依赖 |
+| `shared/bp/` | BP 规则：26 步权威顺序、互斥池、BP 进度状态。 | 不依赖浏览器或 Workers 运行时，可依赖 Zod 与共享 schema |
 | `shared/`（根） | 房间状态、命令契约与纯函数状态转换（`room.ts`、`commands.ts`、`transitions.ts`、`ids.ts`）。 | 依赖 `shared/bp/` |
 | `shared/contracts/` | 网络合同：HTTP、视图投影、WebSocket、归档记录、版本信息。 | 依赖 `shared/` 根与 `shared/bp/` |
 | `shared/api.ts` | 引导期的 `/api/health` 契约，保留兼容；房间协议不在此扩展。 | — |
@@ -26,8 +26,8 @@
   客户端不可读、不可自报。
 - JSON 响应与 WebSocket 广播绝不包含凭据；有效身份重开页面即可恢复当前
   角色（房主、席位或观众由房间状态派生）。
-- 昵称仅用于展示，不用于身份查找；路由参数与房间/成员/代理人等机器 ID
-  均由服务端生成与校验。
+- 昵称仅用于展示，不用于身份查找；房间与成员 ID 由服务端生成，代理人 ID
+  来自构建时固定的数据目录；路由参数与各类 ID 均由服务端校验。
 - 命令入口只接收服务端凭据解析出的 `RoomActor`；客户端载荷中的自报字段
   被 Zod 剥离，`targetMemberId` 只是席位的被安排对象，不是操作者身份。
 
@@ -83,11 +83,12 @@
 ## 视图投影
 
 合同定义于 [shared/contracts/views.ts](../shared/contracts/views.ts)。
-投影按显式白名单构造，绝不直接转发 `RoomState`：
+投影按显式白名单构造（嵌套对象同样逐字段重建，不共享输入引用），
+绝不直接转发 `RoomState`：
 
 | 视图 | 内容 | 接收者 |
 |---|---|---|
-| 公开 BP 视图 | 房名、队名、BP 状态、当前操作位、公开结果、公开预选、规则与数据版本、revision。 | 全部查看者可见的最小集合 |
+| 公开 BP 视图 | 房名、队名、席位占用（匿名布尔，支撑空席「待选择」展示）、BP 状态、当前操作位、公开结果、公开预选、规则与数据版本、revision。 | 全部查看者可见的最小集合 |
 | 成员视图 | 公开内容 + 自身身份/席位 + 命令所需 `bpVersion`。 | 普通成员 |
 | 房主管理视图 | 成员视图 + 全体成员（昵称、席位、在线）。 | 仅房主 |
 | 展示视图 | 与公开 BP 视图同形，无成员数据。 | 匿名展示连接 |
@@ -116,6 +117,6 @@
 
 | PR | 接入点 |
 |---|---|
-| PR4（HTTP/WS 服务端） | 路由按本合同分流；命令经 `applyRoomCommand` / `setMemberOnline` 执行后按身份投影下发。 |
-| PR5（连接与去重） | 多页面连接计数驱动 `setMemberOnline`；`operationId` 持久化去重回执。 |
+| PR4（持久房间与 HTTP） | 房间 Durable Object 持久化、HTTP 建房/入房路由、匿名身份凭据与 Cookie 生成。 |
+| PR5（成员 WS 与同步） | 成员 WS 命令经 `applyRoomCommand` / `setMemberOnline` 执行并按身份投影广播、多页面在线计数、`operationId` 持久化去重回执。 |
 | PR9（归档与清理） | Alarm 与读写路径共用到期检查；到期经 `projectArchiveSnapshot` 生成快照或清理空房间。 |

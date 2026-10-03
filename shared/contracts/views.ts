@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { bpSlotIdSchema, bpTeamSchema, currentBpStep } from "../bp/steps";
+import { bpSlotIdSchema, bpTeamSchema, currentBpStep, type BpTeam } from "../bp/steps";
 import { bpStatusSchema, bpSubmissionSchema } from "../bp/state";
 import { agentIdSchema, memberIdSchema, type MemberId } from "../ids";
 import { nicknameSchema, roomNameSchema, teamNamesSchema, type RoomState } from "../room";
@@ -8,20 +8,33 @@ import { versionInfoSchema, type VersionInfo } from "./versions";
 /**
  * 视图投影合同：服务端向客户端与展示连接下发的可见内容。
  *
- * 投影按显式白名单构造，绝不直接转发 RoomState；成员凭据、成员列表、
+ * 投影按显式白名单构造，绝不直接转发 RoomState；嵌套对象（队名、
+ * 提交序列、版本信息）同样逐字段重建，既防止内部扩展字段随引用
+ * 泄漏，也保证修改视图输出不会污染房间状态。成员凭据、成员列表、
  * 在线管理数据只进入有权查看的视图。产品展示规则见
  * docs/specs/room-layout.md，此处只维护数据边界。
  */
 
 /**
+ * 席位占用：仅以匿名布尔表达 A/B 席是否有选手，支持「席位为空时显示
+ * 待选择」的公开展示，不泄漏成员身份。
+ */
+export const seatOccupancySchema = z.object({
+  A: z.boolean(),
+  B: z.boolean(),
+} satisfies Record<BpTeam, z.ZodType>);
+export type SeatOccupancy = z.infer<typeof seatOccupancySchema>;
+
+/**
  * 公开 BP 视图：所有查看者可见的最小集合。
  *
- * 含房名、队名、BP 状态、当前操作位、已确认公开结果、公开预选、
- * 规则与数据版本、公开 revision；不含任何成员数据或凭据。
+ * 含房名、队名、席位占用、BP 状态、当前操作位、已确认公开结果、
+ * 公开预选、规则与数据版本、公开 revision；不含任何成员数据或凭据。
  */
 export const bpPublicViewSchema = z.object({
   roomName: roomNameSchema,
   teamNames: teamNamesSchema,
+  seatOccupancy: seatOccupancySchema,
   bpStatus: bpStatusSchema,
   /** 当前操作位；无待确认位置（待开始/已完成）时为 null。 */
   currentSlotId: bpSlotIdSchema.nullable(),
@@ -90,14 +103,20 @@ export function projectBpPublicView(state: RoomState, versions: VersionInfo): Bp
   // 仅进行中与已暂停有当前操作位：待开始未开局、已完成无待确认位置；
   // 暂停时保留当前槽位（含高亮与预选展示）。
   const hasActiveSlot = state.bp.status === "running" || state.bp.status === "paused";
+  // 嵌套对象逐字段重建：输入上的扩展字段不随引用进入视图，修改视图
+  // 输出也不会污染房间状态或传入的版本信息。
   return {
     roomName: state.name,
-    teamNames: state.teamNames,
+    teamNames: { A: state.teamNames.A, B: state.teamNames.B },
+    seatOccupancy: { A: state.seats.A !== null, B: state.seats.B !== null },
     bpStatus: state.bp.status,
     currentSlotId: hasActiveSlot && step !== null ? step.slotId : null,
-    submissions: state.bp.submissions,
+    submissions: state.bp.submissions.map((submission) => ({
+      slotId: submission.slotId,
+      agentId: submission.agentId,
+    })),
     preselect: state.bp.preselect,
-    versions,
+    versions: { ruleVersion: versions.ruleVersion, agentDataVersion: versions.agentDataVersion },
     revision: state.revision,
   };
 }

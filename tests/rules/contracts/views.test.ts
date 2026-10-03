@@ -41,11 +41,16 @@ describe("视图投影：白名单与隐私", () => {
       "preselect",
       "revision",
       "roomName",
+      "seatOccupancy",
       "submissions",
       "teamNames",
       "versions",
     ]);
-    // 序列化结果不含成员 ID、昵称、在线数据或席位
+    // 嵌套对象字段集合同样固定
+    expect(Object.keys(view.teamNames).sort()).toEqual(["A", "B"]);
+    expect(Object.keys(view.seatOccupancy).sort()).toEqual(["A", "B"]);
+    expect(Object.keys(view.versions).sort()).toEqual(["agentDataVersion", "ruleVersion"]);
+    // 序列化结果不含成员 ID、昵称、在线数据或席位成员
     const serialized = JSON.stringify(view);
     for (const secret of [
       HOST_ID,
@@ -57,6 +62,78 @@ describe("视图投影：白名单与隐私", () => {
       "online",
       "seats",
     ]) {
+      expect(serialized.includes(secret)).toBe(false);
+    }
+  });
+
+  it("嵌套对象按白名单重建：各层注入的内部字段均不泄漏", () => {
+    let state = startedRoom();
+    state = confirmStep(state, PLAYER_A_ID, "AB1", "agent-01");
+    // 模拟服务端异常在状态各层与版本信息上挂内部字段（合成 token）
+    const tainted = {
+      ...state,
+      credential: "token-top-level",
+      teamNames: { ...state.teamNames, credential: "token-team-names" },
+      bp: {
+        ...state.bp,
+        submissions: state.bp.submissions.map((submission) => ({
+          ...submission,
+          credential: "token-submission",
+        })),
+      },
+    } as unknown as RoomState;
+    const taintedVersions = {
+      ...versions,
+      credential: "token-versions",
+    } as VersionInfo;
+
+    const view = projectBpPublicView(tainted, taintedVersions);
+    const serialized = JSON.stringify(view);
+    for (const token of [
+      "token-top-level",
+      "token-team-names",
+      "token-submission",
+      "token-versions",
+      "credential",
+    ]) {
+      expect(serialized.includes(token)).toBe(false);
+    }
+    // 重建后的嵌套内容与原值一致，且提交条目只含白名单字段
+    expect(view.teamNames).toEqual({ A: "左方", B: "右方" });
+    expect(view.submissions).toEqual([{ slotId: "AB1", agentId: "agent-01" }]);
+    expect(Object.keys(view.submissions[0]).sort()).toEqual(["agentId", "slotId"]);
+    expect(view.versions).toEqual({ ruleVersion: "rules-test", agentDataVersion: "agents-test" });
+  });
+
+  it("修改视图输出的嵌套数据不会污染输入状态与版本信息", () => {
+    const state = startedRoom();
+    const before = structuredClone(state);
+    const view = projectBpPublicView(state, versions);
+    // 视图与输入不共享嵌套引用
+    expect(view.teamNames).not.toBe(state.teamNames);
+    expect(view.submissions).not.toBe(state.bp.submissions);
+    expect(view.versions).not.toBe(versions);
+    // 修改输出后输入保持不变
+    view.teamNames.A = "被修改";
+    view.seatOccupancy.A = false;
+    view.versions.ruleVersion = "被修改";
+    expect(state).toEqual(before);
+    expect(versions).toEqual({ ruleVersion: "rules-test", agentDataVersion: "agents-test" });
+  });
+
+  it("席位占用：空席与已占席在公开视图中可区分且不泄漏成员", () => {
+    // 同房名、同队名、同 revision 的待开始房间，仅 A 席有无选手不同
+    const occupied = buildRoom();
+    const emptySeat = buildRoom({ seatA: null });
+    const occupiedView = projectBpPublicView(occupied, versions);
+    const emptyView = projectBpPublicView(emptySeat, versions);
+    expect(occupiedView.seatOccupancy).toEqual({ A: true, B: true });
+    expect(emptyView.seatOccupancy).toEqual({ A: false, B: true });
+    // 除席位占用外其余公开内容完全一致
+    expect({ ...emptyView, seatOccupancy: occupiedView.seatOccupancy }).toEqual(occupiedView);
+    // 席位占用不携带成员身份
+    const serialized = JSON.stringify(emptyView) + JSON.stringify(occupiedView);
+    for (const secret of [HOST_ID, PLAYER_A_ID, PLAYER_B_ID, AUDIENCE_ID, "房主", "A 选手"]) {
       expect(serialized.includes(secret)).toBe(false);
     }
   });
