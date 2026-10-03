@@ -5,8 +5,9 @@ import type { AgentEntry } from "./schema";
  *
  * 匹配规则依据 docs/specs/room-layout.md「代理人池搜索与筛选」：
  *
- * - 仅匹配代理人官方名称（包含匹配），不扩展别名、拼音或首字母；
- *   查询文本 trim 后为空则不限制。
+ * - 仅匹配代理人官方名称（简短名与数据包提供的官方全名 fullName），
+ *   包含匹配，不扩展社区昵称、别名、拼音或首字母；查询文本 trim 后
+ *   为空则不限制。
  * - 属性与特性两个维度内多选满足任意一项即可（OR）；不同维度与名称
  *   搜索之间需同时满足（AND）；未设置的条件不限制结果。
  * - 输入应包含全部状态的代理人；本函数不感知禁用/选用等业务状态，
@@ -42,7 +43,13 @@ export function filterAgentEntries(
   const specialtyIds = query.specialtyIds.length > 0 ? new Set(query.specialtyIds) : null;
 
   return agents.filter((entry) => {
-    if (name !== "" && !entry.name.includes(name)) return false;
+    if (
+      name !== "" &&
+      !entry.name.includes(name) &&
+      !(entry.fullName !== null && entry.fullName.includes(name))
+    ) {
+      return false;
+    }
     if (elementIds !== null && !elementIds.has(entry.elementId)) return false;
     if (specialtyIds !== null && !specialtyIds.has(entry.specialtyId)) return false;
     return true;

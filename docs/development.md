@@ -4,7 +4,8 @@
 
 ## 环境准备
 
-- Node.js ≥ 24（本地已验证 v24.18.0，`cloudflare.config.ts` 的加载要求 Node ≥ 22.18）。
+- Node.js ≥ 24.11.0（本地已验证 v24.18.0；`cloudflare.config.ts` 的加载要求 Node ≥ 22.18，
+  `@randomplay/data` 的 `engines` 要求 ≥ 24.11.0，项目声明与其对齐）。
 - pnpm 12（`package.json` 的 `packageManager` 字段固定版本，CI 与本地保持一致）。
 - 克隆后执行 `pnpm install`；CI 与发布验证使用 `pnpm install --frozen-lockfile`。
 

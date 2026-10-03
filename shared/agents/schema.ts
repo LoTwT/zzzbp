@@ -28,7 +28,8 @@ export type AgentClassificationId = z.infer<typeof agentClassificationIdSchema>;
 /**
  * 官方名称：trim 后 1 到 50 个 Unicode 码点。
  *
- * 取自数据包本地化详情的 name 原值；约束为防御性上限，空名称在生成与
+ * 取自数据包本地化详情的原值（简短名 `name` 与全名
+ * `partnerInfo.fullName`）；约束为防御性上限，空名称在生成与
  * 加载时都会失败，不允许静默丢弃条目。
  */
 export const officialAgentNameSchema = z.string().trim().min(1).max(50);
@@ -59,8 +60,14 @@ export type AgentClassification = z.infer<typeof agentClassificationSchema>;
 export const agentEntrySchema = z.object({
   /** 稳定 ID：上游数值 ID 的规范十进制字符串。 */
   id: agentSourceIdSchema,
-  /** 官方中文名称。 */
+  /** 官方中文名称（简短展示名）。 */
   name: officialAgentNameSchema,
+  /**
+   * 官方中文全名：上游本地化详情 `partnerInfo.fullName` 的原值（如
+   * 「星见雅」对应简短名「雅」）；来源未记录时为 null，不推测或合并
+   * 变体身份。与简短名同为官方名称，均参与搜索包含匹配。
+   */
+  fullName: officialAgentNameSchema.nullable(),
   /** 头像路径；数据包未记录时为 null，展示留空。 */
   avatarPath: agentResourcePathSchema,
   /** 属性分类 ID（引用 catalog.elements）。 */

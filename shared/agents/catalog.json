@@ -80,6 +80,7 @@
     {
       "id": "1011",
       "name": "安比",
+      "fullName": "安比·德玛拉",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle01.png",
       "elementId": "203",
       "specialtyId": "2"
@@ -87,6 +88,7 @@
     {
       "id": "1021",
       "name": "猫又",
+      "fullName": "猫宫又奈",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle11.png",
       "elementId": "200",
       "specialtyId": "1"
@@ -94,6 +96,7 @@
     {
       "id": "1031",
       "name": "妮可",
+      "fullName": "妮可·德玛拉",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle12.png",
       "elementId": "205",
       "specialtyId": "4"
@@ -101,6 +104,7 @@
     {
       "id": "1041",
       "name": "「11号」",
+      "fullName": "「11号」",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle05.png",
       "elementId": "201",
       "specialtyId": "1"
@@ -108,6 +112,7 @@
     {
       "id": "1051",
       "name": "伊德海莉",
+      "fullName": "伊德海莉·墨菲",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle52.png",
       "elementId": "202",
       "specialtyId": "6"
@@ -115,6 +120,7 @@
     {
       "id": "1061",
       "name": "可琳",
+      "fullName": "可琳·威克斯",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle09.png",
       "elementId": "200",
       "specialtyId": "1"
@@ -122,6 +128,7 @@
     {
       "id": "1071",
       "name": "凯撒",
+      "fullName": "凯撒·金",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle25.png",
       "elementId": "200",
       "specialtyId": "5"
@@ -129,6 +136,7 @@
     {
       "id": "1081",
       "name": "比利",
+      "fullName": "比利·奇德",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle10.png",
       "elementId": "200",
       "specialtyId": "1"
@@ -136,6 +144,7 @@
     {
       "id": "1091",
       "name": "雅",
+      "fullName": "星见雅",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle13.png",
       "elementId": "202",
       "specialtyId": "3"
@@ -143,6 +152,7 @@
     {
       "id": "1101",
       "name": "珂蕾妲",
+      "fullName": "珂蕾妲·贝洛伯格",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle14.png",
       "elementId": "201",
       "specialtyId": "2"
@@ -150,6 +160,7 @@
     {
       "id": "1111",
       "name": "安东",
+      "fullName": "安东·伊万诺夫",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle15.png",
       "elementId": "203",
       "specialtyId": "1"
@@ -157,6 +168,7 @@
     {
       "id": "1121",
       "name": "本",
+      "fullName": "本·比格",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle16.png",
       "elementId": "201",
       "specialtyId": "5"
@@ -164,6 +176,7 @@
     {
       "id": "1131",
       "name": "苍角",
+      "fullName": "苍角",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle17.png",
       "elementId": "202",
       "specialtyId": "4"
@@ -171,6 +184,7 @@
     {
       "id": "1141",
       "name": "莱卡恩",
+      "fullName": "冯·莱卡恩",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle18.png",
       "elementId": "202",
       "specialtyId": "2"
@@ -178,6 +192,7 @@
     {
       "id": "1151",
       "name": "露西",
+      "fullName": "露西亚娜·德·蒙特夫",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle27.png",
       "elementId": "201",
       "specialtyId": "4"
@@ -185,6 +200,7 @@
     {
       "id": "1161",
       "name": "莱特",
+      "fullName": "莱特",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle26.png",
       "elementId": "201",
       "specialtyId": "2"
@@ -192,6 +208,7 @@
     {
       "id": "1171",
       "name": "柏妮思",
+      "fullName": "柏妮思·怀特",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle32.png",
       "elementId": "201",
       "specialtyId": "3"
@@ -199,6 +216,7 @@
     {
       "id": "1181",
       "name": "格莉丝",
+      "fullName": "格莉丝·霍华德",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle20.png",
       "elementId": "203",
       "specialtyId": "3"
@@ -206,6 +224,7 @@
     {
       "id": "1191",
       "name": "艾莲",
+      "fullName": "艾莲·乔",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle21.png",
       "elementId": "202",
       "specialtyId": "1"
@@ -213,6 +232,7 @@
     {
       "id": "1201",
       "name": "悠真",
+      "fullName": "浅羽悠真",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle35.png",
       "elementId": "203",
       "specialtyId": "1"
@@ -220,6 +240,7 @@
     {
       "id": "1211",
       "name": "丽娜",
+      "fullName": "亚历山德丽娜·莎芭丝缇安",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle22.png",
       "elementId": "203",
       "specialtyId": "4"
@@ -227,6 +248,7 @@
     {
       "id": "1221",
       "name": "柳",
+      "fullName": "月城柳",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle31.png",
       "elementId": "203",
       "specialtyId": "3"
@@ -234,6 +256,7 @@
     {
       "id": "1241",
       "name": "朱鸢",
+      "fullName": "朱鸢",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle23.png",
       "elementId": "205",
       "specialtyId": "1"
@@ -241,6 +264,7 @@
     {
       "id": "1251",
       "name": "青衣",
+      "fullName": "青衣",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle29.png",
       "elementId": "203",
       "specialtyId": "2"
@@ -248,6 +272,7 @@
     {
       "id": "1261",
       "name": "简",
+      "fullName": "简·杜",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle24.png",
       "elementId": "200",
       "specialtyId": "3"
@@ -255,6 +280,7 @@
     {
       "id": "1271",
       "name": "赛斯",
+      "fullName": "赛斯·洛威尔",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle30.png",
       "elementId": "203",
       "specialtyId": "5"
@@ -262,6 +288,7 @@
     {
       "id": "1281",
       "name": "派派",
+      "fullName": "派派",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle28.png",
       "elementId": "200",
       "specialtyId": "3"
@@ -269,6 +296,7 @@
     {
       "id": "1291",
       "name": "雨果",
+      "fullName": "雨果·维拉德",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle42.png",
       "elementId": "202",
       "specialtyId": "1"
@@ -276,6 +304,7 @@
     {
       "id": "1301",
       "name": "奥菲丝&「鬼火」",
+      "fullName": "奥菲丝·马格努森&「鬼火」",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle49.png",
       "elementId": "201",
       "specialtyId": "1"
@@ -283,6 +312,7 @@
     {
       "id": "1311",
       "name": "耀嘉音",
+      "fullName": "耀嘉音",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle36.png",
       "elementId": "205",
       "specialtyId": "4"
@@ -290,6 +320,7 @@
     {
       "id": "1321",
       "name": "伊芙琳",
+      "fullName": "伊芙琳 · 舒瓦利耶",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle37.png",
       "elementId": "201",
       "specialtyId": "1"
@@ -297,6 +328,7 @@
     {
       "id": "1331",
       "name": "薇薇安",
+      "fullName": "薇薇安·班希",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle41.png",
       "elementId": "205",
       "specialtyId": "3"
@@ -304,6 +336,7 @@
     {
       "id": "1341",
       "name": "照",
+      "fullName": "照",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle56.png",
       "elementId": "202",
       "specialtyId": "5"
@@ -311,6 +344,7 @@
     {
       "id": "1351",
       "name": "波可娜",
+      "fullName": "波可娜·费雷尼",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle38.png",
       "elementId": "200",
       "specialtyId": "2"
@@ -318,6 +352,7 @@
     {
       "id": "1361",
       "name": "「扳机」",
+      "fullName": "「扳机」",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle39.png",
       "elementId": "203",
       "specialtyId": "2"
@@ -325,6 +360,7 @@
     {
       "id": "1371",
       "name": "仪玄",
+      "fullName": "仪玄",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle44.png",
       "elementId": "205",
       "specialtyId": "6"
@@ -332,6 +368,7 @@
     {
       "id": "1381",
       "name": "零号·安比",
+      "fullName": null,
       "avatarPath": null,
       "elementId": "203",
       "specialtyId": "1"
@@ -339,6 +376,7 @@
     {
       "id": "1391",
       "name": "橘福福",
+      "fullName": "橘福福",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle43.png",
       "elementId": "201",
       "specialtyId": "2"
@@ -346,6 +384,7 @@
     {
       "id": "1401",
       "name": "爱丽丝",
+      "fullName": "爱丽丝·泰姆菲尔德",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle46.png",
       "elementId": "200",
       "specialtyId": "3"
@@ -353,6 +392,7 @@
     {
       "id": "1411",
       "name": "柚叶",
+      "fullName": "浮波柚叶",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle47.png",
       "elementId": "200",
       "specialtyId": "4"
@@ -360,6 +400,7 @@
     {
       "id": "1421",
       "name": "潘引壶",
+      "fullName": "潘引壶",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle45.png",
       "elementId": "200",
       "specialtyId": "5"
@@ -367,6 +408,7 @@
     {
       "id": "1431",
       "name": "叶瞬光",
+      "fullName": "叶瞬光",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle55.png",
       "elementId": "200",
       "specialtyId": "1"
@@ -374,6 +416,7 @@
     {
       "id": "1441",
       "name": "真斗",
+      "fullName": "狛野真斗",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle51.png",
       "elementId": "201",
       "specialtyId": "6"
@@ -381,6 +424,7 @@
     {
       "id": "1451",
       "name": "卢西娅",
+      "fullName": "卢西娅·艾洛温",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle50.png",
       "elementId": "205",
       "specialtyId": "4"
@@ -388,6 +432,7 @@
     {
       "id": "1461",
       "name": "「席德」",
+      "fullName": "「席德」",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle48.png",
       "elementId": "203",
       "specialtyId": "1"
@@ -395,6 +440,7 @@
     {
       "id": "1471",
       "name": "般岳",
+      "fullName": "般岳",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle53.png",
       "elementId": "201",
       "specialtyId": "6"
@@ -402,6 +448,7 @@
     {
       "id": "1481",
       "name": "琉音",
+      "fullName": "琉音",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle54.png",
       "elementId": "200",
       "specialtyId": "2"
@@ -409,6 +456,7 @@
     {
       "id": "1491",
       "name": "千夏",
+      "fullName": "千夏",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle58.png",
       "elementId": "200",
       "specialtyId": "4"
@@ -416,6 +464,7 @@
     {
       "id": "1501",
       "name": "爱芮",
+      "fullName": "爱芮",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle57.png",
       "elementId": "205",
       "specialtyId": "3"
@@ -423,6 +472,7 @@
     {
       "id": "1511",
       "name": "南宫羽",
+      "fullName": "南宫羽",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle59.png",
       "elementId": "205",
       "specialtyId": "2"
@@ -430,6 +480,7 @@
     {
       "id": "1521",
       "name": "希希芙",
+      "fullName": "希希芙",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle60.png",
       "elementId": "203",
       "specialtyId": "1"
@@ -437,6 +488,7 @@
     {
       "id": "1531",
       "name": "星徽·比利",
+      "fullName": null,
       "avatarPath": null,
       "elementId": "200",
       "specialtyId": "6"
@@ -444,6 +496,7 @@
     {
       "id": "1541",
       "name": "普罗米娅",
+      "fullName": "普罗米娅",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle61.png",
       "elementId": "202",
       "specialtyId": "3"
@@ -451,6 +504,7 @@
     {
       "id": "1551",
       "name": "佩洛伊斯",
+      "fullName": null,
       "avatarPath": null,
       "elementId": "205",
       "specialtyId": "1"
@@ -458,6 +512,7 @@
     {
       "id": "1561",
       "name": "维琳娜",
+      "fullName": "维琳娜·艾嘉德",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle64.png",
       "elementId": "204",
       "specialtyId": "3"
@@ -465,6 +520,7 @@
     {
       "id": "1571",
       "name": "诺姆",
+      "fullName": "诺姆·霍洛维尔",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle65.png",
       "elementId": "201",
       "specialtyId": "2"
@@ -472,6 +528,7 @@
     {
       "id": "1581",
       "name": "蕾米埃尔",
+      "fullName": "蕾米埃尔·丹",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle67.png",
       "elementId": "300",
       "specialtyId": "3"
@@ -479,6 +536,7 @@
     {
       "id": "1591",
       "name": "希格莉德",
+      "fullName": "希格莉德·德拉叙尔",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle66.png",
       "elementId": "202",
       "specialtyId": "1"

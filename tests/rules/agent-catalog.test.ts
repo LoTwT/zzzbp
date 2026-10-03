@@ -8,6 +8,7 @@ import {
   agentDataVersion,
   toAgentCatalog,
   toAgentDisplayLookup,
+  toAgentImageUrl,
 } from "../../shared/agents/catalog";
 import { EMPTY_AGENT_POOL_QUERY, filterAgentEntries } from "../../shared/agents/filter";
 import { agentCatalogSchema, type AgentCatalogData } from "../../shared/agents/schema";
@@ -36,8 +37,22 @@ function minimalCatalog(): AgentCatalogData {
     elements: [{ id: "200", name: "物理", iconPath: null }],
     specialties: [{ id: "1", name: "强攻", iconPath: null }],
     agents: [
-      { id: "1011", name: "安比", avatarPath: null, elementId: "200", specialtyId: "1" },
-      { id: "1021", name: "猫又", avatarPath: "icon.png", elementId: "200", specialtyId: "1" },
+      {
+        id: "1011",
+        name: "安比",
+        fullName: "安比·德玛拉",
+        avatarPath: null,
+        elementId: "200",
+        specialtyId: "1",
+      },
+      {
+        id: "1021",
+        name: "猫又",
+        fullName: null,
+        avatarPath: "icon.png",
+        elementId: "200",
+        specialtyId: "1",
+      },
     ],
   });
 }
@@ -95,12 +110,24 @@ describe("真实固定版本加载", () => {
     expect(anby).toMatchObject({
       id: "1011",
       name: "安比",
+      fullName: "安比·德玛拉",
       elementId: "203",
       specialtyId: "2",
     });
     expect(anby?.avatarPath).toMatch(/^UI\/Sprite\/.+\.png$/);
     const last = agentCatalogData.agents.at(-1);
-    expect(last).toMatchObject({ id: "1591", name: "希格莉德" });
+    expect(last).toMatchObject({ id: "1591", name: "希格莉德", fullName: "希格莉德·德拉叙尔" });
+  });
+
+  it("官方全名概况：55 名有 fullName，缺头像的三名均无全名", () => {
+    const withFullName = agentCatalogData.agents.filter((entry) => entry.fullName !== null);
+    expect(withFullName).toHaveLength(55);
+    const without = agentCatalogData.agents.filter((entry) => entry.fullName === null);
+    expect(without.map((entry) => `${entry.id}:${entry.name}`)).toEqual([
+      "1381:零号·安比",
+      "1531:星徽·比利",
+      "1551:佩洛伊斯",
+    ]);
   });
 
   it("缺头像代理人保留身份与筛选信息：零号·安比、星徽·比利、佩洛伊斯", () => {
@@ -152,6 +179,9 @@ describe("目录 schema 拒绝无效输入", () => {
   it("代理人为空名称（仅空白）", () => {
     expectInvalid((catalog) => {
       catalog.agents[0]!.name = "  ";
+    });
+    expectInvalid((catalog) => {
+      catalog.agents[0]!.fullName = "  ";
     });
   });
 
@@ -222,6 +252,54 @@ describe("代理人池搜索与筛选", () => {
     ).toEqual(["1381"]);
   });
 
+  it("官方全名包含匹配：星见雅、月城柳、浅羽悠真", () => {
+    expect(
+      filterAgentEntries(agents, { ...EMPTY_AGENT_POOL_QUERY, name: "星见雅" }).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(["1091"]);
+    expect(
+      filterAgentEntries(agents, { ...EMPTY_AGENT_POOL_QUERY, name: "月城柳" }).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(["1221"]);
+    expect(
+      filterAgentEntries(agents, { ...EMPTY_AGENT_POOL_QUERY, name: "浅羽悠真" }).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(["1201"]);
+  });
+
+  it("简短名与官方全名指向同一代理人：猫又与猫宫又奈", () => {
+    expect(
+      filterAgentEntries(agents, { ...EMPTY_AGENT_POOL_QUERY, name: "猫又" }).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(["1021"]);
+    expect(
+      filterAgentEntries(agents, { ...EMPTY_AGENT_POOL_QUERY, name: "猫宫又奈" }).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(["1021"]);
+  });
+
+  it("缺 fullName 的变体仍可按简短名查询", () => {
+    // 1381 零号·安比无 fullName，查询仍命中其简短名。
+    expect(
+      filterAgentEntries(agents, { ...EMPTY_AGENT_POOL_QUERY, name: "星徽·比利" }).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(["1531"]);
+  });
+
+  it("不扩展社区别名、英文代号或拼音", () => {
+    expect(filterAgentEntries(agents, { ...EMPTY_AGENT_POOL_QUERY, name: "Anby" })).toEqual([]);
+    expect(filterAgentEntries(agents, { ...EMPTY_AGENT_POOL_QUERY, name: "anbi" })).toEqual([]);
+    expect(filterAgentEntries(agents, { ...EMPTY_AGENT_POOL_QUERY, name: "xingjianya" })).toEqual(
+      [],
+    );
+  });
+
   it("名称不匹配任何代理人时结果为空", () => {
     expect(filterAgentEntries(agents, { ...EMPTY_AGENT_POOL_QUERY, name: "不存在的名称" })).toEqual(
       [],
@@ -288,6 +366,33 @@ describe("代理人池搜索与筛选", () => {
   });
 });
 
+describe("头像图片 URL 派生", () => {
+  it("按上游已确认规则转换文档样例路径", () => {
+    expect(
+      toAgentImageUrl("UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle01.png"),
+    ).toBe("https://static.nanoka.cc/assets/zzz/IconRoleCircle01.webp");
+  });
+
+  it("先 trim 再取末段文件名", () => {
+    expect(
+      toAgentImageUrl("  UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle01.png  "),
+    ).toBe("https://static.nanoka.cc/assets/zzz/IconRoleCircle01.webp");
+  });
+
+  it("无来源路径或空输入返回 null", () => {
+    expect(toAgentImageUrl(null)).toBeNull();
+    expect(toAgentImageUrl("")).toBeNull();
+    expect(toAgentImageUrl("   ")).toBeNull();
+  });
+
+  it("无 .png 扩展名的资源标识不制造图片地址", () => {
+    // 上游明确 live2_d 等动画资源标识不适用本规则。
+    expect(toAgentImageUrl("UISpine_Yidhari")).toBeNull();
+    // roleIcon 类无扩展名路径同样不适用。
+    expect(toAgentImageUrl("IconRole/UnPacker/IconRole01")).toBeNull();
+  });
+});
+
 describe("目录派生一致性", () => {
   it("规则层名单与目录同源同序", () => {
     const catalog = toAgentCatalog(agentCatalogData);
@@ -302,9 +407,13 @@ describe("目录派生一致性", () => {
       const display = lookup.get(entry.id);
       expect(display, `缺少 ${entry.id} 的展示信息`).toEqual({
         name: entry.name,
-        avatarUrl: entry.avatarPath,
+        avatarUrl: toAgentImageUrl(entry.avatarPath),
       });
     }
+    // 具体样例：安比头像按上游规则派生为 webp 地址。
+    expect(lookup.get("1011")?.avatarUrl).toBe(
+      "https://static.nanoka.cc/assets/zzz/IconRoleCircle01.webp",
+    );
   });
 
   it("数据版本可进入视图与归档记录的版本合同", () => {
@@ -356,6 +465,11 @@ describe("目录派生一致性", () => {
       expect(snapshot.operations[index]?.agentName).toBe(expected?.name);
       expect(snapshot.operations[index]?.agentAvatarUrl).toBe(expected?.avatarUrl);
     }
+    // 归档中的头像为按上游规则派生的 webp 地址，不是原始游戏内路径。
+    expect(snapshot.operations[0]?.agentId).toBe("1011");
+    expect(snapshot.operations[0]?.agentAvatarUrl).toBe(
+      "https://static.nanoka.cc/assets/zzz/IconRoleCircle01.webp",
+    );
     // 缺头像代理人的归档记录保留名称、头像为 null。
     const pyroisOperation = snapshot.operations.find((operation) => operation.agentId === "1551");
     expect(pyroisOperation?.agentName).toBe("佩洛伊斯");

@@ -13,8 +13,9 @@ import {
  * 代理人目录生成脚本：从固定版本的 @randomplay/data 生成本站只读目录。
  *
  * 运行：pnpm run generate:agent-catalog
- * （Node ≥ 24 原生类型剥离执行；本脚本与 shared/agents/schema.ts 均不
- * 使用需要编译的 TypeScript 语法，相对导入显式带 .ts 扩展名。）
+ * （Node ≥ 24.11.0（@randomplay/data 的 engines 要求）原生类型剥离执行；
+ * 本脚本与 shared/agents/schema.ts 均不使用需要编译的 TypeScript 语法，
+ * 相对导入显式带 .ts 扩展名。）
  *
  * 产物 shared/agents/catalog.json 提交入库，日常构建与测试只读取产物、
  * 不重新生成、不访问网络。数据来源、字段映射与版本更新办法见
@@ -101,14 +102,19 @@ async function main(): Promise<void> {
       fail(context, `来源 ID ${id} 不是规范十进制数`);
     }
 
-    // 官方中文名称。
+    // 官方中文名称（简短展示名）与官方全名（来源未记录时为 null，
+    // 不推测或合并变体身份）。
     const officialName = details.name;
     if (typeof officialName !== "string" || officialName.trim() === "") {
       fail(context, "缺少官方中文名称");
     }
+    const fullNameSource = details.partnerInfo.fullName;
+    const fullName =
+      typeof fullNameSource === "string" && fullNameSource.trim() !== "" ? fullNameSource : null;
 
     // 头像：数据包已记录的路径（公共字段优先，其次中文详情独有原值）；
-    // 均缺失时为 null，不根据图标编号拼接或推测补写。
+    // 均缺失时为 null，不根据图标编号拼接或推测补写。产物保留原始路径，
+    // 可加载的图片 URL 在消费边界派生（见 shared/agents/catalog.ts）。
     const avatarPath = data.partnerInfo.iconPath ?? details.partnerInfo.iconPath ?? null;
     if (avatarPath !== null && avatarPath === "") {
       fail(context, "头像路径记录为空字符串，应视为缺失（null）还是异常需人工确认");
@@ -136,7 +142,7 @@ async function main(): Promise<void> {
       });
     }
 
-    entries.push({ id, name: officialName, avatarPath, elementId, specialtyId });
+    entries.push({ id, name: officialName, fullName, avatarPath, elementId, specialtyId });
   }
 
   // 按来源 ID 数值升序固定排列（目录默认排列的权威顺序）。

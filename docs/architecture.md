@@ -10,7 +10,7 @@
 |---|---|---|
 | `src/` | Vue 页面、组件与浏览器连接管理。 | 依赖 `shared/` |
 | `shared/bp/` | BP 规则：26 步权威顺序、互斥池、BP 进度状态。 | 不依赖浏览器或 Workers 运行时，可依赖 Zod 与共享 schema |
-| `shared/agents/` | 代理人目录：固定版本的只读数据产物（`catalog.json`）、共享 Zod schema、目录派生接口与纯数据搜索筛选。 | 不依赖浏览器或 Workers 运行时，可依赖 Zod；运行时只读产物，不导入上游数据包 |
+| `shared/agents/` | 代理人目录：固定版本的只读数据产物（`catalog.json`）、共享 Zod schema、目录派生接口（含头像图片 URL 派生）与纯数据搜索筛选。 | 不依赖浏览器或 Workers 运行时，可依赖 Zod；运行时只读产物，不导入上游数据包 |
 | `shared/`（根） | 房间状态、命令契约与纯函数状态转换（`room.ts`、`commands.ts`、`transitions.ts`、`ids.ts`）。 | 依赖 `shared/bp/` |
 | `shared/contracts/` | 网络合同：HTTP、视图投影、WebSocket、归档记录、版本信息。 | 依赖 `shared/` 根与 `shared/bp/` |
 | `shared/api.ts` | 引导期的 `/api/health` 契约，保留兼容；房间协议不在此扩展。 | — |
