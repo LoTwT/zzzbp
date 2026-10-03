@@ -1,0 +1,51 @@
+Use case: precise-object-edit
+Asset type: desktop BP room wireframe, host replacing one team's player inside the same member-list panel.
+Input images: Image 1 is the edit target desktop-host-members-v1.png, the member-list companion just created.
+Primary request: Create the SECOND state of this same panel: selecting an eligible replacement for team “A 队”. Reuse the same overlay dimensions, location, list style, header controls, and room composition. Change only the member-list content and the paused match indicators.
+
+Pause state:
+- In the top room header, replace “进行中” with EXACTLY “已暂停”. Show no pause reason.
+- Keep the existing public preview portrait in left pick slot 2 and its double active border.
+- REMOVE the small radiating pulse rays around that slot, to show a static highlight while paused.
+- No other BP results or slots change.
+
+Panel header:
+- Keep “← 返回” on the left and × on the far right.
+- Centered title changes from “其他成员” to “更换选手”.
+- Replace “共 12 人” with TWO compact context lines:
+  “目标队伍：A 队”
+  “当前选手：选手 01”
+- Use slightly stronger typography for the target team line. These are read-only context labels, not inputs.
+- The header and target context remain above the scrolling list.
+
+Candidate list:
+- Four aligned column headings: “昵称”, “角色”, “状态”, “操作”.
+- Keep the clean flat rows and thin horizontal dividers. No member avatars, checkboxes, cards, search, tabs, or pagination.
+- Show EIGHT rows, ALL online spectators, in this exact order:
+  “观众 01” | “观众” | filled dot + “在线” | “设为选手”
+  “观众 03” | “观众” | filled dot + “在线” | “设为选手”
+  “观众 04” | “观众” | filled dot + “在线” | “设为选手”
+  “观众 05” | “观众” | filled dot + “在线” | “设为选手”
+  “观众 06” | “观众” | filled dot + “在线” | “设为选手”
+  “观众 08” | “观众” | filled dot + “在线” | “设为选手”
+  “观众 09” | “观众” | filled dot + “在线” | “设为选手”
+  “观众 10” | “观众” | filled dot + “在线” | “设为选手”
+- Each “设为选手” is an enabled outlined button in the final column. Its vertical centre is on the SAME line as that candidate's nickname, role, and status.
+- Buttons have identical widths and right alignment. Render their four Chinese characters legibly on one line.
+- Maintain enough width for all four columns and the scrollbar without overlapping.
+- Keep a narrow scrollbar at the inside right edge of the list; the final candidate can be below the visible region. The list is the ONLY scrolling region inside the panel.
+- Offline members “观众 02” and “观众 07” must NOT appear in this selection list. Do not show either current player as a candidate.
+- Do not show an extra bottom confirmation/cancel button or a confirmation dialog. Selecting a row's “设为选手” is the action; its success will return to the main panel, outside this sketch.
+- Do not show the panel-home controls such as pause/resume, team-name editing, layout switching, display-page opening, or link copying in this subview.
+
+Invariants:
+- Outside-top annotation becomes “桌面线框 · 房主更换选手”.
+- Same landscape size, black pen sketch and white background.
+- “XX 杯” centered; four ban squares per side, first two filled/slashed and last two empty.
+- Team headings “A 队” and “B 队”; exactly nine pick slots per side numbered 1–9.
+- Left slot 1 submitted, slot 2 public preview with static double border, slots 3–9 empty; right slots 1 and 2 submitted, others empty.
+- Keep central agent grid and its states unchanged behind the overlay.
+- Both teams' pick columns and the header remain completely visible.
+- Keep the fixed sliders-icon + “控制面板” entry below the overlay at the bottom-right inside the central pool.
+- No agent search/filter bar, no BP submission button, no footer, no second floating dialog.
+Names and counts are illustrative. Make the target team and the per-member action unambiguous.

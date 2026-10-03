@@ -1,0 +1,42 @@
+Use case: ui-mockup
+Asset type: desktop BP room hand-drawn wireframe, ordinary HOST view with the control panel OPEN.
+Input images: Image 1 is the edit target, the current approved PLAYER-view desktop-room-v4.png.
+Primary request: Produce the next companion wireframe in exactly the same black-and-white pen sketch style, landscape 16:10 composition. This screen is an ordinary 房主 who DOES NOT occupy either player seat. Edit the target to show the host's open controls. White background, crisp readable simplified Chinese, ample but practical spacing. No colour, no photographic rendering.
+
+Preserve the surrounding room:
+- Change the outside top-left annotation to “桌面线框 · 房主视角”.
+- Keep the top header, with “XX 杯” centred, “进行中” below, FOUR ban squares at each side, first TWO of each side filled/slashed and last TWO empty.
+- Keep left and right pick columns at the original width and position. Headings exactly “A 队” and “B 队”.
+- Exactly NINE square pick slots down EACH side, numbered 1 through 9. Left slot 1 filled, slot 2 has a public preview portrait, doubled active border and small pulse rays, remaining seven empty. Right slots 1 and 2 filled, remaining seven empty. Do not add the word 预选.
+- Preserve the central agent pool grid with sketched portraits and their Chinese names, some dim/slashed banned cards and desaturated/checked picked cards. Keep the existing grid spacing, scale, and order; it continues behind the open overlay. Do not filter the pool.
+- REMOVE THE ENTIRE SEARCH AND FILTER TOOLBAR: no search field, no attribute/specialty icons, no clear/reset controls, no empty toolbar placeholder. Agent grid begins near the top of the central pool.
+- REMOVE the bottom centre “确认选用” button completely; this host has no player actions.
+- Keep a fixed smaller sliders-icon + “控制面板” button at the bottom-right INSIDE the central pool, aligned with the existing pool-internal bottom action strip. It can appear selected. No global page footer.
+
+Open control panel proposal:
+- A white opaque drawer overlays ONLY the right portion of the CENTRAL AGENT POOL. It starts at the pool's top and ends just above its internal bottom action strip. About 360–390 reference pixels wide within the 1440x900 composition.
+- Keep BOTH pick columns and the entire top header unobscured. Do not squeeze, push, resize, or shift the room layout or portrait grid. Covered grid cards stay behind the panel.
+- Fine black outline and subtle hand-drawn shadow, no screen-wide dimming. No floating tabs or extra sidebars.
+- Header “控制面板” at left and a clear × close icon at right.
+- Single column, THREE simple groups separated by thin horizontal lines, no accordion or tabs. These are panel section headings, not separate pages.
+
+Group 1, “比赛控制”:
+A prominent “暂停 BP” button and secondary “撤回上一步” button on the same row.
+Smaller secondary “重开本局” button on the next row, separated by whitespace.
+Only show the current-state main action “暂停 BP”; do NOT show 开始 BP or 继续 BP at the same time.
+
+Group 2, “队伍与成员”:
+Compact team row: outlined editable team-name field “A 队” with pencil icon. Under it “选手 01” and small status dot + “在线”; on the right, muted disabled “更换” button.
+Then another matching team row: team-name field “B 队” with pencil icon. Under it “选手 02” and dot + “在线”; right muted disabled “更换”.
+Below, small helper text “暂停后可更换选手”.
+Then small label “其他成员” and TWO compact rows:
+“房主本人 · 房主” with dot and “在线” aligned right.
+“观众 01 · 观众” with dot and “在线” aligned right.
+All nicknames are examples. Do not add score, timer, permission settings, chat, kick/ban buttons, or confirmation dialogs.
+
+Group 3, “显示与分享”:
+Label “选用区布局”.
+Two-option segmented control: “9 格竖排” selected with darker outline/light pencil fill; “按 Pick 分行” unselected.
+Full width secondary button with link icon + “复制房间链接”.
+
+Constraints: Clear natural hand-drawn Chinese UI, easily readable action labels. Player role does not apply to this host. Absolutely no search/filter icons anywhere and no player confirmation button. Keep both teams' nine slots visible, current active left slot 2, four bans per team, centred event title and current status. No explanatory annotations outside the top-left view label. This is a low-fidelity sketch, not a polished application screenshot.

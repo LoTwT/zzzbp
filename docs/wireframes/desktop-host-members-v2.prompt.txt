@@ -1,0 +1,32 @@
+Use case: precise-object-edit
+Asset type: hand-drawn desktop BP member-list wireframe.
+Input images: Image 1 is the exact edit target desktop-host-members-v1.png.
+Primary request: A TEXT-ONLY correction to the nickname column. The old role-plus-number example nicknames caused confusion with the current player “选手 01”. Replace spectator nicknames with distinct ordinary nicknames. Do not change any layout, row order, roles, statuses, labels, controls, or surrounding artwork.
+
+Nickname replacements in the visible rows, in place:
+“房主本人” remains “房主本人”.
+“观众 01” becomes “小鱼”.
+“观众 02” becomes “小雨”.
+“观众 03” becomes “橙子”.
+“观众 04” becomes “星河”.
+“观众 05” becomes “阿洛”.
+“观众 06” becomes “豆包”.
+“观众 07” becomes “小林”.
+“观众 08” becomes “阿宁”.
+
+Preserve exact role/status correspondence:
+房主本人 | 房主 | 在线
+小鱼 | 观众 | 在线
+小雨 | 观众 | 离线
+橙子 | 观众 | 在线
+星河 | 观众 | 在线
+阿洛 | 观众 | 在线
+豆包 | 观众 | 在线
+小林 | 观众 | 离线
+阿宁 | 观众 | 在线
+
+The role column still says “观众” for spectators. Do not prepend the role or a number to the new nicknames. Offline rows stay muted with a hollow dot and “离线”; online rows stay dark with a filled dot and “在线”.
+Keep “共 12 人”, headers “昵称 / 角色 / 状态”, “← 返回”, “其他成员”, ×, and the scrollbar.
+Do not add current players to this list.
+All surrounding content remains unchanged: “桌面线框 · 房主查看成员”, “XX 杯”, “进行中”, A 队 / B 队, four ban slots and nine pick slots each side, active public preview in left slot 2, the agent grid, and the fixed bottom-right “控制面板” entry.
+Same canvas dimensions, black pen sketch on white. This is a surgical nickname correction only.

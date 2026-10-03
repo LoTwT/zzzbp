@@ -1,0 +1,22 @@
+Use case: ui-mockup edit.
+Edit the provided v3 desktop ban/pick wireframe into v4. Preserve its monochrome hand-drawn pen style and all existing content except the control-panel entry placement.
+
+CHANGES:
+1. REMOVE the sliders control-panel icon button from the extreme top-right of the page header. The top header should contain only: four left ban squares, centered “XX 杯” with “进行中” below, and four right ban squares. Shift the existing group of four right ban squares to the right so it mirrors the left group with equal outer margins. Keep the exact four slots, with two crossed-out portrait placeholders and two empty squares. No control button remains in the top header.
+
+2. ADD a small SECONDARY control-panel button INSIDE the bottom-right corner of the central agent-pool panel, on the same existing bottom action row as the centered “确认选用” button. Use the SAME sliders icon as before, followed by the exact text “控制面板”.
+The center confirmation button must remain in the center at its original size and position.
+The new control-panel button sits well to its right, right-aligned with the central panel's inner padding, and should be smaller and lighter than the main confirmation button. Rough proportions in this 1586x992 reference: main confirmation about 250px wide; new control-panel button about 145px wide and 40px tall, with its right edge at about x=1315, vertical center about y=920.
+There is ample horizontal whitespace between these two buttons. Keep them visibly separate.
+This is the existing bottom area INSIDE the central panel, NOT a new global page footer and NOT underneath the right team's pick column.
+Do not open the control panel.
+
+STRICT INVARIANTS:
+- Keep the two circular-arrow group-reset icon placeholders exactly as they are; the user will choose their final icons later. Do not redesign the clear icons in this revision.
+- Keep the toolbar left-to-right: group reset + five attribute icons, divider, group reset + six specialty icons, then right-aligned name search input. No global “清空” action.
+- Preserve exact labels “XX 杯”, “进行中”, “A 队”, “B 队”, “搜索代理人名称”, “确认选用”.
+- Retain EXACTLY NINE square vertical pick slots numbered 1–9 on each side. Left slot 2 is the only active emphasized slot.
+- Keep the entire central avatar grid and agent names, all filled/empty slot states, internal scrollbar, and full canvas aspect ratio unchanged.
+- No extra footer, global navigation bar, legend, color, new panels, callout annotations, or alternative views.
+
+Output ONE revised simple hand-drawn wireframe. Its only functional layout change is relocating the room's control-panel entry from the top-right header to the central panel's internal bottom-right action area.
