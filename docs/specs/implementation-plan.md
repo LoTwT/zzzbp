@@ -1,6 +1,6 @@
 # 首版开发方案（草案）
 
-本稿整理技术选型、模块职责、实现顺序和验收重点，更新于 2026-10-04。当前项目只有规格和静态线框，尚无应用代码、依赖清单或运行配置。前端沿用 Vue 3 与 TypeScript，用户指定通过 `pnpm create vite` 初始化；代码质量采用 Oxlint、Oxfmt、simple-git-hooks 与 lint-staged，样式采用 Tailwind CSS 与 `@ayingott/theme`，Cloudflare 命令入口改用 `cf`，测试统一使用 Vitest 及其生态，输入校验采用 Zod。具体接入方式和兼容版本如下，尚未执行项目初始化。
+本稿整理技术选型、模块职责、实现顺序和验收重点，更新于 2026-10-04。工程引导已完成：仓库内已有应用包、Worker 与运行配置，业务功能尚未实现，规格与线框全部保留。前端沿用 Vue 3 与 TypeScript，由 `pnpm create vite` 的 `vue-ts` 模板初始化；代码质量采用 Oxlint、Oxfmt、simple-git-hooks 与 lint-staged，样式采用 Tailwind CSS 与 `@ayingott/theme`，Cloudflare 命令入口采用 `cf`，测试统一使用 Vitest 及其生态，输入校验采用 Zod。具体接入方式和兼容版本如下；依赖已安装并锁定在锁文件中，日常开发与验证命令见[开发指南](../development.md)。
 
 ## 目标与依据
 
@@ -37,7 +37,7 @@
 
 ## 初始化依赖
 
-以下清单包含模板已有基础包、用户指定的替换项，以及接入所需的配套依赖；保留此前已指定的 Oxlint、Oxfmt、simple-git-hooks、Tailwind CSS 与主题包。尚未安装或生成锁文件。
+以下清单包含模板已有基础包、用户指定的替换项，以及接入所需的配套依赖；保留此前已指定的 Oxlint、Oxfmt、simple-git-hooks、Tailwind CSS 与主题包。清单已在工程引导中安装并写入锁文件；Cloudflare 相关工具按运行验证过的组合固定精确版本。
 
 | 用途 | 包 | 说明 |
 |---|---|---|
@@ -73,9 +73,9 @@ Oxlint 当前仅检查 Vue 文件的 `<script>` 区域；`vue-tsc` 用于 Vue �
 
 开发、构建、部署分别使用 `cf dev`、`cf build`、`cf deploy`。Worker 类型通过 `cf workers types` 生成到 `.cloudflare/types/index.d.ts`，前端、构建配置与 Worker 分开配置类型环境。`cf build` 和 `cf deploy` 直接调用 Vite 构建，不执行 `package.json` 中附加的检查步骤，因此项目脚本必须显式串联类型检查与构建；发布复用已检查的构建产物。依据 [cf 开发与构建指南](https://developers.cloudflare.com/cf/projects/)。
 
-测试继续统一以 Vitest 为入口，但版本由 Workers 插件约束：核对时 `@cloudflare/vitest-plugin` 为 1.3.6，其 Vitest、runner 与 snapshot 的 peer 范围均为 `^4.1.0`，而 Vitest 最新主版本已为 5。首版使用兼容的 Vitest 4.x，浏览器 provider、UI 或覆盖率插件按需要选择同一版本。依据 [Workers 测试接入指南](https://developers.cloudflare.com/workers/testing/vitest-integration/write-your-first-test/)及发布包元数据；浏览器方案依据 [Vitest Browser Mode](https://vitest.dev/guide/browser/)。
+测试继续统一以 Vitest 为入口，但版本由 Workers 插件约束：核对时 `@cloudflare/vitest-plugin` 为 1.3.6，其 Vitest、runner 与 snapshot 的 peer 范围均为 `^4.1.0`，而 Vitest 最新主版本已为 5。首版使用兼容的 Vitest 4.x（工程引导锁定 4.1.11，插件锁定 1.3.6），浏览器 provider、UI 或覆盖率插件按需要选择同一版本。依据 [Workers 测试接入指南](https://developers.cloudflare.com/workers/testing/vitest-integration/write-your-first-test/)及发布包元数据；浏览器方案依据 [Vitest Browser Mode](https://vitest.dev/guide/browser/)。
 
-当前 Workers 测试插件仍包含 Wrangler 内部依赖，其配置文档提供旧配置路径及 `main`、`miniflare` 参数，不能假定它能直接读取新的 `cloudflare.config.ts`。计划由共享配置值为测试提供入口、兼容设置与 SQLite Durable Object 绑定，保持部署和测试一致；该适配须在初始化时实际运行验证。项目日常命令采用 `cf`，不把 CLI 替换理解为整个依赖树完全移除 Wrangler。依据 [Workers 测试配置](https://developers.cloudflare.com/workers/testing/vitest-integration/configuration/)。
+Workers 测试插件内部仍包含 Wrangler 依赖，其常规文档面向 Wrangler 配置，提供旧配置路径及 `main`、`miniflare` 参数。工程引导实际运行验证了另一条路径：1.3.6 的 `experimental.newConfig` 选项可以直接加载 `cloudflare.config.ts`，测试与 `cf dev`/`cf build`/`cf deploy` 共用同一份 Worker 入口、兼容性设置与 SQLite 房间对象声明，无需为测试单独维护绑定配置；依赖该插件的 Wrangler 内部依赖时须重新验证。项目日常命令采用 `cf`，不把 CLI 替换理解为整个依赖树完全移除 Wrangler。依据 [Workers 测试配置](https://developers.cloudflare.com/workers/testing/vitest-integration/configuration/)。
 
 ## 模块职责
 
@@ -106,7 +106,7 @@ Worker 负责路由、输入检查与房间定位。房间对象拥有最终决�
 | `tests/` | 规则与房间集成场景。 |
 | `vite.config.ts`、`cloudflare.config.ts` | 本地运行、静态路由、房间绑定与 SQLite 对象导出及变更声明。 |
 
-完整首版会涉及超过 8 个源码与配置文件。本次仅维护方案文档，尚未创建这些实现文件。
+完整首版会涉及超过 8 个源码与配置文件。工程引导已按此结构建立最小骨架：页面为占位实现，`shared/` 仅含最小 API 契约，业务模块随后续实现顺序补充。
 
 ## 页面与接口边界
 
@@ -171,7 +171,7 @@ Alarm 每次执行都重新检查当前生命周期和实际期限，重复执�
 | `pnpm test` | 执行 BP 规则和房间集成测试。 |
 | `pnpm build` | 显式执行类型检查与 `cf build`，验证前端及 Worker 产物。 |
 
-这些是计划中的脚本，当前仓库尚未提供。测试统一由 Vitest 执行，规则测试、Workers 集成测试与必要的浏览器交互测试使用独立配置，兼容版本与接入边界见上文。
+上述脚本已在工程引导中落地于 `package.json`，工具版本由锁文件固定。测试统一由 Vitest 执行，规则测试、Workers 集成测试与必要的浏览器交互测试使用独立配置，兼容版本与接入边界见上文。
 
 必须覆盖的行为包括：
 
@@ -189,7 +189,7 @@ Alarm 每次执行都重新检查当前生命周期和实际期限，重复执�
 
 本方案最需验证的假设是：实际赛事连接数和消息频率能落在可接受额度内，同时掉线检测符合比赛使用需要。若不成立，需要依据实测调整容量或服务策略，不能直接以升级套餐解决预算约束。预选、重连和展示连接都纳入用量统计，测试记录检测到断线及暂停广播的实际延迟。
 
-本地已发现 Node.js `v24.18.0` 与 pnpm `12.6.0`。`cf` 将作为项目开发依赖使用，不要求全局安装。本轮只读核对模板发布包、依赖元数据与官方文档，没有安装依赖，也没有验证应用构建或 Cloudflare 账户状态。
+本地已发现 Node.js `v24.18.0` 与 pnpm `12.6.0`。`cf` 已作为项目开发依赖安装并在本地完成构建、开发与测试验证，不要求全局安装；Cloudflare 账户状态与部署凭据尚未配置，部署作为独立的发布动作处理。
 
 本地开发不需要第三方业务 API 密钥。正式部署需要 Cloudflare 账户与部署凭据，使用 CLI 登录或环境凭据配置，不把凭据写入仓库。当前阶段不需要新增付费服务或修改 `fairy` 上游。
 
@@ -197,7 +197,7 @@ Alarm 每次执行都重新检查当前生命周期和实际期限，重复执�
 
 | 事项 | 推荐与责任 |
 |---|---|
-| 新 CLI 与测试配置适配 | 初始化时验证 `cf`、Vite 插件 Beta 与 Workers 测试配置的实际组合，锁定通过检查的版本；本轮文档核对不能替代运行验证。 |
+| 新 CLI 与测试配置适配 | 已在工程引导中完成并锁定：`cf` 1.0.0-beta.12、`@cloudflare/vite-plugin` 2.0 Beta、`@cloudflare/vitest-plugin` 1.3.6（`experimental.newConfig`）与 Vitest 4.1.11 的组合通过本地运行验证；升级任一依赖时重新验证配置与构建行为。 |
 | 本场代理人名单与数据版本 | 在数据接入时由实现方展示实际导入结果，按此前约定核对使用范围和字段；当前示例名单不作为比赛可用名单。 |
 | 正式使用规模 | 用户提供预计同时开房与观众规模后，由实现方据此验证连接、预选与存储用量，作为部署前的容量依据。 |
 
