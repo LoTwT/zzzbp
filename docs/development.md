@@ -76,7 +76,10 @@ Worker 的运行时与绑定类型由 `cf workers types`（或 Cloudflare Vite �
   通过 `@cloudflare/vitest-plugin` 的 `experimental.newConfig` 直接加载
   `cloudflare.config.ts`，与部署配置共用同一份入口、兼容性设置与 SQLite 房间对象
   声明。该组合（cf 1.0.0-beta.12 / vite-plugin 2.0 Beta / vitest-plugin 1.3.6 /
-  Vitest 4.1.11）已在初始化时实际运行验证。
+  Vitest 4.1.11）已在初始化时实际运行验证。房间 HTTP/身份/Cookie 流程经
+  `exports.default.fetch` 以真实请求驱动；SQLite 持久化用 `cloudflare:test` 的
+  `runInDurableObject` 直接观察实例内表行，实例重建用 `evictDurableObject`
+  拆除实例（保留持久存储）后读回验证。
 
 浏览器交互测试 provider（`@vitest/browser-playwright`）在需要真实浏览器验证交互时
 引入，与 Vitest 保持同一版本；本阶段不编写空泛的 UI 测试。
