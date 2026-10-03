@@ -11,6 +11,7 @@
     "format:check": "oxfmt --check",
     "typecheck": "cf workers types && vue-tsc -b",
     "test": "vitest run",
+    "generate:agent-catalog": "node scripts/generate-agent-catalog.ts",
     "prepare": "simple-git-hooks"
   },
   "dependencies": {
@@ -25,6 +26,7 @@
     "@ayingott/theme": "^0.3.0",
     "@cloudflare/vite-plugin": "2.0.0-beta.sha-52b0dc0e9",
     "@cloudflare/vitest-plugin": "1.3.6",
+    "@randomplay/data": "0.2.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@vitejs/plugin-vue": "^6.0.8",
@@ -50,7 +52,7 @@
     ]
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=24.11.0"
   },
   "packageManager": "pnpm@12.6.0"
 }

@@ -4,7 +4,8 @@
 
 ## 环境准备
 
-- Node.js ≥ 24（本地已验证 v24.18.0，`cloudflare.config.ts` 的加载要求 Node ≥ 22.18）。
+- Node.js ≥ 24.11.0（本地已验证 v24.18.0；`cloudflare.config.ts` 的加载要求 Node ≥ 22.18，
+  `@randomplay/data` 的 `engines` 要求 ≥ 24.11.0，项目声明与其对齐）。
 - pnpm 12（`package.json` 的 `packageManager` 字段固定版本，CI 与本地保持一致）。
 - 克隆后执行 `pnpm install`；CI 与发布验证使用 `pnpm install --frozen-lockfile`。
 
@@ -24,6 +25,7 @@ pnpm 12 另有最小发布年龄（minimum release age）的供应链策略：�
 | `pnpm format` / `pnpm format:check` | Oxfmt 格式化 / 校验，含 Tailwind 类名排序。 |
 | `pnpm typecheck` | 先 `cf workers types` 生成 Worker 类型，再 `vue-tsc -b` 检查所有类型环境。 |
 | `pnpm test` | Vitest：纯规则测试与真实 Workers 集成测试。 |
+| `pnpm run generate:agent-catalog` | 从固定版本的 `@randomplay/data` 重新生成代理人目录产物；仅在数据版本更新时使用，日常构建与测试不运行（见[代理人数据接入](specs/agent-data.md)）。 |
 | `pnpm build` | 显式串联 `typecheck` 与 `cf build`，产出 `.cloudflare/output/v0/`。 |
 
 `cf` 不会执行 `package.json` 中的脚本，因此 `build` 必须自行串联类型检查；部署

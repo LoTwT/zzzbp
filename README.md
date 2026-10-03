@@ -2,7 +2,7 @@
 
 绝区零（Zenless Zone Zero）BP 房间网站：建房、入房、安排选手与单局 BP 的实时对局工具。
 
-当前处于工程引导阶段：已建立 Vue 3 前端、Cloudflare Worker 与 SQLite Durable Object 的开发基础，业务界面与 BP 规则随后续版本提供。
+当前已建立工程基础（Vue 3 前端、Cloudflare Worker 与 SQLite Durable Object）、BP 规则与房间协议合同，并接入固定版本的代理人目录；业务界面随后续版本提供。
 
 ## 开发
 
