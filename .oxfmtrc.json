@@ -3,5 +3,5 @@
   "sortTailwindcss": {
     "stylesheet": "./src/assets/main.css"
   },
-  "ignorePatterns": [".cloudflare", "dist", "docs", "pnpm-lock.yaml"]
+  "ignorePatterns": [".cloudflare", "dist", "docs", "pnpm-lock.yaml", "shared/agents/catalog.json"]
 }

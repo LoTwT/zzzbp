@@ -10,6 +10,7 @@
 |---|---|---|
 | `src/` | Vue 页面、组件与浏览器连接管理。 | 依赖 `shared/` |
 | `shared/bp/` | BP 规则：26 步权威顺序、互斥池、BP 进度状态。 | 不依赖浏览器或 Workers 运行时，可依赖 Zod 与共享 schema |
+| `shared/agents/` | 代理人目录：固定版本的只读数据产物（`catalog.json`）、共享 Zod schema、目录派生接口与纯数据搜索筛选。 | 不依赖浏览器或 Workers 运行时，可依赖 Zod；运行时只读产物，不导入上游数据包 |
 | `shared/`（根） | 房间状态、命令契约与纯函数状态转换（`room.ts`、`commands.ts`、`transitions.ts`、`ids.ts`）。 | 依赖 `shared/bp/` |
 | `shared/contracts/` | 网络合同：HTTP、视图投影、WebSocket、归档记录、版本信息。 | 依赖 `shared/` 根与 `shared/bp/` |
 | `shared/api.ts` | 引导期的 `/api/health` 契约，保留兼容；房间协议不在此扩展。 | — |
@@ -71,6 +72,10 @@
 
 - 房间状态与 BP 进度由 `roomStateSchema` / `bpProgressSchema` 定义并
   校验（含序列前缀、代理人不重复、预选不得已用等不变量）。
+- `agentDataVersion` 取自 `shared/agents` 目录（`agentDataVersion` 导出，
+  构建时由固定版本数据包生成）；规则层 `AgentCatalog.agentIds` 与归档
+  展示 lookup 均从该目录派生。数据来源与更新办法见
+  [代理人数据接入](specs/agent-data.md)。
 - `bp.version` 与公开 `revision` 职责分开：前者只随预选、提交、控制
   命令与席位权限变化递增（重开不重置），用于命令过期判断；后者随
   任何可见状态变化递增，用于视图同步。
@@ -117,6 +122,6 @@
 
 | PR | 接入点 |
 |---|---|
-| PR4（持久房间与 HTTP） | 房间 Durable Object 持久化、HTTP 建房/入房路由、匿名身份凭据与 Cookie 生成。 |
+| PR4（持久房间与 HTTP） | 房间 Durable Object 持久化（含目录名单与 `agentDataVersion` 的固定输入，升级部署不重解释已有预选/结果）、HTTP 建房/入房路由、匿名身份凭据与 Cookie 生成。 |
 | PR5（成员 WS 与同步） | 成员 WS 命令经 `applyRoomCommand` / `setMemberOnline` 执行并按身份投影广播、多页面在线计数、`operationId` 持久化去重回执。 |
 | PR9（归档与清理） | Alarm 与读写路径共用到期检查；到期经 `projectArchiveSnapshot` 生成快照或清理空房间。 |
