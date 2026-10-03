@@ -1,0 +1,23 @@
+Use-case: text-localization / precise-object-edit.
+Edit target: the supplied grayscale hand-drawn read-only BP record page. Make a minimal text-and-alignment edit ONLY to the first two columns of the central record list. Preserve all other artwork and layout exactly: full screenshot framing, paper style, “桌面线框 · 只读记录页” caption, “XX 杯”, “只读记录 · 已完成”, four filled slashed ban portraits on each side, A 队 and B 队 as sample team names at the side headers, nine filled numbered pick portraits per side, all central agent portraits and Chinese names, dividers, list scrollbar, “禁选顺序”, “共 26 步”, and bottom-right “控制面板” entry.
+
+Replace the central table column headers with exactly:
+顺序 | 操作 | 代理人
+
+FIRST COLUMN: remove all AB1, BB1, AB2, BB2, AP1, BP1, BP2, AP2, AP3, BP3 codes. Show ONLY the continuous integers 1 through 10, one integer per row, centered under “顺序”. There must NOT be an extra number or a code beside the integer. This first column expresses the overall chronological order.
+
+SECOND COLUMN: replace every “A 队” or “B 队” in this central table column with the corresponding full four-character action label below, centered under “操作”. Do not alter the A 队 and B 队 labels outside the table at the left and right team headers.
+
+EXACT ten visible row texts, with the existing agent avatar between the action column and the unchanged agent name:
+1 | 左方禁用 | 猫宫又奈
+2 | 右方禁用 | 冯·莱卡恩
+3 | 左方禁用 | 青衣
+4 | 右方禁用 | 朱鸢
+5 | 左方选用 | 安比·德玛拉
+6 | 右方选用 | 妮可·德玛拉
+7 | 右方选用 | 比利·奇德
+8 | 左方选用 | 可琳·威克斯
+9 | 左方选用 | 本·比格
+10 | 右方选用 | 安东·伊万诺夫
+
+Keep the ten row heights, agent portrait positions, names, slash/check indicators, and row order exactly the same. The action labels must fit comfortably on one line with clear spacing from the portraits. Match the reference's neat black pen Chinese lettering and light hand-drawn dividers. Do not add a legend, arrows, color, tooltip, annotation, new button, filter, footer, active state, extra record, or explanatory prose. The only semantic change is replacing letter codes and repeated team names in the list with chronological numbers and fixed left/right action wording.

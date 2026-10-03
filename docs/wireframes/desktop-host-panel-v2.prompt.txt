@@ -1,0 +1,32 @@
+Use case: precise-object-edit
+Asset type: desktop BP room hand-drawn wireframe, ordinary HOST with controls open.
+Input images: Image 1 is the edit target desktop-host-panel-v1.png.
+Primary request: Fix ONLY the ambiguous replacement buttons and the visual alignment in the drawer's “队伍与成员” section. Preserve the rest of the wireframe, dimensions, composition, line-art style, all portraits, room progress, panel position and width, and all other text and controls.
+
+Problem to fix:
+Currently each “更换” button floats between the team-name input and the player nickname row, making its target ambiguous. The replacement action must clearly belong to the PLAYER row. Team-name editing must remain a separate row.
+
+Redraw the TWO team blocks under “队伍与成员” as a clean consistent two-row form each:
+Block A:
+row 1: small field label “队伍名” on the left, then outlined editable field containing “A 队” and the small pencil icon at the field's far right.
+row 2: small field label “选手” on the left, then “选手 01” with a small status dot and “在线”; a single muted disabled button labeled EXACTLY “更换选手” flush right.
+Block B:
+row 1: label “队伍名”, outlined editable field containing “B 队” and small pencil icon.
+row 2: label “选手”, “选手 02” with dot and “在线”; a muted disabled “更换选手” button flush right.
+
+Precise alignment and visual grouping:
+- Both team blocks have IDENTICAL columns and spacing.
+- The “队伍名” and “选手” field labels share a left edge.
+- Both input fields start at the same x coordinate and end at the same right edge.
+- Both replacement buttons share the same right edge as the name inputs.
+- EACH “更换选手” button must be vertically centred on the SAME HORIZONTAL LINE as the player nickname and online status, BELOW the name-input row. It must NOT sit between the rows or alongside the name input.
+- Keep enough button width to render “更换选手” as four legible Chinese characters on ONE line.
+- There should be more vertical space BETWEEN the A and B team blocks than BETWEEN the two rows within each block.
+- Use whitespace grouping, not additional heavy bordered cards.
+- The two team fields should feel calm, readable, and aligned.
+- Keep helper text “暂停后可更换选手” below BOTH team blocks.
+- Keep “其他成员” and the existing two rows “房主本人 · 房主” / “观众 01 · 观众” with “在线” status. Adjust this group's internal vertical spacing slightly if needed to fit; do not resize the whole panel.
+
+Invariants:
+Keep “桌面线框 · 房主视角”; “XX 杯” and “进行中”; four ban squares each side; nine pick squares each side; “A 队” and “B 队”; left pick slot 2 active with preview; central agent pool without search/filter toolbar and without any confirmation button. Keep panel header and ×, “比赛控制” with “暂停 BP”, “撤回上一步”, “重开本局”; “显示与分享” with “选用区布局”, “9 格竖排”, “按 Pick 分行”, “复制房间链接”; bottom-right in-pool sliders + “控制面板” entry.
+Do not add streaming mode controls, new functions, more panels, callouts, labels outside the drawer, or any extra UI. White background, black pencil/pen sketch, muted disabled player-replacement buttons. Same landscape image size as input.

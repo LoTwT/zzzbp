@@ -1,0 +1,18 @@
+Edit the supplied black-and-white hand-drawn BP room wireframe to show the AFTER state of successfully replacing A team's player with 小鱼. Make a minimal precise edit: preserve the complete room, paused BP state, all artwork, every list row position, all dividers, scroll position, panel dimensions, columns, and nine row order exactly as in the reference. The replacement list stays open. Do not return to the main control panel, do not rearrange members, and do not add a toast or confirmation.
+
+Make ONLY these content changes:
+1. In the fixed context above the table, replace “当前选手：选手 01” with “当前选手：小鱼”. Keep “目标队伍：A 队”.
+2. First row remains first: nickname “选手 01”; role changes to “观众”; status remains “● 在线”; action changes from disabled “当前选手” to enabled “设为选手”, drawn with the same normal dark border, white fill and dark text as other enabled action buttons.
+3. Second row remains second: nickname “小鱼”; role changes to “选手”; status remains “● 在线”; action changes from enabled “设为选手” to disabled “当前选手”, drawn with the same light-gray fill, faint-gray border and muted-gray text previously used in the first row.
+4. Outside the app frame at the top-left, change the tiny draft caption from “桌面线框 · 更换选手前” to “桌面线框 · 更换选手后”.
+
+All other rows remain identical in text, state, position and order:
+橙子 | 观众 | ● 在线 | 设为选手
+星河 | 观众 | ● 在线 | 设为选手
+阿洛 | 观众 | ● 在线 | 设为选手
+豆包 | 观众 | ● 在线 | 设为选手
+阿宁 | 观众 | ● 在线 | 设为选手
+青禾 | 观众 | ● 在线 | 设为选手
+小麦 | 观众 | ● 在线 | 设为选手
+
+Keep the exact top title “XX 杯” and status “已暂停”. Keep the A pick slot 2 preview with static double border and no pulse rays. Keep the right-side B 队 nine slots and left A 队 nine slots. Use the same full screenshot framing, dimensions, grayscale pen sketch style and legible Chinese handwriting. No extra changes.

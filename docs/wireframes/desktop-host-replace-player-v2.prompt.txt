@@ -1,0 +1,26 @@
+Use case: precise-object-edit
+Asset type: hand-drawn desktop BP replacement-player wireframe.
+Input images: Image 1 is the exact edit target desktop-host-replace-player-v1.png.
+Primary request: A TEXT-ONLY correction to candidate nicknames. The old “观众 01” was intended as a different member from current player “选手 01”, but their shared number was ambiguous. Correct the candidate nicknames to clearly distinct ordinary names; preserve the current-player context and every other element.
+
+Keep the context EXACTLY:
+“目标队伍：A 队”
+“当前选手：选手 01”
+
+Replace ONLY the nickname column, row by row:
+“观众 01” -> “小鱼”
+“观众 03” -> “橙子”
+“观众 04” -> “星河”
+“观众 05” -> “阿洛”
+“观众 06” -> “豆包”
+“观众 08” -> “阿宁”
+“观众 09” -> “青禾”
+“观众 10” -> “小麦”
+
+Each resulting row still has:
+[new nickname] | “观众” | filled dot + “在线” | the existing enabled “设为选手” button.
+All eight new nicknames must be legible and correctly aligned. Do not add a role prefix, index number, or extra subtitle to them.
+Neither “选手 01” nor “选手 02” may appear in the candidate rows. The current player stays solely in the fixed context line above the list. Offline example members “小雨” and “小林” must also remain absent.
+Keep the four column headers, back and close controls, scrollbar, button alignment, panel size, row spacing and every surrounding element unchanged.
+Keep “已暂停” under “XX 杯”. Left pick slot 2 retains its preview and STATIC double border with NO pulse rays. Preserve four ban slots and nine pick slots on each side, A 队 / B 队, the agent grid, and bottom-right “控制面板”.
+Same original image size, black pen sketch on white. Do not add explanatory UI, dialogs, badges, or warnings. Only replace the eight candidate nickname strings.

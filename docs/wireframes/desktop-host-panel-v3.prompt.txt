@@ -1,0 +1,32 @@
+Use case: precise-object-edit
+Asset type: desktop BP room hand-drawn wireframe, ordinary HOST with controls open.
+Input images: Image 1 is the edit target desktop-host-panel-v2.png.
+Primary request: Make TWO limited changes in the open control panel: add a clearly visible “打开展示页” entry, and replace the always-visible other-member list with a compact navigation row. Preserve the surrounding room, exact progress, all other controls, and the black-and-white sketch style.
+
+Change 1, other members:
+- Under the helper text “暂停后可更换选手”, REMOVE the “其他成员” heading and the TWO visible member rows (“房主本人 · 房主”, “观众 01 · 观众”).
+- Replace them with ONE full-width, approximately 40-pixel-high outlined navigation row.
+- Inside it: a small people icon on the left, text EXACTLY “其他成员（12）”, and a RIGHT-facing chevron › at the far right.
+- This is navigation to another view within the same panel, NOT an inline accordion: show a right chevron, not a down chevron.
+- No individual member nicknames or extra rows under it.
+- Keep generous enough padding for the whole row to look clickable.
+- Twelve is simply the illustrative count. Do not add a second panel or any diagram showing the navigation.
+
+Change 2, show the new display-page entry:
+- Keep the section heading “显示与分享” and the “选用区布局” label.
+- Keep the existing two-option control “9 格竖排” selected and “按 Pick 分行” unselected.
+- Directly BELOW the layout switch, add a FULL-WIDTH secondary action button labeled EXACTLY “打开展示页”, with a small external-page arrow ↗ icon.
+- Directly BELOW that button, retain a separate FULL-WIDTH “复制房间链接” button with link icon.
+- These are two distinct stacked actions: open display page, then copy room link.
+- Use the vertical space freed by removing the full member list. Fit both buttons INSIDE the existing drawer, without making the drawer taller, covering the original fixed entry, shrinking the text excessively, or adding a footer.
+- Keep “打开展示页” easy to find and its text completely legible.
+
+Preserve invariants:
+- Panel remains an opaque right-side overlay INSIDE central agent pool; BOTH teams' picks and the entire header remain visible. Keep panel width/position/bounds and its × close icon.
+- “队伍与成员” continues to have TWO clean two-row forms. Row 1 is label “队伍名” and input with “A 队” / “B 队”; row 2 is label “选手”, nickname “选手 01” / “选手 02”, dot + “在线”, and muted “更换选手” button aligned on the SAME row as the nickname. Do not move replacement buttons back beside the name inputs.
+- Keep “比赛控制” with “暂停 BP”, “撤回上一步”, “重开本局”.
+- Keep the fixed sliders-icon + “控制面板” button at bottom-right INSIDE central pool, below the open panel.
+- Preserve top-left annotation “桌面线框 · 房主视角”, centered “XX 杯” and “进行中”, four ban squares each side, exactly nine pick slots each side, “A 队” and “B 队”, left pick slot 2 active with public preview.
+- Agent grid unchanged behind overlay. Ordinary host still has NO search/filter toolbar and NO player-confirmation button.
+- No new UI besides the TWO specified changes. No streaming content on this control screen, no visitor chat, no copied URL field, no member table in the main panel.
+White background, calm black pen/pencil sketch, same landscape image dimensions as target.

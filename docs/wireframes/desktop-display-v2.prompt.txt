@@ -1,0 +1,32 @@
+Use case: ui-mockup
+Asset type: desktop live BP display-page wireframe, full roster visible at once.
+Input images: Image 1 is the edit target desktop-display-v1.png.
+Primary request: Correct the central agent pool for an unattended livestream display. Replace the scrollable 7-by-4 visible grid with a denser complete grid that fits ALL cards on this ONE screen, with NO scrolling, clipping, paging, or automatic rotation. Keep the surrounding room exactly the same.
+
+Layout density example:
+- Draw exactly TEN columns and SIX rows in the central pool, 60 illustrative tiles TOTAL. This count is only a wireframe density example, not the actual game roster.
+- All SIX rows and all TEN columns must be FULLY VISIBLE inside the central body region.
+- Use compact square portrait tiles around 80–88 pixels in the supplied composition, even horizontal gaps, consistent rows, and a short Chinese name caption below every portrait. Fit the ENTIRE grid inside the existing central area.
+- To avoid inventing a real roster, use diverse simple generic hand-drawn agent-like faces, and label EVERY central tile “名称” as an explicit name placeholder. Do not fabricate character names.
+- Use exactly FOUR dimmed diagonally slashed tiles and THREE desaturated corner-checked tiles in separate positions to illustrate the submitted four bans and three picks. All other tiles have normal thin outlines. These states stay in place within the grid; do not group or remove them.
+- Preserve space for readable name captions; do not replace captions with hover-only information.
+- REMOVE the right-side scrollbar completely. No visible overflow or partial cards.
+- In a real implementation the grid adjusts to roster count and available dimensions; do not show that explanation as product UI.
+
+Preserve room invariants:
+- Same landscape canvas and white background, black/gray pen sketch, thin consistent lines.
+- Same top header size and position. “XX 杯” centered, “进行中” underneath.
+- FOUR ban squares on each side, first TWO filled/slashed and last TWO empty.
+- Keep both side columns and their pick-slot sizes unchanged, so increasing central density does not shrink the main BP results.
+- Team headings exactly “A 队” and “B 队”.
+- Exactly NINE pick squares on EACH side, numbered 1–9.
+- Left pick slot 1 submitted, slot 2 public preview with a double active border and small pulse rays, slots 3–9 empty.
+- Right pick slots 1 and 2 submitted, slots 3–9 empty.
+- No “预选” text.
+- No search/filter toolbar, buttons, controls, control panel, overlays, member names, footer, timer, scores, chat, carousel arrows, or pagination.
+- Keep the central grid in the same space between the fixed side columns.
+
+Outside the top of the UI frame, update the small sketch annotation to exactly:
+“桌面线框 · 实时展示页 · 60 格密度示意”
+This single annotation explains that the 60 tiles are a density sketch. No other explanatory text.
+The goal is a clear static broadcast composition showing the entire roster and all BP progress at once, without any operator scrolling.

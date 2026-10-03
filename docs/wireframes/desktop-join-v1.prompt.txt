@@ -1,0 +1,17 @@
+Use-case: precise-object-edit / ui-mockup.
+Edit target: the supplied black-and-white hand-drawn homepage creation form. Produce a matching companion screenshot showing a FIRST-TIME VISITOR ENTERING AN EXISTING ROOM VIA A SHARED LINK.
+
+Preserve the screenshot dimensions, full thin app-frame outline, white paper background, neat handwritten pen style, sparse centered composition, product title “绝区零 BP”, subtitle “危局强袭战”, the form card's position and width, and the input/button alignment. Keep the same grayscale style and ordinary pen lettering.
+
+Make these precise changes inside the central card:
+1. Replace the card heading “创建房间” with “进入房间”.
+2. Completely remove the first field label “房间名（赛事名）” AND its rectangular editable input border. Replace that whole field area with a clear, centered READ-ONLY room-name heading “XX 杯”. It must look like ordinary display text, not a textbox or editable field.
+3. Directly below that room name, add one short centered explanatory line in smaller, readable text:
+“进入后为观众，选手由房主安排。”
+Keep this helper line above the nickname label, with comfortable separation. It fits on one line within the card.
+4. Keep the existing left-aligned label “你的昵称”. Keep exactly ONE full-width input underneath, with the sample typed value changed from “小鱼” to “橙子”. Preserve its size and alignment.
+5. Change the full-width primary button text from “创建房间” to “进入房间”. Keep its slightly heavier outline, subtle light-gray pencil fill and dark text, aligned with the nickname input.
+6. Outside the app frame at top left, change the draft caption to:
+“桌面线框 · 首次进入房间”
+
+The complete form now contains: heading 进入房间; read-only room name XX 杯; short role-explanation line; 你的昵称 label; one input with 橙子; one 进入房间 action button. No room-name input, room code, room-password field, role chooser, team chooser, login, registration, creation option, avatar, background artwork, secondary button, footer or additional notes. Do not invent controls or change the main product title. Maintain balanced spacing, exact Chinese text and the same simple sketch quality as the reference. This is a static filled-form example; show no loading or error state.

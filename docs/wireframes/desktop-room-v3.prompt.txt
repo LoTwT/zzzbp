@@ -1,0 +1,27 @@
+Use case: ui-mockup edit.
+Edit the provided v2 desktop ban/pick wireframe into v3. This is a tightly scoped edit to ONLY the single toolbar at the top of the central agent pool. Keep the black-and-white hand-drawn pen style and every other part of the page in place.
+
+REQUIRED NEW TOOLBAR, LEFT TO RIGHT:
+[one reset icon] [five ATTRIBUTE pictogram buttons] | [one reset icon] [six SPECIALTY pictogram buttons]       [name search input]
+
+1. Move the name search input to the RIGHT END of the central toolbar. It is a compact outlined input about 240–270 pixels wide in this reference image, with a small magnifier at its left and exact placeholder “搜索代理人名称”. It ends near the right edge of the central panel, with normal padding. Nothing should appear to its right. Keep it empty; do not add a clear icon inside this empty field.
+
+2. Delete the standalone “清空” action entirely. There is NO global reset or clear action on the right.
+
+3. Place both filter groups together on the LEFT of this toolbar.
+The first group begins with ONE small circular-arrow reset icon button, followed by the same five attribute icons from the reference: fist/physical, flame, snowflake, lightning, ether diamond.
+Then a slim vertical divider or distinct gap.
+The second group begins with ONE matching circular-arrow reset icon button, followed by the same six specialty icons from the reference: sword, hammer, flask, support star, shield, rupture burst.
+There are EXACTLY TWO reset icon buttons total, ONE per group. Do NOT put a reset icon before every individual filter button.
+Each reset arrow means clearing only its adjacent group's selected filters.
+Give each group reset a small gap after it so it reads as an action followed by that group's choices.
+All filter and reset buttons are compact, consistently sized, with fine light outlines or subtle boundaries; icons should read more strongly than the borders. No filled selected filter state is needed in this sketch.
+Remove the persistent text labels “属性” and “特性” from the toolbar; the recognizable icon groups and their separator do the visual grouping.
+The two compact groups align to the left edge of the agent grid; search aligns to the right edge. Use modest flexible empty space between the groups and search.
+
+INVARIANTS:
+Header stays exactly “XX 杯” with “进行中” underneath, control panel sliders icon stays at far top-right, four ban squares remain on each side.
+Team titles remain “A 队” and “B 队”.
+Each side retains EXACTLY NINE visible vertical square pick slots numbered 1 through 9. Left slot 2 remains the only active emphasized slot.
+Keep the entire agent portrait grid, agent names, internal scrollbar, and the bottom button “确认选用” as they are. Do not reduce the number of slots or rows.
+No footer, no extra legend, no additional panel or views, no colors. Output ONE revised wireframe with only the specified toolbar rearrangement.

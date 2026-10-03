@@ -1,0 +1,28 @@
+Use case: ui-mockup
+Asset type: desktop live BP DISPLAY PAGE for livestream capture, low-fidelity hand-drawn wireframe.
+Input images: Image 1 is the edit target, desktop-room-v4.png. Keep its room structure, match progress, sketch style, and landscape proportions.
+Primary request: Turn this PLAYER-view room into its clean, independent REAL-TIME DISPLAY PAGE. This is an image companion showing the same match and the default nine-slot vertical layout. It has NO controls or management interface, only public match information. White background, thin black pen/pencil lines, legible Chinese, same image dimensions and composition.
+
+Keep:
+- The top header in the same position and height.
+- Centered event name exactly “XX 杯” and current status exactly “进行中”.
+- FOUR ban squares on each side of the header, first TWO filled/slashed, last TWO empty.
+- Both narrow pick columns at the same location/width. Headings “A 队” and “B 队”.
+- Exactly NINE square pick slots per side, numbered 1 to 9.
+- Left slot 1 is submitted, slot 2 contains the public preview portrait with a double active border and small pulse rays; left slots 3–9 empty.
+- Right slots 1 and 2 submitted, right slots 3–9 empty.
+- The central agent pool with the same 28 illustrated cards and Chinese labels as the reference, arranged in SEVEN columns and FOUR visible rows. These drawings are illustrative. Preserve their order and the existing slash/check visual examples. Keep a subtle narrow scrollbar at the inside right edge so more agents can be viewed.
+- Public banned/picked states: dimmed with diagonal slash versus desaturated with corner check, no written state badges.
+
+Change:
+- Outside the frame, the small top-left wireframe annotation becomes “桌面线框 · 实时展示页”. This is a sketch annotation, not a product banner.
+- REMOVE the ENTIRE search and filter toolbar, including the search field, clear/reset buttons, attribute icons, specialty icons, and separators.
+- REMOVE the “确认选用” button and its bottom action area.
+- REMOVE the bottom-right sliders icon and “控制面板” button.
+- NO new substitute toolbar, buttons, settings cog, links, member information, back button, live-stream badge, nickname prompt, overlay, drawer, or floating controls.
+- Let the agent-list viewport use the FULL height of the central panel formerly occupied by the toolbar and action strip. Rebalance the four visible grid rows evenly within that available height, keeping square portrait cards, readable names, and consistent column alignment. Do not leave an empty reserved toolbar strip or bottom action strip.
+- Preserve the three-column room layout; no page footer or extra regions.
+- This page is a passive synchronized BP view. There is no “预选” word; the active slot conveys the preview exactly as before. No countdown, scores, chat, or extra match statistics.
+
+Constraints:
+Only change the viewing mode and reclaim the spaces formerly occupied by controls. Both teams' nine pick slots must remain fully visible. Keep the clean black-and-white hand-drawn aesthetic. No implementation notes, explanatory arrows, instructional text, or decorative elements. No browser chrome. No additional agent cards or invented agent names beyond the supplied reference.

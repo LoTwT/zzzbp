@@ -1,0 +1,18 @@
+Edit the supplied black-and-white hand-drawn desktop BP room wireframe. Produce ONE full screenshot in the identical composition, aspect ratio, linework, hand lettering and grayscale sketch style. This is the BEFORE state of changing the A-team player. Preserve the entire room outside the right-side overlay: top title “XX 杯”, status “已暂停”, four ban boxes per team, A 队 and B 队, nine numbered pick slots each, the agent pool artwork and names, static double border around A pick slot 2 with preview portrait and NO pulse rays, and the bottom-right 控制面板 entry. Keep the overlay position and outer size unchanged.
+
+Inside the existing 更换选手 overlay retain the header “← 返回”, “更换选手”, and close X. Retain the fixed context “目标队伍：A 队” and “当前选手：选手 01”. Retain four columns “昵称 / 角色 / 状态 / 操作”, all clearly aligned.
+
+Change the list so that the CURRENT PLAYER is included as the first row and is visibly disabled as an action. Fit these EXACT NINE rows in the same list area by slightly reducing row height (equal-height rows). Show all nine rows, no missing or duplicated row. Text and order:
+1. 选手 01 | 选手 | ● 在线 | 当前选手
+2. 小鱼 | 观众 | ● 在线 | 设为选手
+3. 橙子 | 观众 | ● 在线 | 设为选手
+4. 星河 | 观众 | ● 在线 | 设为选手
+5. 阿洛 | 观众 | ● 在线 | 设为选手
+6. 豆包 | 观众 | ● 在线 | 设为选手
+7. 阿宁 | 观众 | ● 在线 | 设为选手
+8. 青禾 | 观众 | ● 在线 | 设为选手
+9. 小麦 | 观众 | ● 在线 | 设为选手
+
+Only the first row action button “当前选手” has a light gray fill, faint gray border and muted gray text to clearly show disabled state; the nickname, role and online status remain legible. All other row action buttons “设为选手” have identical dimensions and normal dark outlines/text indicating enabled state. Buttons align in one right-hand column. Use subtle row dividers and an internal scrollbar exactly like the reference. Keep stable, evenly aligned rows; no added badges, toast, confirmation footer or explanatory prose inside the product. This is a paused-room replacement list, not a modal confirmation.
+
+Outside the app frame, replace only the tiny top-left draft caption with “桌面线框 · 更换选手前”. Preserve full-frame readability. All Chinese text must be exact, no English annotations.

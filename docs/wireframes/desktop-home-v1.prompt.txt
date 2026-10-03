@@ -1,0 +1,23 @@
+Use-case: ui-mockup.
+Create ONE full-screen desktop wireframe for the homepage of a Chinese Zenless Zone Zero BP website. This is the companion to a set of black-and-white hand-drawn UI sketches. Use white paper, fine slightly irregular black pen lines, neat legible handwritten Chinese, modest light-gray pencil shading, and generous empty space. Flat front-facing UI screenshot, landscape 16:10, target canvas 1586 × 992. No perspective, photorealism, glossy effects or color.
+
+Draw a thin rectangular outline around the app viewport, inset roughly 10 px at the sides, with a small draft caption ABOVE the frame at the upper left:
+“桌面线框 · 首页创建房间”
+
+Inside the viewport there is only one compact centered creation form. Keep this page calm and sparse. Above the form, centered horizontally, show the simple descriptive product title “绝区零 BP” at about 32 px, with the smaller subtitle “危局强袭战” below it. These are plain pen-lettered words, not a logo illustration.
+
+A single rectangular form card is centered horizontally and the whole title-plus-card group is centered vertically. Card width about 510 px, height about 420 px. Thin dark hand-drawn outline, tiny corner rounding, white fill, no drop shadow. Internal padding about 36 px. Header centered at the top of the card:
+“创建房间”
+
+Inside the card place exactly TWO stacked labeled single-line text fields, all aligned to the same left and right edges:
+First label: “房间名（赛事名）”
+First input value: “XX 杯”
+Second label: “你的昵称”
+Second input value: “小鱼”
+The values are dark example text, not gray placeholders. Input rectangles about 438 px wide and 54 px high, white fill, thin dark outline. Give each label and field comfortable breathing space.
+
+Below the second input, with a clear gap, put one full-width primary button aligned to the fields:
+“创建房间”
+Draw a slightly heavier outline and subtle light-gray pencil fill so it reads as the main action, with dark legible text. Keep the button inside the form card with balanced bottom padding. Exactly one action button.
+
+Do not add top navigation, login/register, account selectors, role selectors, room lists, room codes, join-room forms, settings, team fields, character portraits, background decoration, marketing copy, footer, legal text, explanatory annotations, or any extra controls. The visible page text is limited to the draft caption, product title/subtitle, card heading, two field labels and values, and the single action button. This is a static layout example showing the filled-in form ready to create a room. Make all Chinese text exact, readable and correctly aligned.
