@@ -156,14 +156,15 @@ function zodIssueSummary(error: {
   return path === "" ? issue.message : `${path}：${issue.message}`;
 }
 
-/** `/api/rooms/...` 路由参数；sub 为 null 表示房间本身。 */
+/** `/api/rooms/...` 路由参数；subPath 为 null 表示房间本身。 */
 interface RoomRoute {
   readonly roomId: string;
-  readonly sub: string | null;
+  readonly subPath: string | null;
 }
 
 /**
- * 解析 `/api/rooms/:roomId[/:sub]` 形式的路径。
+ * 解析 `/api/rooms/:roomId[/:subPath]` 形式的路径，subPath 最多两段
+ * （覆盖 `display/ws`）。
  * `route` 为 null 表示不匹配房间路由（按未知 /api 路径处理）；
  * `invalid` 为 true 表示 roomId 非法（无法解码或不符合 schema），
  * 由调用方返回 400。
@@ -173,8 +174,9 @@ function matchRoomRoute(pathname: string): { invalid: boolean; route: RoomRoute 
   const segments = rest.split("/");
   const rawRoomId = segments[0] ?? "";
   if (rawRoomId === "") return { invalid: false, route: null };
-  // 只接受 /api/rooms/:roomId 或 /api/rooms/:roomId/:sub，多余路径段按未知路径处理。
-  if (segments.length > 2) return { invalid: false, route: null };
+  // 只接受 /api/rooms/:roomId、/:roomId/:sub 或 /:roomId/:sub/:sub2，
+  // 更多路径段按未知路径处理。
+  if (segments.length > 3) return { invalid: false, route: null };
 
   let decodedRoomId: string;
   try {
@@ -185,9 +187,10 @@ function matchRoomRoute(pathname: string): { invalid: boolean; route: RoomRoute 
   const parsedRoomId = roomIdSchema.safeParse(decodedRoomId);
   if (!parsedRoomId.success) return { invalid: true, route: null };
 
+  const subPath = segments.length > 1 ? segments.slice(1).join("/") : null;
   return {
     invalid: false,
-    route: { roomId: parsedRoomId.data, sub: segments.length > 1 ? segments[1] : null },
+    route: { roomId: parsedRoomId.data, subPath },
   };
 }
 
@@ -325,6 +328,31 @@ async function handleRoomCatalog(ctx: ExecutionContext, roomId: string): Promise
   return jsonResponse(200, catalog);
 }
 
+/**
+ * 房间实时连接升级（成员 `/ws` 与展示 `/display/ws`）。
+ *
+ * Worker 只做协议级校验（方法、Upgrade 头、同源 Origin）并把原始请求
+ * 转发给房间 DO；房间存在性、生命周期与成员身份由 DO 在升级时判断
+ * （见 server/room.ts 的 fetch）。非升级请求不进入 DO。
+ */
+async function handleRoomWebSocket(
+  request: Request,
+  ctx: ExecutionContext,
+  roomId: string,
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
+  }
+  const upgrade = request.headers.get("Upgrade");
+  if (upgrade === null || upgrade.toLowerCase() !== "websocket") {
+    return apiError(426, "INVALID_REQUEST", "WebSocket 升级需要 Upgrade: websocket 头");
+  }
+  if (!isSameOrigin(request)) {
+    return apiError(403, "INVALID_REQUEST", "拒绝跨源请求");
+  }
+  return roomStub(ctx, roomId).fetch(request);
+}
+
 /** `/api/*` 路由分发；未预期异常由 fetch 的统一错误边界捕获。 */
 async function handleApiRequest(request: Request, ctx: ExecutionContext): Promise<Response> {
   const { pathname } = new URL(request.url);
@@ -358,26 +386,28 @@ async function handleApiRequest(request: Request, ctx: ExecutionContext): Promis
       return apiError(400, "INVALID_REQUEST", "非法的房间 ID");
     }
     if (route !== null) {
-      const { roomId, sub } = route;
-      if (sub === null) {
+      const { roomId, subPath } = route;
+      if (subPath === null) {
         if (request.method !== "GET") {
           return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
         }
         return handleRoomEntry(request, ctx, roomId);
       }
-      if (sub === "members") {
+      if (subPath === "members") {
         if (request.method !== "POST") {
           return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
         }
         return handleJoinRoom(request, ctx, roomId);
       }
-      if (sub === "catalog") {
+      if (subPath === "catalog") {
         if (request.method !== "GET") {
           return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
         }
         return handleRoomCatalog(ctx, roomId);
       }
-      // 成员实时连接与展示连接（/ws、/display/ws）在 PR5 接入。
+      if (subPath === "ws" || subPath === "display/ws") {
+        return handleRoomWebSocket(request, ctx, roomId);
+      }
     }
   }
 

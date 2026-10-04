@@ -10,10 +10,10 @@ import { teamNameInputSchema, type RoomState } from "./room";
  * 载荷中的自报字段会被 Zod 默认行为剥离，不存在可伪造身份的字段；
  * `targetMemberId` 仅是席位的被安排对象，不代表操作者。
  *
- * 所有命令携带 `operationId`（客户端生成的唯一操作标识，持久化去重回执
- * 由后续 PR 实现）与 `expectedBpVersion`（命令所依据的 bp.version，
- * 不匹配即视为过期命令）。预选与提交命令额外携带目标操作位，
- * 必须与当前操作位一致，防止跨位误用。
+ * 所有命令携带 `operationId`（客户端生成的唯一操作标识，服务端按
+ * room + member + operationId 持久化去重回执，见 shared/contracts/websocket.ts）
+ * 与 `expectedBpVersion`（命令所依据的 bp.version，不匹配即视为过期命令）。
+ * 预选与提交命令额外携带目标操作位，必须与当前操作位一致，防止跨位误用。
  */
 
 /** 操作标识：客户端生成，仅要求 trim 后非空。 */
@@ -137,7 +137,12 @@ export type RoomCommand = z.infer<typeof roomCommandSchema>;
  * - SEAT_CHANGE_FORBIDDEN / SEAT_TARGET_*：席位调整相关；
  * - PRESELECT_SLOT_MISMATCH / NO_PRESELECT：预选与提交的目标位问题；
  * - AGENT_NOT_IN_CATALOG / AGENT_UNAVAILABLE：代理人名单或互斥池；
- * - NOTHING_TO_UNDO：无可撤回提交。
+ * - NOTHING_TO_UNDO：无可撤回提交；
+ * - OPERATION_ID_CONFLICT：同一 operationId 被用于不同的命令载荷（去重回执边界，
+ *   见 shared/contracts/websocket.ts）；
+ * - RULE_VERSION_UNSUPPORTED：房间持久规则版本不受当前引擎支持，拒绝执行；
+ * - INTERNAL：命令处理中的未预期内部故障（存储或状态装配），状态保持原样，
+ *   客户端可凭同一 operationId 重试。
  */
 export const roomOperationErrorCodeSchema = z.enum([
   "ACTOR_NOT_MEMBER",
@@ -160,6 +165,9 @@ export const roomOperationErrorCodeSchema = z.enum([
   "AGENT_UNAVAILABLE",
   "NO_PRESELECT",
   "NOTHING_TO_UNDO",
+  "OPERATION_ID_CONFLICT",
+  "RULE_VERSION_UNSUPPORTED",
+  "INTERNAL",
 ]);
 export type RoomOperationErrorCode = z.infer<typeof roomOperationErrorCodeSchema>;
 

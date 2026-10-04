@@ -6,18 +6,22 @@ import { displayViewSchema, hostManagementViewSchema, roomMemberViewSchema } fro
  * WebSocket 消息合同：成员通道与展示通道分离。
  *
  * - 客户端业务消息复用 roomCommandSchema：系统入口（如 setMemberOnline）
- *   不在客户端联合中，无法注入；认证经连接升级时的成员凭据完成。
+ *   不在客户端联合中，无法注入；认证经连接升级时的成员凭据完成，
+ *   升级后的命令操作者一律来自连接附件中的可信身份。
  * - 展示连接始终没有写入口：即使携带房主凭据连接展示通道，也只接收
  *   展示视图，客户端消息一律不被接受。
  * - 命令结果关联 operationId 与命令生效后的 bp.version / revision，
  *   不把包含全部成员的内部 RoomOperationResult.state 直接下发；结果
  *   之后由服务端按连接身份推送最新视图（memberView 或 hostView）。
  * - 结果未知（超时或断线）时，客户端重连并取得最新完整视图，再决定
- *   是否重发；重发必须复用同一 operationId。
- * - operationId 持久化去重回执由后续 PR 实现。合同约定按
- *   room + member + operationId 辨认操作：重复的合法请求只返回同一
- *   处理结果而不再推进；同一 ID 配不同载荷不得当成新操作。去重是
- *   有限回执，不是完整操作历史。
+ *   是否重发；重发必须复用同一 operationId 与同一命令载荷。
+ * - operationId 持久化去重回执：按 room + member + operationId 辨认操作，
+ *   回执与状态更新同事务写入房间 SQLite。同一规范化载荷（Zod 解析后
+ *   重建、键序无关）重发返回原结果且不再执行；同一 ID 配不同载荷以
+ *   OPERATION_ID_CONFLICT 拒绝。回执是有限窗口：每房间仅保留最近的
+ *   2048 条（按写入顺序淘汰最旧），被淘汰后的重发按新命令处理，由
+ *   expectedBpVersion 版本门与命令幂等性保证不会重复推进；保留边界
+ *   的正文见 docs/architecture.md「WebSocket 通道」。
  */
 
 /** 客户端可发送的消息：仅业务命令，系统入口不可注入。 */
