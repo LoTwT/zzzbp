@@ -1,6 +1,6 @@
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { exports } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { agentCatalogData } from "../../shared/agents/catalog";
 import { BP_STEP_ORDER } from "../../shared/bp/steps";
 import { BP_RULE_VERSION } from "../../shared/bp/version";
@@ -820,5 +820,288 @@ describe("90 天快照到期清理", () => {
     expect((await ws.next("notice")).code).toBe("ROOM_NOT_FOUND");
     expect(await businessTables(roomId)).toEqual([]);
     expect(await currentAlarm(roomId)).toBeNull();
+  });
+});
+
+describe("终态连接收口：任何入口与重试都幂等收敛现存实时通道", () => {
+  /** 等待客户端收到指定 notice 并返回其内容；超时抛错。 */
+  async function waitNotice(
+    client: TestWsClient,
+    code: string,
+    label: string,
+    timeoutMs = 3000,
+  ): Promise<void> {
+    await client.waitFor(
+      (message) => {
+        if (message === null) return false;
+        try {
+          const parsed = JSON.parse(message) as { kind?: string; code?: string };
+          return parsed.kind === "notice" && parsed.code === code;
+        } catch {
+          return false;
+        }
+      },
+      label,
+      timeoutMs,
+    );
+  }
+
+  /**
+   * 到期房间 + 保持打开的展示连接：裁决经真实 HTTP/WS 入口或 Alarm
+   * 执行时，现存展示连接必须收到终态通知并被关闭——展示客户端没有
+   * 心跳，遗漏通知会永远保留「已连接」的旧画面。
+   */
+  async function expiredRoomWithDisplay(withStep: boolean): Promise<{
+    roomId: string;
+    hostSecret: string;
+    display: TestWsClient;
+  }> {
+    const room = await startedRoom(withStep ? "终态收口赛" : "终态清理赛", withStep ? 1 : 0);
+    const roomId = room.roomId;
+    const display = await TestWsClient.connectDisplay(roomId);
+    await display.next("displayView");
+    await closeAll(room);
+    await setLeftAt(roomId, -1);
+    return { roomId, hostSecret: room.host.secret, display };
+  }
+
+  it.each([
+    { label: "GET 房间入口", kind: "entry" },
+    { label: "POST members 入房", kind: "join" },
+    { label: "GET catalog 目录", kind: "catalog" },
+    { label: "成员 WS 接纳", kind: "member-ws" },
+    { label: "展示 WS 接纳", kind: "display-ws" },
+  ] as const)(
+    "HTTP/WS 入口触发归档（$label）：展示连接收 ROOM_ARCHIVED 并关闭",
+    async ({ kind }) => {
+      const { roomId, hostSecret, display } = await expiredRoomWithDisplay(true);
+      try {
+        if (kind === "entry") {
+          const response = await getEntry(roomId);
+          expect(response.status).toBe(200);
+          expect(roomEntryResponseSchema.parse(await response.json()).kind).toBe("archived");
+        } else if (kind === "join") {
+          const response = await exports.default.fetch(
+            new Request(`${BASE_URL}/api/rooms/${roomId}/members`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ nickname: "观众" }),
+            }),
+          );
+          expect(response.status).toBe(410);
+        } else if (kind === "catalog") {
+          const response = await exports.default.fetch(`${BASE_URL}/api/rooms/${roomId}/catalog`);
+          expect(response.status).toBe(410);
+        } else if (kind === "member-ws") {
+          // 成员通道接纳：先完成到期裁决与终态收口，再以 ROOM_ARCHIVED
+          // 拒绝新连接（即使凭据有效也不能注册连接清掉已过期期限）。
+          const client = await TestWsClient.connectMember(roomId, hostSecret);
+          expect((await client.next("notice")).code).toBe("ROOM_ARCHIVED");
+          expect((await client.waitForClose("归档后成员接纳拒绝")).code).toBe(1008);
+        } else {
+          const client = await TestWsClient.connectDisplay(roomId);
+          expect((await client.next("notice")).code).toBe("ROOM_ARCHIVED");
+        }
+        await waitNotice(display, "ROOM_ARCHIVED", "归档通知");
+        expect((await display.waitForClose("归档关闭展示通道")).code).toBe(1008);
+      } finally {
+        display.close();
+      }
+    },
+  );
+
+  it.each([
+    { label: "HTTP 读取触发", kind: "http" },
+    { label: "Alarm 触发", kind: "alarm" },
+  ] as const)("空序列到期清理（$label）：展示连接收 ROOM_NOT_FOUND 并关闭", async ({ kind }) => {
+    const { roomId, display } = await expiredRoomWithDisplay(false);
+    try {
+      if (kind === "http") {
+        expect((await getEntry(roomId)).status).toBe(404);
+      } else {
+        await runInDurableObject(exports.Room.get(exports.Room.idFromName(roomId)), (_r, state) => {
+          state.storage.setAlarm(Date.now() - 1);
+        });
+        expect(
+          await waitForRoomQuery(
+            roomId,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE name = 'room_meta'",
+            "n",
+            0,
+            5000,
+          ),
+        ).toBe(true);
+      }
+      await waitNotice(display, "ROOM_NOT_FOUND", "清理通知");
+      expect((await display.waitForClose("清理关闭展示通道")).code).toBe(1008);
+      expect(await currentAlarm(roomId)).toBeNull();
+    } finally {
+      display.close();
+    }
+  });
+
+  it("归档已提交但 Alarm 写入失败：恢复后的重试仍完成终态通知与 Alarm 补齐", async () => {
+    const { roomId, display } = await expiredRoomWithDisplay(true);
+    const stub = exports.Room.get(exports.Room.idFromName(roomId));
+    try {
+      // 注入 setAlarm 故障：alarm() 的 SQL 归档照常提交，Alarm 写入抛错。
+      const first = await runInDurableObject(stub, async (instance, state) => {
+        const original = state.storage.setAlarm.bind(state.storage);
+        state.storage.setAlarm = async () => {
+          throw new Error("review injected setAlarm failure");
+        };
+        try {
+          await (instance as unknown as { alarm(): Promise<void> }).alarm();
+          return "did not fail";
+        } catch {
+          return "failed";
+        } finally {
+          state.storage.setAlarm = original;
+        }
+      });
+      expect(first).toBe("failed");
+      // SQL 归档已持久成立；通知在 Alarm 恢复前不发出（不发假终态）。
+      expect((await queryRoomRows(roomId, "SELECT lifecycle FROM room_meta"))[0]?.lifecycle).toBe(
+        "archived",
+      );
+
+      // 平台重试（或任意入口）恢复后：终态通知幂等补齐，Alarm 补设。
+      await runInDurableObject(stub, async (instance) => {
+        await (instance as unknown as { alarm(): Promise<void> }).alarm();
+      });
+      await waitNotice(display, "ROOM_ARCHIVED", "恢复重试后的归档通知");
+      expect((await display.waitForClose("恢复重试后关闭")).code).toBe(1008);
+      const snapshot = await readStoredSnapshot(roomId);
+      expect(snapshot).not.toBeNull();
+      expect(await currentAlarm(roomId)).toBe(Date.parse(snapshot!.expiresAt));
+    } finally {
+      display.close();
+    }
+  });
+
+  it("入房的前置 Alarm 收敛失败：零成员写入、无凭据交付，恢复后重试正常建成员", async () => {
+    const host = await createRoomViaHttp("入房收敛故障赛", "主持人");
+    const roomId = host.roomId;
+    const stub = exports.Room.get(exports.Room.idFromName(roomId));
+    const revisionBefore = Number(
+      (await queryRoomRows(roomId, "SELECT revision FROM room_meta"))[0]?.revision,
+    );
+
+    // 注入：删除既有 Alarm（使收敛必然走 setAlarm）并让 setAlarm 失败。
+    await runInDurableObject(stub, async (_r, state) => {
+      await state.storage.deleteAlarm();
+      const target = state.storage as unknown as {
+        setAlarm: (...args: unknown[]) => Promise<void>;
+        __restore?: () => void;
+      };
+      const original = target.setAlarm.bind(target);
+      target.setAlarm = async () => {
+        throw new Error("review injected setAlarm failure");
+      };
+      target.__restore = () => {
+        target.setAlarm = original;
+      };
+    });
+
+    try {
+      const response = await exports.default.fetch(
+        new Request(`${BASE_URL}/api/rooms/${roomId}/members`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nickname: "不应存在的观众" }),
+        }),
+      );
+      // 失败零写入：500、无 Cookie、成员与 revision 不变（无孤儿成员）。
+      expect(response.status).toBe(500);
+      expect(response.headers.has("Set-Cookie")).toBe(false);
+      expect(await queryRoomRows(roomId, "SELECT COUNT(*) AS n FROM members")).toEqual([{ n: 1 }]);
+      expect(await queryRoomRows(roomId, "SELECT revision FROM room_meta")).toEqual([
+        { revision: revisionBefore },
+      ]);
+    } finally {
+      await runInDurableObject(stub, (_r, state) => {
+        (state.storage as unknown as { __restore: () => void }).__restore();
+      });
+    }
+
+    // 故障解除后重试：前置收敛成功，成员写入与凭据交付正常，Alarm 在期限上。
+    const retry = await exports.default.fetch(
+      new Request(`${BASE_URL}/api/rooms/${roomId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname: "恢复后的观众" }),
+      }),
+    );
+    expect(retry.status).toBe(200);
+    expect(retry.headers.has("Set-Cookie")).toBe(true);
+    expect(await queryRoomRows(roomId, "SELECT COUNT(*) AS n FROM members")).toEqual([{ n: 2 }]);
+    expect(await queryRoomRows(roomId, "SELECT revision FROM room_meta")).toEqual([
+      { revision: revisionBefore + 1 },
+    ]);
+    const leftAt = Date.parse(
+      String((await queryRoomRows(roomId, "SELECT created_at FROM room_meta"))[0]?.created_at),
+    );
+    expect(
+      Math.abs(((await currentAlarm(roomId)) ?? 0) - (leftAt + RETENTION_MS)),
+    ).toBeLessThanOrEqual(5_000);
+  });
+
+  it("终态收口触发的成员 close 回调不产生无意义重试", async () => {
+    const host = await createRoomViaHttp("归档关闭回调赛", "主持人");
+    const roomId = host.roomId;
+    // 构造「已归档但成员连接仍在」的防御状态（正常运行中接纳即拒绝，
+    // 此处验证终态关闭后的 close 回调路径）。
+    const client = await TestWsClient.connectMember(roomId, host.secret);
+    await client.next("hostView");
+    const archivedAt = new Date().toISOString();
+    const snapshot = archiveSnapshotSchema.parse({
+      roomId,
+      roomName: "归档关闭回调赛",
+      teamNames: { A: "左", B: "右" },
+      bpCompleted: false,
+      operations: [
+        {
+          slotId: "AB1",
+          team: "A",
+          action: "ban",
+          agentId: agentCatalogData.agents[0]!.id,
+          agentName: agentCatalogData.agents[0]!.name,
+          agentAvatarUrl: null,
+        },
+      ],
+      versions: {
+        ruleVersion: BP_RULE_VERSION,
+        agentDataVersion: agentCatalogData.agentDataVersion,
+      },
+      archivedAt,
+      expiresAt: computeSnapshotDeadline(archivedAt),
+    });
+    await execInRoom(
+      roomId,
+      `UPDATE room_meta SET lifecycle = 'archived';
+       INSERT INTO archive_snapshot (id, snapshot_json) VALUES (1, '${JSON.stringify(snapshot).replace(/'/g, "''")}')`,
+    );
+
+    // 读取入口触发终态收口：成员连接收通知并被关闭；close 回调对非 live
+    // 房间零写入跳过，不触发协调重试链（无 close/presence-retry 诊断日志）。
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect((await getEntry(roomId)).status).toBe(200);
+      await waitNotice(client, "ROOM_ARCHIVED", "收口通知");
+      expect((await client.waitForClose("收口关闭")).code).toBe(1008);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const lifecycleErrors = errorSpy.mock.calls.filter(([message]) => {
+        const text = String(message);
+        return (
+          text.includes('"phase":"close"') ||
+          text.includes('"phase":"presence-retry"') ||
+          text.includes("在线协调")
+        );
+      });
+      expect(lifecycleErrors).toEqual([]);
+    } finally {
+      errorSpy.mockRestore();
+      client.close();
+    }
   });
 });

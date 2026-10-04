@@ -90,6 +90,13 @@ function onJoinArchived(): void {
   void loadEntry();
 }
 
+function onJoinNotFound(): void {
+  // 提交时房间已不存在（404，初始读取 live 之后的自然过期竞态）：
+  // 与初始 404、WS ROOM_NOT_FOUND 一致，转统一不存在页（含创建入口）。
+  memberView.value = null;
+  phase.value = "not-found";
+}
+
 onMounted(loadEntry);
 </script>
 
@@ -136,6 +143,7 @@ onMounted(loadEntry);
       :notice="joinNotice"
       @joined="onJoined"
       @archived="onJoinArchived"
+      @not-found="onJoinNotFound"
     />
 
     <RoomWorkspace

@@ -182,8 +182,6 @@ type CommandOutcome =
   | {
       readonly kind: "archived";
       readonly versions: RoomVersionInfo;
-      /** 本次事件刚完成归档转换（回执后需通知并终止现存连接）。 */
-      readonly transitioned: boolean;
     }
   | { readonly kind: "unsupported_rule_version"; readonly versions: RoomVersionInfo }
   /** 回执命中且载荷一致：返回原结果，不再执行。 */
@@ -397,17 +395,40 @@ export class Room extends DurableObject {
   /**
    * 入房：有效凭据恢复原成员（忽略请求昵称，不轮换凭据、不重复建成员）；
    * 否则以请求昵称创建新观众成员。新成员为离线状态（只有实际成员 WS
-   * 连接会计在线）。成员写入与 revision 递增、写入后的视图装配同在一个
-   * 事务闭包内：任一步骤失败整体回滚，不会留下无凭据交付的孤儿成员。
+   * 连接会计在线）。
    *
-   * 入房前先做生命周期裁决：到期房间在写路径上完成归档或清理，归档后
-   * 按已归档拒绝（HTTP 层 410，不自动加入成员、不建立任何实时连接来读
-   * 记录）；HTTP 身份登记本身不取消、不延长保留期限（last_member_left_at
-   * 只由实际成员 WS 连接维护）。未建房的实例不做任何写入（不建表），
-   * 直接按 not_found 返回。新成员写入成功、或在线协调修复了历史分叉时，
-   * 向已连接的成员/展示连接广播最新视图（房主的成员列表因此实时更新）。
+   * 两阶段结构（修复「Alarm 收敛失败留下无凭据孤儿成员」）：
+   * - 阶段一（前置生命周期收敛）：会失败的异步 Alarm 应用放在成员写入
+   *   之前——失败时上抛，HTTP 500、零成员写入、无凭据交付（保持 PR4
+   *   的失败零写入契约，客户端重试不产生孤儿）；到期房间在此完成
+   *   归档/清理（含终态连接收口）并按终态拒绝入房。
+   * - 阶段二（入房事务）：成员写入与 revision 递增、写入后的视图装配
+   *   在一个事务闭包内，任一步骤失败整体回滚；事务内重新裁决——阶段
+   *   一的 await 期间时钟推进或连接事件都可能改变结论，到期在此归档
+   *   并拒绝，不能因前置已判定 live 而让过期房间被入房复活。
+   * - 阶段三（收口）：终态（归档/清理）走统一收口；live 不再重复应用
+   *   Alarm——阶段一已收敛，此后 last_member_left_at 的任何变化都由
+   *   连接/断开/命令路径各自收敛（见 settleLifecycle 注释），此处重复
+   *   应用一旦失败会把已提交成员变成无凭据孤儿。
+   *
+   * HTTP 身份登记本身不取消、不延长保留期限（last_member_left_at 只由
+   * 实际成员 WS 连接维护）；未建房的实例不做任何写入（不建表、不动
+   * Alarm），直接按 not_found 返回。新成员写入成功、或在线协调修复了
+   * 历史分叉时，向已连接的成员/展示连接广播最新视图（房主的成员列表
+   * 因此实时更新）。
    */
   async joinRoom(input: JoinRoomInput): Promise<JoinRoomResult> {
+    // 阶段一：前置生命周期收敛（裁决 + Alarm 应用 + 终态收口）。
+    const preAdjudication = this.ctx.storage.transactionSync((): LifecycleAdjudication => {
+      if (!hasRoomSchema(this.sql)) return { kind: "not_found", alarm: null };
+      ensureRoomSchema(this.sql);
+      return this.adjudicateLifecycleInTransaction(this.connectedMemberIds());
+    });
+    const preEffective = await this.settleLifecycle(preAdjudication);
+    if (preEffective.kind === "not_found") return { kind: "not_found" };
+    if (preEffective.kind === "archived") return { kind: "archived" };
+
+    // 阶段二：入房事务（重新裁决，防阶段一之后状态/时钟变化）。
     const outcome = this.ctx.storage.transactionSync(
       (): {
         result: JoinRoomResult | null;
@@ -465,10 +486,15 @@ export class Room extends DurableObject {
       },
     );
 
-    // 生命周期收口（清理/Alarm）：失败时上抛，不留下对外成功但无唤醒的房间。
-    const effective = await this.settleLifecycle(outcome.adjudication);
-    if (effective.kind === "not_found") return { kind: "not_found" };
-    if (effective.kind === "archived") return { kind: "archived" };
+    // 阶段三：终态收口（清理/Alarm/终态通知；live 不重复应用 Alarm，见
+    // 方法注释）。终态路径没有成员写入，Alarm 失败上抛不产生孤儿。
+    if (outcome.adjudication.kind !== "live") {
+      const effective = await this.settleLifecycle(outcome.adjudication);
+      if (effective.kind === "not_found") return { kind: "not_found" };
+      if (effective.kind === "archived") return { kind: "archived" };
+      // settleLifecycle 的 live 结果只能来自 live 裁决，此处不可达（防御）。
+      throw new Error("生命周期收口结果与裁决不一致");
+    }
     if (outcome.result === null) {
       throw new Error("live 裁决后缺少入房结果，存储状态异常");
     }
@@ -640,42 +666,61 @@ export class Room extends DurableObject {
   /**
    * 裁决的事务外收口：清理（原子 deleteAll 回收整个 SQLite，含业务表、
    * KV 与兼容日期 2026-09-01 起的 Active Alarm；仍显式 deleteAlarm 兜底
-   * 旧运行时语义）与 Alarm 应用。返回对调用方的最终结果（cleanup 折叠
-   * 为 not_found）。归档转换的通知不在此处发出，由持有消息顺序的入口
-   * （命令回执之后、HTTP/Alarm 路径在收口后）调用
-   * terminateConnectionsAfterArchive。
+   * 旧运行时语义）、Alarm 应用与终态连接收口。返回对调用方的最终结果
+   * （cleanup 折叠为 not_found）。
+   *
+   * 终态连接收口（concludeConnections）不依赖 transitioned：归档/清理
+   * 一旦持久成立，任何入口（读取、入房、目录、WS 接纳、命令、Alarm
+   * 及其故障后的重试）重放收口都向现存实时连接发送终态通知并关闭——
+   * 无心跳的展示客户端不会自己发现房间已终态，遗漏一次通知就会永远
+   * 保留「已连接」的旧画面。幂等：通知/关闭只影响仍存活的连接；早已
+   * 收口的房间重放时没有连接可发。SQL 归档/清理失败（事务回滚）不会
+   * 到达这里，不发假终态；Alarm 应用失败时在通知之前上抛，由平台
+   * 重试或下一事件在恢复后完成通知（持久终态不变，重放结论相同）。
+   *
+   * `beforeConclude` 供命令通道保序：commandResult 必须先于终态通知与
+   * 关闭送达操作者连接（挂起命令以服务端回执结算，随后连接按终态
+   * 收口）。
    */
-  private async settleLifecycle(adjudication: LifecycleAdjudication): Promise<LifecycleEffective> {
+  private async settleLifecycle(
+    adjudication: LifecycleAdjudication,
+    options?: { readonly beforeConclude?: () => void },
+  ): Promise<LifecycleEffective> {
     switch (adjudication.kind) {
       case "not_found":
-        // 不触碰 Alarm API：空实例的孤立 Alarm（如建房事务回滚的残留）
-        // 触发时由 alarm() 按无房间自清。
+        // 不触碰 Alarm 与连接：房间从未存在（或早已清理且无连接可发），
+        // 空实例的孤立 Alarm（如建房事务回滚的残留）触发时由 alarm()
+        // 按无房间自清。
         return { kind: "not_found" };
       case "cleanup":
         await this.ctx.storage.deleteAll();
         await this.ctx.storage.deleteAlarm();
+        this.concludeConnections("ROOM_NOT_FOUND", "房间不存在或已过期");
         return { kind: "not_found" };
       case "live":
         await this.applyLifecycleAlarm(adjudication.alarm);
         return { kind: "live" };
       case "archived":
         await this.applyLifecycleAlarm(adjudication.alarm);
+        options?.beforeConclude?.();
+        this.concludeConnections("ROOM_ARCHIVED", "房间已归档");
         return { kind: "archived", snapshot: adjudication.snapshot };
     }
   }
 
   /**
-   * 归档转换成功后终止现存实时通道：展示与成员连接收到 ROOM_ARCHIVED
-   * 通知并被关闭（1008）。终态通知与 close 只在持久转换成功后发出；
-   * 转换失败（事务回滚）时不发假归档。过期清理后房间不存在，新连接由
-   * 各入口按 ROOM_NOT_FOUND 拒绝。
+   * 终态连接收口：向现存的成员/展示连接发送终态通知并关闭（1008）。
+   *
+   * 只在持久终态成立后调用（见 settleLifecycle）：归档 → ROOM_ARCHIVED；
+   * 清理 → ROOM_NOT_FOUND（原房间链接按不存在收口，客户端不再重连）。
+   * rejected 连接（升级时即被拒绝的）跳过；发送/关闭失败只影响该连接。
    */
-  private terminateConnectionsAfterArchive(): void {
+  private concludeConnections(code: "ROOM_ARCHIVED" | "ROOM_NOT_FOUND", message: string): void {
     for (const socket of this.ctx.getWebSockets()) {
       const attachment = readAttachment(socket);
       if (attachment === null || attachment.kind === "rejected") continue;
-      this.safeSend(socket, noticeMessage("ROOM_ARCHIVED", "房间已归档"));
-      this.safeClose(socket, 1008, "ROOM_ARCHIVED");
+      this.safeSend(socket, noticeMessage(code, message));
+      this.safeClose(socket, 1008, code);
     }
   }
 
@@ -686,11 +731,13 @@ export class Room extends DurableObject {
    * 连接重新裁决（与读取/入房/命令共用同一裁决），重复、过早或延迟的
    * 触发都收敛到当前应设的下一期限——不重复归档、不提早清理、不覆盖
    * 已设的下一期限、不靠延迟触发延长可操作时间（期限由各入口的裁决
-   * 强制，Alarm 只负责无人访问时的推进）。
+   * 强制，Alarm 只负责无人访问时的推进）。终态连接收口同样幂等：即使
+   * 上一次执行的归档已提交而 Alarm 写入失败，本次重试（或任何入口）
+   * 仍会对现存连接完成终态通知。
    *
-   * SQL 裁决在 transactionSync 内原子完成；其后的 Alarm 收敛失败时抛出，
-   * 由平台 at-least-once 语义重试（2 秒起指数退避，最多 6 次），进程
-   * 崩溃时在另一实例上从头重跑（见官方 Alarms API）。
+   * SQL 裁决在 transactionSync 内原子完成；其后的 Alarm 收敛或收口失败
+   * 时抛出，由平台 at-least-once 语义重试（2 秒起指数退避，最多 6 次），
+   * 进程崩溃时在另一实例上从头重跑（见官方 Alarms API）。
    */
   async alarm(): Promise<void> {
     const adjudication = this.ctx.storage.transactionSync((): LifecycleAdjudication => {
@@ -698,14 +745,7 @@ export class Room extends DurableObject {
       ensureRoomSchema(this.sql);
       return this.adjudicateLifecycleInTransaction(this.connectedMemberIds());
     });
-    const effective = await this.settleLifecycle(adjudication);
-    if (
-      effective.kind === "archived" &&
-      adjudication.kind === "archived" &&
-      adjudication.transitioned
-    ) {
-      this.terminateConnectionsAfterArchive();
-    }
+    await this.settleLifecycle(adjudication);
   }
 
   /** 生命周期路径内部故障的结构化诊断（白名单字段，不含错误内容）。 */
@@ -788,16 +828,13 @@ export class Room extends DurableObject {
     );
 
     // 生命周期收口：清理失败或 Alarm 收敛失败都上抛（升级请求由平台的
-    // 统一错误边界收口为 5xx，不产生假成功连接）。
+    // 统一错误边界收口为 5xx，不产生假成功连接）；终态时现存实时连接
+    // 在此一并收口（幂等，不依赖本次是否发生转换），随后拒绝新连接。
     const effective = await this.settleLifecycle(resolved.adjudication);
     if (effective.kind === "not_found") {
       return this.acceptRejectedConnection("ROOM_NOT_FOUND", "房间不存在");
     }
     if (effective.kind === "archived") {
-      // 刚完成归档转换时，先终止现存实时通道，再拒绝新连接。
-      if (resolved.adjudication.kind === "archived" && resolved.adjudication.transitioned) {
-        this.terminateConnectionsAfterArchive();
-      }
       return this.acceptRejectedConnection("ROOM_ARCHIVED", "房间已归档");
     }
 
@@ -944,6 +981,10 @@ export class Room extends DurableObject {
    * 内联执行——嵌入时与所在业务单元同事务提交或回滚。
    *
    * 规则：
+   * - 非 live（归档）房间直接跳过：成员、席位等操作期数据已清理，
+   *   无法也不应按 live 状态装配/投影；终态连接收口触发的 close 回调
+   *   到这里零写入返回，不制造无意义重试（清理后的房间无业务表，
+   *   hasRoomSchema 分支同样零写入）。
    * - 存储在线但已无连接：视为离线（进行中房主/在席选手触发掉线暂停）；
    * - 存储离线但仍有连接（如上线写入曾失败后由其他事件补偿）：视为在线
    *   并取消空房计时；
@@ -956,9 +997,9 @@ export class Room extends DurableObject {
     ensureRoomSchema(this.sql);
     const meta = readRoomMeta(this.sql);
     if (meta === null) return { changed: false, state: null, meta: null };
+    if (meta.lifecycle !== "live") return { changed: false, state: null, meta };
     const state = loadRoomState(this.sql);
     if (state === null) throw new Error("在线协调前状态装配失败");
-    if (meta.lifecycle !== "live") return { changed: false, state, meta };
 
     const connected = this.connectedMemberIds();
     let current = state;
@@ -1190,11 +1231,7 @@ export class Room extends DurableObject {
             const versions = readRoomVersionInfo(this.sql);
             if (versions === null) throw new Error("命令处理前房间元信息缺失");
             return {
-              outcome: {
-                kind: "archived",
-                versions,
-                transitioned: adjudication.transitioned,
-              } as const,
+              outcome: { kind: "archived", versions } as const,
               adjudication,
             };
           }
@@ -1278,30 +1315,25 @@ export class Room extends DurableObject {
         return;
       }
       case "room_cleanup": {
-        // 空房到期且无有效记录：事务外原子清理，随后按不存在收口。
+        // 空房到期且无有效记录：事务外原子清理；收口内含终态连接收口
+        // （ROOM_NOT_FOUND + 1008，含本连接），无需重复通知。
         await this.settleLifecycle(adjudication);
-        this.safeSend(ws, noticeMessage("ROOM_NOT_FOUND", "房间不存在或已过期"));
-        this.safeClose(ws, 1008, "ROOM_NOT_FOUND");
         return;
       }
       case "archived": {
         // Alarm 收敛失败会上抛（webSocketMessage 由运行时收口），不发送
-        // 假归档回执；成功后先回执挂起命令，再按终态通知并关闭。
-        await this.settleLifecycle(adjudication);
-        this.sendCommandResult(ws, command.operationId, {
-          ok: false,
-          error: { code: "ROOM_ARCHIVED", message: "房间已归档，拒绝一切写操作" },
-          versions: outcome.versions,
+        // 假归档回执；成功后经 beforeConclude 先回执挂起命令，再对全部
+        // 现存实时通道（含本连接）按终态通知并关闭——无论归档是本次
+        // 转换还是早已成立（防御路径），收口幂等一致。
+        await this.settleLifecycle(adjudication, {
+          beforeConclude: () => {
+            this.sendCommandResult(ws, command.operationId, {
+              ok: false,
+              error: { code: "ROOM_ARCHIVED", message: "房间已归档，拒绝一切写操作" },
+              versions: outcome.versions,
+            });
+          },
         });
-        if (outcome.transitioned) {
-          // 刚完成归档转换：终止全部现存实时通道（含本连接，通知在
-          // commandResult 之后送达）。
-          this.terminateConnectionsAfterArchive();
-        } else {
-          // 早已归档的房间不会有有效成员连接；防御性按终态关闭。
-          this.safeSend(ws, noticeMessage("ROOM_ARCHIVED", "房间已归档"));
-          this.safeClose(ws, 1008, "ROOM_ARCHIVED");
-        }
         return;
       }
       case "unsupported_rule_version": {
