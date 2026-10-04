@@ -313,12 +313,15 @@ function sendConfirm(): void {
 }
 
 const confirmErrorText = computed(() => {
-  const error =
-    session.scopeError("confirmPreselect") ?? session.scopeError("setPreselect") ?? null;
-  // 身份变化结论由底栏的通用身份提示统一展示（同一结论不重复两行）；
-  // 其余错误（含「结果未知」）仍在操作区显示。
-  if (error !== null && error.code === IDENTITY_CHANGED) return null;
-  return error?.text ?? null;
+  // 身份变化结论由底栏的通用身份提示统一展示（同一结论不重复两行）。
+  // 过滤只丢弃该结论本身，不跳过其后的候选：旧 confirm 的身份结论仍在
+  // 保留期时，后续预选的新错误（如并发选择被拒）仍按既有优先级在
+  // 操作区可见。
+  const candidates = [session.scopeError("confirmPreselect"), session.scopeError("setPreselect")];
+  for (const error of candidates) {
+    if (error !== null && error.code !== IDENTITY_CHANGED) return error.text;
+  }
+  return null;
 });
 
 // ---- 控制面板 ----
