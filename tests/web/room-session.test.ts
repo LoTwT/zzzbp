@@ -169,8 +169,10 @@ test("命令补齐 operationId 与版本前置条件，pending 期间防重复",
   expect("expectedRevision" in sent).toBe(false);
   expect(session.isScopePending("setPreselect")).toBe(true);
 
-  // 回执按 operationId 精确匹配；同区域第二条命令独立排队。
-  session.sendCommand({ type: "setPreselect", slotId: "AB1", agentId: "1241" });
+  // 同 scope 已有命令在途时会话层拒绝重复发送（UI 亦禁用入口，此处兜底）。
+  const duplicate = session.sendCommand({ type: "setPreselect", slotId: "AB1", agentId: "1241" });
+  expect(duplicate).toEqual({ sent: false });
+  expect(handle.sent).toHaveLength(1);
   handle.receive({
     kind: "commandResult",
     operationId: "op-1",
@@ -180,14 +182,24 @@ test("命令补齐 operationId 与版本前置条件，pending 期间防重复",
     revision: 4,
   });
   expect(session.pending.value.get("op-1")).toBeUndefined();
-  expect(session.isScopePending("setPreselect")).toBe(true);
+  expect(session.isScopePending("setPreselect")).toBe(false);
+  // 回执解除挂起后同 scope 可再次发送，并携带新的唯一 operationId。
+  const next = session.sendCommand({ type: "setPreselect", slotId: "AB1", agentId: "1241" });
+  expect(next).toEqual({ sent: true });
+  expect(handle.sent).toHaveLength(2);
+  expect(JSON.parse(handle.sent[1]!)).toMatchObject({
+    type: "setPreselect",
+    agentId: "1241",
+    operationId: "op-2",
+    expectedBpVersion: 7,
+  });
   handle.receive({
     kind: "commandResult",
     operationId: "op-2",
     ok: true,
     error: null,
-    bpVersion: 8,
-    revision: 4,
+    bpVersion: 9,
+    revision: 5,
   });
   expect(session.isScopePending("setPreselect")).toBe(false);
 });

@@ -33,7 +33,8 @@ async function loadEntry(): Promise<void> {
     phase.value = result.value.memberView === null ? "join" : "room";
     return;
   }
-  if (result.reason === "network") {
+  if (result.reason === "network" || result.reason === "server") {
+    // 网络/服务端故障可重试：房间不一定不存在，保留重新加载入口。
     loadFailed.value = true;
     phase.value = "loading";
     return;

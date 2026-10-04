@@ -195,7 +195,10 @@ const pickColumns = computed(() => {
         active: view.value !== null && view.value.currentSlotId === slotId,
       })),
     );
-    result[team] = { teamName: teamName === "" ? "待选择" : teamName, rows };
+    // 顶部标识以席位占用为准（room-layout.md「双方队伍信息」）：空席一律
+    // 显示「待选择」，队名独立保留；落座后显示队名（未命名时为空）。
+    const seatOccupied = view.value?.seatOccupancy[team] ?? false;
+    result[team] = { teamName: seatOccupied ? teamName : "待选择", rows };
   }
   return result;
 });
@@ -232,18 +235,28 @@ watch(
 
 // ---- 预选与提交 ----
 
+/**
+ * 当前操作位的挂起互斥：预选与确认任一在途时，两者入口都锁定，避免基于
+ * 旧视图发出注定过期/越权的额外命令（服务端仍会拒绝，但那不是期望路径）。
+ * 挂起解除（回执或换连接后的视图核对）后按最新权威状态恢复。
+ */
+const slotOperationPending = computed(
+  () => session.isScopePending("setPreselect") || session.isScopePending("confirmPreselect"),
+);
+
 const canPreselect = computed(
   () =>
     connected.value &&
     view.value !== null &&
     view.value.bpStatus === "running" &&
     isCurrentPlayerSide.value &&
-    !session.isScopePending("setPreselect") &&
+    !slotOperationPending.value &&
     poolStatuses.value !== null,
 );
 
 function sendPreselect(agentId: string): void {
   if (view.value === null || view.value.currentSlotId === null) return;
+  if (slotOperationPending.value) return;
   if (view.value.preselect === agentId) return;
   session.sendCommand({ type: "setPreselect", slotId: view.value.currentSlotId, agentId });
 }
@@ -260,7 +273,7 @@ const confirmDisabled = computed(() => {
     view.value.preselect === null ||
     view.value.bpStatus !== "running" ||
     !connected.value ||
-    confirmPending.value
+    slotOperationPending.value
   );
 });
 
@@ -314,59 +327,76 @@ function closePanel(): void {
         side-text="A 方"
       />
 
-      <!-- 中央代理人池：筛选栏与底部操作区固定，仅列表滚动；面板右侧覆盖。 -->
+      <!-- 中央代理人池：筛选栏与底部操作区固定，仅列表滚动；面板覆盖池区右侧，不遮底部操作区。 -->
       <section
-        class="relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-(--border-default) bg-(--surface-panel)"
+        class="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-(--border-default) bg-(--surface-panel)"
         aria-label="代理人池"
       >
-        <AgentPoolToolbar
-          v-if="isSeatedMember && catalogModel !== null"
-          v-model="agentQuery"
-          :elements="catalogModel.elements"
-          :specialties="catalogModel.specialties"
-        />
+        <!-- 池区（筛选栏 + 滚动列表）：控制面板的覆盖范围限制在此区域内。 -->
+        <div class="relative flex min-h-0 flex-1 flex-col">
+          <AgentPoolToolbar
+            v-if="isSeatedMember && catalogModel !== null"
+            v-model="agentQuery"
+            :elements="catalogModel.elements"
+            :specialties="catalogModel.specialties"
+          />
 
-        <div
-          ref="listEl"
-          class="min-h-0 flex-1 overflow-y-auto px-2 py-3"
-          :class="isSeatedMember ? '' : 'pt-2'"
-        >
-          <template v-if="catalogState !== 'ready'">
-            <div
-              class="flex size-full flex-col items-center justify-center gap-2 text-sm text-neutral-500"
-            >
-              <template v-if="catalogState === 'loading'">
-                <p>正在加载代理人名单…</p>
-              </template>
-              <template v-else>
-                <p class="text-danger-700" role="alert">代理人名单加载失败</p>
-                <button
-                  type="button"
-                  class="rounded-lg border border-(--border-default) px-3 py-1.5 text-xs font-medium focus-ring hover:bg-(--surface-subtle)"
-                  @click="loadCatalog"
-                >
-                  重新加载
-                </button>
-              </template>
-            </div>
-          </template>
-          <template v-else-if="filteredEntries.length === 0">
-            <p class="py-10 text-center text-sm text-neutral-500">没有符合搜索或筛选条件的代理人</p>
-          </template>
-          <template v-else>
-            <ul
-              class="mx-auto grid w-full max-w-4xl grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-1"
-            >
-              <li v-for="entry in filteredEntries" :key="entry.id">
-                <AgentCard
-                  :agent="entry"
-                  :status="poolStatuses?.get(entry.id) ?? 'available'"
-                  :selectable="canPreselect"
-                  @preselect="sendPreselect"
-                />
-              </li>
-            </ul>
-          </template>
+          <div
+            ref="listEl"
+            class="min-h-0 flex-1 overflow-y-auto px-2 py-3"
+            :class="isSeatedMember ? '' : 'pt-2'"
+          >
+            <template v-if="catalogState !== 'ready'">
+              <div
+                class="flex size-full flex-col items-center justify-center gap-2 text-sm text-neutral-500"
+              >
+                <template v-if="catalogState === 'loading'">
+                  <p>正在加载代理人名单…</p>
+                </template>
+                <template v-else>
+                  <p class="text-danger-700" role="alert">代理人名单加载失败</p>
+                  <button
+                    type="button"
+                    class="rounded-lg border border-(--border-default) px-3 py-1.5 text-xs font-medium focus-ring hover:bg-(--surface-subtle)"
+                    @click="loadCatalog"
+                  >
+                    重新加载
+                  </button>
+                </template>
+              </div>
+            </template>
+            <template v-else-if="filteredEntries.length === 0">
+              <p class="py-10 text-center text-sm text-neutral-500">
+                没有符合搜索或筛选条件的代理人
+              </p>
+            </template>
+            <template v-else>
+              <ul
+                class="mx-auto grid w-full max-w-4xl grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-1"
+              >
+                <li v-for="entry in filteredEntries" :key="entry.id">
+                  <AgentCard
+                    :agent="entry"
+                    :status="poolStatuses?.get(entry.id) ?? 'available'"
+                    :selectable="canPreselect"
+                    @preselect="sendPreselect"
+                  />
+                </li>
+              </ul>
+            </template>
+          </div>
+
+          <!-- 控制面板：覆盖池区右侧，不挤压网格、不遮底部操作区。 -->
+          <ControlPanel
+            v-if="panelOpen"
+            :session="session"
+            :view="view"
+            :catalog-model="catalogModel"
+            :layout="pickLayout"
+            :connected="connected"
+            @close="closePanel"
+            @update:layout="pickLayout = $event"
+          />
         </div>
 
         <!-- 连接层全局提示（服务端连接通知），随最新视图自动清除。 -->
@@ -378,8 +408,11 @@ function closePanel(): void {
           {{ session.globalNotice.value }}
         </p>
 
-        <!-- 底部操作区：确认按钮居中（仅当前操作方），控制面板入口固定右下。 -->
-        <div class="relative shrink-0 border-t border-(--border-default) px-3 py-2.5">
+        <!--
+          底部操作区（固定，不被面板覆盖）：确认按钮相对整个池区几何居中，
+          控制面板入口固定右下，二者始终可见可达。
+        -->
+        <div class="shrink-0 border-t border-(--border-default) px-3 py-2.5">
           <p
             v-if="confirmVisible && confirmErrorText !== null"
             class="pb-1.5 text-center text-xs text-danger-700"
@@ -387,22 +420,20 @@ function closePanel(): void {
           >
             {{ confirmErrorText }}
           </p>
-          <div class="flex items-center justify-between gap-3">
-            <div class="min-w-0 flex-1" aria-hidden="true" />
+          <div class="relative flex min-h-10 items-center">
             <button
               v-if="confirmVisible"
               type="button"
-              class="rounded-lg bg-lavender-600 px-10 py-2 text-sm font-semibold text-white focus-ring hover:bg-lavender-700 disabled:cursor-not-allowed disabled:opacity-50"
+              class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-lavender-600 px-10 py-2 text-sm font-semibold text-white focus-ring hover:bg-lavender-700 disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="confirmDisabled"
               @click="sendConfirm"
             >
               {{ confirmPending ? "提交中…" : confirmLabel }}
             </button>
-            <div v-else class="min-w-0 flex-1" aria-hidden="true" />
             <button
               ref="panelEntryEl"
               type="button"
-              class="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium text-neutral-700 focus-ring hover:bg-(--surface-subtle)"
+              class="relative ml-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium text-neutral-700 focus-ring hover:bg-(--surface-subtle)"
               aria-haspopup="dialog"
               @click="panelOpen = true"
             >
@@ -411,18 +442,6 @@ function closePanel(): void {
             </button>
           </div>
         </div>
-
-        <!-- 控制面板：右侧覆盖中央区，不挤压网格。 -->
-        <ControlPanel
-          v-if="panelOpen"
-          :session="session"
-          :view="view"
-          :catalog-model="catalogModel"
-          :layout="pickLayout"
-          :connected="connected"
-          @close="closePanel"
-          @update:layout="pickLayout = $event"
-        />
       </section>
 
       <PickColumn

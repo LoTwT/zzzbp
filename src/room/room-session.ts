@@ -254,7 +254,9 @@ export class RoomSession {
   /**
    * 发送业务命令：补齐唯一 operationId 与 expectedBpVersion（setTeamName
    * 另补 expectedRevision），经共享 schema 校验后序列化发送。
-   * 未连接或尚无视图时不发送（调用方也会禁用入口，此处兜底）。
+   * 未连接、尚无视图或同 scope 已有命令在途时不发送——同一操作区域的
+   * 防重复由会话层兜底，调用方同时按 pending 状态禁用入口；跨 scope 的
+   * 互斥（如预选与确认）由调用方的派发入口约束。
    */
   sendCommand(input: RoomCommandInput): { readonly sent: boolean } {
     const view = this.view.value;
@@ -264,6 +266,11 @@ export class RoomSession {
       view === null ||
       this.handle === null
     ) {
+      return { sent: false };
+    }
+    // 同 scope 已有命令在途时直接拒绝（不消耗 operationId）。
+    const scope = scopeOfCommand(input);
+    if (this.isScopePending(scope)) {
       return { sent: false };
     }
     const operationId = this.generateOperationId();
@@ -281,7 +288,7 @@ export class RoomSession {
     const entry: PendingRoomCommand = {
       operationId,
       command,
-      scope: scopeOfCommand(command),
+      scope,
       snapshot: {
         bpVersion: view.bpVersion,
         status: view.bpStatus,
@@ -491,8 +498,11 @@ function isUndoCommand(entry: PendingRoomCommand): boolean {
   return entry.command.type === "undoBpStep";
 }
 
-/** 命令的操作区域标识：同一区域的 pending/错误互斥展示。 */
-export function scopeOfCommand(command: RoomCommand): string {
+/**
+ * 命令的操作区域标识：同一区域的 pending/错误互斥展示。
+ * 接受命令输入或补齐协议字段后的完整命令（判别字段相同）。
+ */
+export function scopeOfCommand(command: RoomCommandInput | RoomCommand): string {
   switch (command.type) {
     case "setTeamName":
       return `setTeamName:${command.team}`;

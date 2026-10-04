@@ -27,6 +27,13 @@ export type RoomHttpFailure =
   | "archived"
   /** 请求体未通过共享 schema（客户端已预检，正常流程不应出现）。 */
   | "invalid"
+  /**
+   * 服务端或协议层故障：INTERNAL 错误体、非 JSON 的非 2xx 响应等。与调用
+   * 方输入无关且通常可重试；短暂服务故障不代表房间消失，不能并入
+   * not-found 或 invalid 的文案。
+   */
+  | "server"
+  /** 网络层失败（连接失败、中断、超时）。 */
   | "network";
 
 /** 统一的判别结果。 */
@@ -37,7 +44,7 @@ export type RoomHttpResult<T> =
       readonly reason: RoomHttpFailure;
     };
 
-/** 解析 JSON 响应体；非 JSON 或结构不符按 network 处理（服务端合同外响应）。 */
+/** 解析 JSON 响应体；非 JSON 抛错，由调用方决定归类（2xx 合同违背按可重试处理）。 */
 async function readJson(response: Response): Promise<unknown> {
   try {
     return await response.json();
@@ -46,7 +53,7 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-/** 把非 2xx 响应转换为失败原因。 */
+/** 把非 2xx 响应转换为失败原因：按错误体稳定码区分，无法解析时视为可重试的服务/协议故障。 */
 async function failureOfResponse(response: Response): Promise<RoomHttpFailure> {
   const body = apiErrorResponseBodySchema.safeParse(await readJson(response).catch(() => null));
   if (body.success) {
@@ -55,11 +62,15 @@ async function failureOfResponse(response: Response): Promise<RoomHttpFailure> {
         return "not-found";
       case "ROOM_ARCHIVED":
         return "archived";
-      default:
+      case "INVALID_REQUEST":
         return "invalid";
+      default:
+        // INTERNAL 等其余稳定码：服务端故障，可重试。
+        return "server";
     }
   }
-  return response.ok ? "network" : "invalid";
+  // 非 JSON 或不符合错误体合同的非 2xx（如网关 503 HTML）：协议层故障，可重试。
+  return "server";
 }
 
 /** 网络层异常（连接失败、中断、超时）统一折叠为 network。 */

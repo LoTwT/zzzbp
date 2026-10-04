@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useClipboard } from "@vueuse/core";
 import { ArrowLeft, ChevronRight, Link2, Pencil, RotateCcw, Undo2, Users, X } from "@lucide/vue";
 import type { BpTeam } from "../../../shared/bp/steps";
@@ -44,21 +44,33 @@ const seatTeam = ref<BpTeam>("A");
 const restartConfirming = ref(false);
 const pendingSeatMemberId = ref<string | null>(null);
 const teamNameErrors = reactive<{ A: string | null; B: string | null }>({ A: null, B: null });
+/**
+ * 队名草稿：仅当草稿仍等于上一份权威值（用户未改动）时才跟随新视图同步；
+ * 有未保存编辑（含保存请求在途时继续输入）一律保留，等待明确的成功回执
+ * 后由权威值自然追平（草稿===新权威值时保存按钮恢复禁用）。失败或无关
+ * 广播都不会覆盖草稿。
+ */
 const teamDrafts = reactive<{ A: string; B: string }>({
   A: props.view.teamNames.A,
   B: props.view.teamNames.B,
 });
-const teamDraftDirty = reactive<{ A: boolean; B: boolean }>({ A: false, B: false });
 
 const isHost = computed(() => isHostManagementView(props.view));
 const hostView = computed(() => (isHostManagementView(props.view) ? props.view : null));
 const { copy, copied } = useClipboard({ legacy: true });
 
-/** 面板根元素：打开时聚焦，Esc 可关闭/返回。 */
+// 面板根元素：打开时聚焦，返回焦点由父组件管理。
 const rootEl = ref<HTMLElement | null>(null);
 
 onMounted(() => {
   rootEl.value?.focus();
+  // Esc 全局生效（打开期间）：子视图先返回主面板，主面板关闭整个面板。
+  // 面板是非模态覆盖层，焦点可能停留在面板之外，不能只监听面板内部。
+  window.addEventListener("keydown", onWindowKeydown);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onWindowKeydown);
 });
 
 // 重开成功（回到待开始）后收起二次确认框。
@@ -74,12 +86,12 @@ function seatedMemberOf(view: HostManagementView, team: BpTeam): ManagedMember |
   return view.members.find((member) => member.seatTeam === team) ?? null;
 }
 
-// 队名草稿与权威值同步：仅在未修改时跟随视图，保留房主的输入。
+// 队名草稿与权威值同步：草稿仍等于旧权威值（未编辑）才跟随；否则保留输入。
 watch(
   () => [props.view.teamNames.A, props.view.teamNames.B] as const,
-  ([nextA, nextB]) => {
-    if (!teamDraftDirty.A) teamDrafts.A = nextA;
-    if (!teamDraftDirty.B) teamDrafts.B = nextB;
+  ([nextA, nextB], [prevA, prevB]) => {
+    if (teamDrafts.A === prevA) teamDrafts.A = nextA;
+    if (teamDrafts.B === prevB) teamDrafts.B = nextB;
   },
 );
 
@@ -126,7 +138,8 @@ function backToMain(): void {
   subview.value = "main";
 }
 
-function onKeydown(event: KeyboardEvent): void {
+/** Esc 处理：子视图返回主面板，主面板关闭整个面板（挂在 window 上）。 */
+function onWindowKeydown(event: KeyboardEvent): void {
   if (event.key !== "Escape") return;
   if (subview.value === "main") emit("close");
   else subview.value = "main";
@@ -158,13 +171,12 @@ function saveTeamName(team: BpTeam): void {
   const error = validateTeamName(teamDrafts[team]);
   teamNameErrors[team] = error;
   if (error !== null) return;
-  teamDraftDirty[team] = false;
+  // 草稿不在这里标记为已同步：成功与否由回执决定，权威值追平前保持输入。
   props.session.sendCommand({ type: "setTeamName", team, teamName: teamDrafts[team] });
 }
 
 function onTeamNameInput(team: BpTeam, value: string): void {
   teamDrafts[team] = value;
-  teamDraftDirty[team] = true;
   teamNameErrors[team] = null;
   props.session.clearScopeError(`setTeamName:${team}`);
 }
@@ -197,7 +209,6 @@ function assignSeat(memberId: string): void {
     role="dialog"
     aria-label="控制面板"
     tabindex="-1"
-    @keydown="onKeydown"
   >
     <!-- 顶部固定：子视图提供返回入口；只有列表内容滚动。 -->
     <header

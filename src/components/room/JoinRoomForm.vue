@@ -27,6 +27,7 @@ const FAILURE_TEXTS: Record<RoomHttpFailure, string> = {
   "not-found": "房间不存在或已过期",
   archived: "房间不存在或已过期",
   invalid: "提交内容不合法，请检查后重试",
+  server: "服务器暂时不可用，请稍后重试",
   network: "网络异常，进入失败，请重试",
 };
 
