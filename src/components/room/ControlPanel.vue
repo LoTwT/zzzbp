@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useClipboard } from "@vueuse/core";
-import { ArrowLeft, ChevronRight, Link2, Pencil, RotateCcw, Undo2, Users, X } from "@lucide/vue";
+import {
+  ArrowLeft,
+  ChevronRight,
+  ExternalLink,
+  Link2,
+  Pencil,
+  RotateCcw,
+  Undo2,
+  Users,
+  X,
+} from "@lucide/vue";
 import type { BpTeam } from "../../../shared/bp/steps";
 import type { HostManagementView, ManagedMember } from "../../../shared/contracts/views";
 import { validateTeamName } from "../../lib/form-validation";
@@ -10,6 +20,7 @@ import { isHostManagementView, type RoomView } from "../../room/room-session";
 import type { RoomCatalogModel } from "../../room/room-catalog";
 import { TeamNameDraft } from "../../room/team-name-draft";
 import { pendingOperationText } from "../../room/operation-feedback";
+import { displayPagePath } from "../../room/display-url";
 import {
   memberRoleText,
   otherMemberRows,
@@ -35,6 +46,8 @@ const props = defineProps<{
   readonly catalogModel: RoomCatalogModel | null;
   readonly layout: PickLayout;
   readonly connected: boolean;
+  /** 当前房间 ID：构建展示页链接使用。 */
+  readonly roomId: string;
 }>();
 
 const emit = defineEmits<{
@@ -272,6 +285,13 @@ function onWindowKeydown(event: KeyboardEvent): void {
 function chooseLayout(layout: PickLayout): void {
   emit("update:layout", layout);
 }
+
+/**
+ * 展示页链接：显式携带当前布局（打开时冻结继承；展示页只读取一次，
+ * 不跟随本页后续切换）。新标签页打开并保留原操作页，noopener 防止
+ * 展示页反向操作原页。
+ */
+const displayHref = computed(() => displayPagePath(props.roomId, props.layout));
 
 async function copyRoomLink(): Promise<void> {
   await copy(window.location.href);
@@ -614,6 +634,15 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
             </button>
           </div>
         </div>
+        <a
+          :href="displayHref"
+          target="_blank"
+          rel="noopener"
+          class="flex items-center gap-2 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring hover:bg-(--surface-subtle)"
+        >
+          <ExternalLink class="size-4 text-neutral-400" aria-hidden="true" />
+          打开展示页
+        </a>
         <button
           type="button"
           class="flex items-center gap-2 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring hover:bg-(--surface-subtle)"

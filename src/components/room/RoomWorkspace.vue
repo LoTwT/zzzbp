@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
-import type { BpSlotId, BpTeam } from "../../../shared/bp/steps";
-import { getBpStep } from "../../../shared/bp/steps";
 import { computeAgentPoolStatuses, type AgentPoolStatus } from "../../../shared/bp/agents";
 import { memberWebSocketPath } from "../../../shared/contracts/http";
 import type { RoomMemberView } from "../../../shared/contracts/views";
@@ -14,18 +12,24 @@ import { SlidersHorizontal } from "@lucide/vue";
 import AgentCard from "./AgentCard.vue";
 import AgentPoolToolbar from "./AgentPoolToolbar.vue";
 import ControlPanel from "./ControlPanel.vue";
-import PickColumn, { type PickSlotView } from "./PickColumn.vue";
+import PickColumn from "./PickColumn.vue";
 import RoomHeader from "./RoomHeader.vue";
 import { fetchRoomCatalog } from "../../room/api";
 import type { RoomCatalogModel } from "../../room/room-catalog";
 import { toRoomCatalogModel } from "../../room/room-catalog";
 import {
-  banStepsOfTeam,
-  pickSlotRows,
   readPickLayoutPreference,
   writePickLayoutPreference,
   type PickLayout,
 } from "../../room/pick-layout";
+import {
+  banSlotsOfView,
+  currentStepOf,
+  EMPTY_BAN_SLOTS,
+  EMPTY_PICK_COLUMNS,
+  pickColumnsOfView,
+  preselectAgentOf,
+} from "../../room/view-projections";
 import { RoomSession } from "../../room/room-session";
 import { IDENTITY_CHANGED } from "../../room/command-errors";
 import { pendingOperationText } from "../../room/operation-feedback";
@@ -121,10 +125,7 @@ const breathing = computed(
   () => connected.value && view.value !== null && view.value.bpStatus === "running",
 );
 
-const currentStep = computed(() => {
-  if (view.value === null || view.value.currentSlotId === null) return null;
-  return getBpStep(view.value.currentSlotId);
-});
+const currentStep = computed(() => currentStepOf(view.value));
 
 const isCurrentPlayerSide = computed(
   () =>
@@ -133,12 +134,9 @@ const isCurrentPlayerSide = computed(
     view.value.self.seatTeam === currentStep.value.team,
 );
 
-const preselectAgent = computed(() => {
-  if (view.value === null || view.value.preselect === null || catalogModel.value === null) {
-    return null;
-  }
-  return catalogModel.value.byId.get(view.value.preselect) ?? null;
-});
+const preselectAgent = computed(() =>
+  view.value === null ? null : preselectAgentOf(view.value, catalogModel.value),
+);
 
 const poolStatuses = computed<ReadonlyMap<string, AgentPoolStatus> | null>(() => {
   if (view.value === null || catalogModel.value === null) return null;
@@ -146,33 +144,11 @@ const poolStatuses = computed<ReadonlyMap<string, AgentPoolStatus> | null>(() =>
   return computeAgentPoolStatuses(catalog, view.value.submissions);
 });
 
-const submissionsBySlotId = computed(() => {
-  const map = new Map<BpSlotId, string>();
-  if (view.value !== null) {
-    for (const submission of view.value.submissions) map.set(submission.slotId, submission.agentId);
-  }
-  return map;
-});
-
-function agentDisplayOf(agentId: string | undefined) {
-  if (agentId === undefined || catalogModel.value === null) return null;
-  return catalogModel.value.byId.get(agentId) ?? null;
-}
-
-const banSlots = computed(() => {
-  const result = {} as Record<
-    BpTeam,
-    ReadonlyArray<{ slotId: BpSlotId; agent: ReturnType<typeof agentDisplayOf>; active: boolean }>
-  >;
-  for (const team of ["A", "B"] as const) {
-    result[team] = banStepsOfTeam(team).map(({ slotId }) => ({
-      slotId,
-      agent: agentDisplayOf(submissionsBySlotId.value.get(slotId)),
-      active: view.value !== null && view.value.currentSlotId === slotId,
-    }));
-  }
-  return result;
-});
+// 禁用/选用槽位与空席「待选择」规则由 view-projections 统一派生
+// （与实时展示页共用同一份投影语义）；视图未到达时以空投影占位。
+const banSlots = computed(() =>
+  view.value === null ? EMPTY_BAN_SLOTS : banSlotsOfView(view.value, catalogModel.value),
+);
 
 // ---- 个人布局：A、B 两侧一起切换，切换只重排槽位。 ----
 
@@ -182,28 +158,11 @@ watch(pickLayout, (layout) => {
   writePickLayoutPreference(layout);
 });
 
-const pickColumns = computed(() => {
-  const result = {} as Record<
-    BpTeam,
-    { teamName: string; rows: ReadonlyArray<ReadonlyArray<PickSlotView>> }
-  >;
-  for (const team of ["A", "B"] as const) {
-    const teamName = view.value?.teamNames[team] ?? "";
-    const rows = pickSlotRows(team, pickLayout.value).map((row) =>
-      row.map(({ slotId, step }) => ({
-        slotId,
-        step: { sideOrdinal: step.sideOrdinal },
-        agent: agentDisplayOf(submissionsBySlotId.value.get(slotId)),
-        active: view.value !== null && view.value.currentSlotId === slotId,
-      })),
-    );
-    // 顶部标识以席位占用为准（room-layout.md「双方队伍信息」）：空席一律
-    // 显示「待选择」，队名独立保留；落座后显示队名（未命名时为空）。
-    const seatOccupied = view.value?.seatOccupancy[team] ?? false;
-    result[team] = { teamName: seatOccupied ? teamName : "待选择", rows };
-  }
-  return result;
-});
+const pickColumns = computed(() =>
+  view.value === null
+    ? EMPTY_PICK_COLUMNS
+    : pickColumnsOfView(view.value, catalogModel.value, pickLayout.value),
+);
 
 // ---- 代理人池筛选：仅选手（含兼任房主）可用，失去席位恢复完整列表。 ----
 
@@ -423,6 +382,7 @@ function closePanel(): void {
             :catalog-model="catalogModel"
             :layout="pickLayout"
             :connected="connected"
+            :room-id="roomId"
             @close="closePanel"
             @update:layout="pickLayout = $event"
           />
