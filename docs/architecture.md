@@ -16,7 +16,7 @@
 | `shared/api.ts` | 引导期的 `/api/health` 契约，保留兼容；房间协议不在此扩展。 | — |
 | `server/` | Worker 动态入口与房间 Durable Object：HTTP 路由与输入校验（`index.ts`）、房间对象编排与 WS 生命周期（`room.ts`）、身份凭据与 Cookie（`credentials.ts`）、SQLite 持久化与命令回执（`persistence.ts`）、WS 协议构件（`ws.ts`）。 | 依赖 `shared/` |
 | `tests/rules/` | 纯规则与合同测试（Node 环境）。 | — |
-| `tests/workers/` | Worker 与房间对象集成测试（真实 workerd）：HTTP/身份/Cookie（`rooms.test.ts`）、SQLite 持久化与实例重建（`room-storage.test.ts`）、WS 通道边界（`room-websocket.test.ts`）、命令管线与去重回执（`room-commands.test.ts`）、在线计数与休眠恢复（`room-presence.test.ts`），共享辅助 `ws-helpers.ts`。 | — |
+| `tests/workers/` | Worker 与房间对象集成测试（真实 workerd）：HTTP/身份/Cookie（`rooms.test.ts`）、SQLite 持久化与实例重建（`room-storage.test.ts`）、WS 通道边界（`room-websocket.test.ts`）、命令管线与去重回执（`room-commands.test.ts`）、在线计数与休眠恢复（`room-presence.test.ts`）、生命周期裁决/归档快照/Alarm 调度与 90 天清理（`room-lifecycle.test.ts`），共享辅助 `ws-helpers.ts`。 | — |
 
 `shared/` 不依赖前端与服务端实现；服务端把 `shared/` 的纯函数作为唯一状态
 权威，前端只用它做类型与展示推导。
@@ -53,9 +53,9 @@
 | 路径 | 行为 |
 |---|---|
 | `POST /api/rooms` | 建房（房名 + 首次昵称），创建者成为房主；响应房间 ID 与其成员视图，并经 Set-Cookie 下发房主身份。 |
-| `GET /api/rooms/:roomId` | 按生命周期分流：live 返回房名（携带有效身份时附成员视图以恢复角色，匿名为 null 供首次入房）；archived 返回只读快照（PR9 接入）；不存在返回 404 错误体。 |
-| `POST /api/rooms/:roomId/members` | 新成员以昵称作为观众加入并取得新身份；携带有效身份时恢复原身份（昵称被忽略、凭据不轮换、不重复建成员）。新成员写入成功后向已连接的成员/展示连接广播最新视图。 |
-| `GET /api/rooms/:roomId/catalog` | 返回该房间建房时固定的代理人目录快照（含来源版本）；只读，无需身份，不含成员或凭据数据，不计在线、不影响保留计时。 |
+| `GET /api/rooms/:roomId` | 按生命周期分流：live 返回房名（携带有效身份时附成员视图以恢复角色，匿名为 null 供首次入房）；archived 返回只读快照（原房主、成员与匿名取得同一份，读取不建立实时连接、不刷新期限）；不存在或已清理返回 404 错误体。 |
+| `POST /api/rooms/:roomId/members` | 新成员以昵称作为观众加入并取得新身份；携带有效身份时恢复原身份（昵称被忽略、凭据不轮换、不重复建成员）。新成员写入成功后向已连接的成员/展示连接广播最新视图。归档房间返回 410 `ROOM_ARCHIVED`（读取记录走 GET 房间入口，不需要加入成员）。 |
+| `GET /api/rooms/:roomId/catalog` | live 房间返回建房时固定的代理人目录快照（含来源版本）；只读，无需身份，不含成员或凭据数据，不计在线、不影响保留计时。归档房间返回 410（目录行随操作期数据清理，记录展示信息全部固定在快照内）。 |
 | `GET /api/rooms/:roomId/ws` | 成员实时连接升级（详见[WebSocket 通道](#websocket-通道)）。非 GET 返回 405；缺少 `Upgrade: websocket` 头返回 426；第三方 Origin 返回 403。 |
 | `GET /api/rooms/:roomId/display/ws` | 匿名展示连接升级（同上协议校验）；通道语义见[WebSocket 通道](#websocket-通道)。 |
 | `GET /api/health` | 引导期存储链路自检。 |
@@ -70,9 +70,7 @@
 `apiErrorResponseBodySchema`）；未预期异常（DO RPC、存储、状态装配等）
 由统一错误边界转换为 500 `INTERNAL` 通用错误体，不泄漏内部细节，并记录
 结构化诊断（见[错误诊断与可观测性](#错误诊断与可观测性)）；
-未知 `/api` 路径维持引导期的 404 JSON。归档房间在 PR9 前没有任何转入
-路径，读取归档分支当前是防御实现（410 `ROOM_ARCHIVED`），届时替换为
-快照响应。
+未知 `/api` 路径维持引导期的 404 JSON。
 
 ## 错误诊断与可观测性
 
@@ -108,8 +106,9 @@
 | `seats` / `team_names` | A/B 席位占用与双方队名（初始空席、空队名）。 |
 | `bp_submissions` | 当前有效序列：按 position 递增，装配时与权威顺序前缀校验。 |
 | `command_receipts` | operationId 去重回执：按 (member_id, operation_id) 主键，保存规范化载荷与原结果（含稳定错误码与版本），写入时裁剪到每房间 2048 条的保留窗口（见[WebSocket 通道](#websocket-通道)）。 |
-| `room_catalog`（单行） | 建房时一次性保存的目录快照 JSON 文本。 |
-| `schema_meta`（单行） | 业务表结构版本；`ensureRoomSchema` 是幂等的初始化/版本升级入口（当前版本 2：v1 → v2 只新增 `command_receipts`，无历史数据搬移；更高版本拒绝加载，防降级误读）；读取路径先经只读的 `hasRoomSchema` 判断实例是否已初始化。 |
+| `room_catalog`（单行） | 建房时一次性保存的目录快照 JSON 文本；归档时随操作期数据清理（记录展示信息固定进快照）。 |
+| `archive_snapshot`（单行，v3） | 归档快照 JSON 文本（`archiveSnapshotSchema` 生成并校验）；归档转换与生命周期标记、操作期数据清理同事务写入，是归档房间的唯一可服务数据。 |
+| `schema_meta`（单行） | 业务表结构版本；`ensureRoomSchema` 是幂等的初始化/版本升级入口（当前版本 3：v1 → v2 新增 `command_receipts`，v2 → v3 新增 `archive_snapshot`，均无历史数据搬移；更高版本拒绝加载，防降级误读）；读取路径先经只读的 `hasRoomSchema` 判断实例是否已初始化。 |
 | `room_info`（legacy） | 引导期 `/api/health` 的存储自检记录（`shared/api.ts` 合同），由 DO 的 health 方法单独维护，与业务表互不干扰。 |
 
 - 建房与入房各为一个 `transactionSync` 同步事务闭包：schema 初始化、
@@ -141,8 +140,8 @@
 - `last_member_left_at` 初始化为创建时刻：从未有成员连接的空房自创建
   起即开始 12 小时保留窗口的计时。只有实际成员 WS 连接会将其置空
   （首个连接取消计时）并在全员离开时重置（最后一名在线成员离开时写入
-  当前时刻）；HTTP 读写、目录读取与展示连接都不影响该计时；到期执行
-  与 Alarm 在 PR9。
+  当前时刻）；HTTP 读写、目录读取与展示连接都不影响该计时；到期裁决
+  与 Alarm 调度见[生命周期与归档记录](#生命周期与归档记录)。
 
 ## WebSocket 通道
 
@@ -268,21 +267,63 @@
 合同定义于 [shared/contracts/records.ts](../shared/contracts/records.ts)。
 产品规则见[房间保留与只读记录](specs/room-roles.md#房间保留与只读记录)；
 时间常量：全员离开后空房保留 12 小时，只读快照自归档起 90 天。
+运行时实现于 `server/room.ts`（裁决与编排）与 `server/persistence.ts`
+（归档行读写）。
 
-- 本轮只定义时戳结构（`roomRetentionSchema`）、快照结构
-  （`archiveSnapshotSchema`）、到期推导与 `projectArchiveSnapshot` 纯投影；
-  Alarm 与自动归档不在此实现。
-- 快照只保留最后一局当前有效顺序；每步含操作位、阵营、动作与归档时
-  固定的代理人名称/头像，后续数据包更新不改变旧记录解释；不含预选、
-  成员凭据或撤回/重开历史。空有效序列的房间到期直接清理，不生成快照。
-- 运行时职责：实际成员 WS 连接在期限前回来即取消本次 12 小时计时，
-  下次全员离开重新计算；展示连接永不影响计时；到期检查在 join、read、
-  write 与 Alarm 中共用同一规则，不允许靠延迟 Alarm 延长可写期限；
-  快照 90 天期限自转为只读起算，查看不延长。
-- 持久化现状（PR5）：`lastMemberLeftAt` 已在 `room_meta` 落地：建房时
-  初始化为创建时刻，实际成员 WS 连接取消本次计时，最后一名在线成员
-  离开时重新写入（见[房间持久化与固定目录](#房间持久化与固定目录)）；
-  到期执行、Alarm 与归档快照生成在 PR9。
+- 单一裁决入口（`adjudicateLifecycleInTransaction`）：读取（含目录）、
+  入房、WS 接纳、已有 WS 命令与 Alarm 处理器共用同一规则，不复制各自
+  期限算法。live 房间以实际成员连接为保留的权威依据（连接存在或
+  `last_member_left_at` 为 null 即继续保留）；空房按
+  `last_member_left_at + 12h` 判定，`now >= 期限` 必须先完成裁决再考虑
+  入房或命令——注册新连接不能清掉已过期期限，也不能靠延迟 Alarm 延长
+  可操作时间。
+- 到期转换在一个 `transactionSync` 内原子完成：有有效提交的房间生成
+  快照（`projectArchiveSnapshot`，用该房间持久目录与建房时固定的版本，
+  90 天自本次实际转为只读起算，重复读取或 Alarm 不刷新起点）并清理
+  操作期数据（成员凭据摘要、席位、队名行、当前序列、命令回执与固定
+  目录），只保留快照与必要生命周期元数据（room_meta 的房间标识、名称、
+  生命周期、创建时间与版本来源）；任一步失败整体回滚，不留半归档。
+  无有效提交（仅预选、全部撤回、重开未提交）不生成空快照，房间经原子
+  `deleteAll` 清理（回收整个 SQLite，含兼容日期 2026-09-01 起的 Active
+  Alarm；删除后的房间对后续 GET/POST/WS 按不存在处理，不重建表或期限）。
+- Alarm 是唤醒信号而非期限本身：每对象同时仅一个 Alarm，建房空房、
+  最后成员离开、归档后 90 天分别调度相应期限；真正成员回归取消旧
+  Alarm。Alarm 处理器每次触发都按当前持久状态与当前实际连接重新裁决
+  （重复/过早/延迟的触发收敛到应设的下一期限，不重复归档、不提早
+  清理、不覆盖已设的下一期限）。Alarm 是异步存储操作，不进入
+  `transactionSync`：裁决（SQL 部分）在事务内原子提交，其后的 Alarm
+  应用失败时上抛——读取路径按 500 收口（客户端重试由下一事件恢复）、
+  Alarm 处理器交给平台 at-least-once 重试（2 秒起退避，最多 6 次）、
+  断开路径交给有界重试链，不留下「对外成功但不再有唤醒信号」的状态。
+- 入房是两阶段结构：阶段一先在线协调再裁决、后应用 Alarm（全部在
+  成员写入之前）——协调可能修复「存储在线但实际无连接」的持久残留
+  （最后断开写入失败且重试链/实例已丢失）并补写全员离开时间，裁决
+  的 Alarm 期望值按协调后的最终期限推导，失败 → 500、零成员写入、
+  无凭据交付（保持失败零写入契约，重试不产生孤儿成员）。阶段二的
+  入房事务先重新裁决到期状态（前置 await 期间的时钟推进或连接事件
+  不能让过期房间被入房复活）再做兜底协调与成员写入。live 入房成功后
+  不重复应用 Alarm（阶段一已按协调后状态收敛，兜底协调若再写计时，
+  由源头断开事件的重试链收敛，持久残留由下一个入房的阶段一兜底）；
+  终态（归档/清理）路径没有成员写入，Alarm 失败上抛无孤儿。
+- 终态连接收口幂等且不依赖「本次是否发生转换」：归档/清理一旦持久
+  成立，任何入口（读取、入房、目录、WS 接纳、命令、Alarm 及其故障后
+  的重试）重放收口都向现存实时连接发送终态通知并关闭——归档 →
+  `ROOM_ARCHIVED`、清理后与房间不存在 → `ROOM_NOT_FOUND`（均 1008；
+  not_found 收口只发 ws 通知不创建存储，未知房间为空操作，而
+  「deleteAll 已成功、冗余 deleteAlarm 失败」的半收口故障由此幂等
+  补齐）；展示客户端没有心跳，遗漏通知会永远保留「已连接」的旧画面。
+  清理的收口在 deleteAll 原子成功后立即执行，冗余的 Alarm 显式清理
+  独立处理（失败仅记日志，残留 Alarm 触发时按 not_found 自清；deleteAll
+  自身失败上抛、不发假终态）。命令通道经 `beforeConclude` 保序
+  （commandResult 先于终态通知与关闭）；SQL 转换回滚不发假终态；
+  终态关闭触发的 close 回调对非 live 房间零写入跳过，不按已清理的
+  成员/席位装配视图或制造无意义重试。
+- 归档房间的原链接经普通 HTTP 返回同一份快照（原房主、成员与匿名
+  一致），不自动加入成员、不建立成员或展示实时连接；快照到期清理后
+  按 `ROOM_NOT_FOUND` 收口。
+- 健康自检使用独立 DO 实例名（`bootstrap-health`，legacy `room_info`
+  表），与房间实例的业务表互不干扰；清理只发生在对应房间自己的 DO
+  实例内，没有跨房间或批量全局操作。
 
 ## 后续运行时接入位置
 
@@ -354,9 +395,31 @@ PR8 已落地独立实时展示页（`/rooms/:roomId/display`，`src/pages/Displ
   状态视觉（`AgentStatusAvatar`）：禁选槽位、空席「待选择」、公开预选
   与三种状态视觉在两个场景由同一实现派生。
 
+PR9 已落地归档与只读记录（`server/room.ts` 生命周期裁决、
+`src/pages/RoomPage.vue` 记录分流、`src/components/room/RecordView.vue`、
+`src/room/record-view.ts` 与 `src/room/api.ts` 的 archived 快照解析）：
+
+- 原房间链接按生命周期分流（`RoomPage.vue`）：live 沿用首次入房/实时
+  房间；archived 是成功只读响应，进入同一套只读记录界面（原房主、成员
+  与匿名一致）；入房进行中或实时会话被归档（410 / `ROOM_ARCHIVED`
+  终态）时同样转记录读取；提交时房间已不存在（404，初始读取 live 之后
+  的自然过期竞态）与初始 404、WS `ROOM_NOT_FOUND` 一致转统一不存在页
+  （含创建入口），失效的入房表单退出；网络/服务端故障保留表单与重试
+  入口，不误报「不存在或已过期」。`room-session.ts` 把 ROOM_ARCHIVED
+  终态与 ROOM_NOT_FOUND 分开表达（`room-archived`）。
+- 只读记录页（`RecordView.vue` + `record-view.ts`）：快照是唯一数据
+  来源（不请求当前 catalog 重解释旧名称或头像）；顶部双方禁用区、房名
+  与「只读记录 · 已完成/未完成」；两侧选用结果沿用两种选用布局（个人
+  设置，默认竖排，切换不改变快照）；中央单列禁选顺序列表（1 起连续
+  顺序、左右方动作文案、代理人头像与名称，禁用/选用沿用既有视觉），
+  仅列表内部滚动；控制面板为右侧覆盖，内容限布局切换、复制原链接与
+  记录到期时间；页面无实时连接、无倒计时轮询。
+- 生命周期与 Alarm 语义见[生命周期与归档记录](#生命周期与归档记录)。
+
 | PR | 接入点 |
 |---|---|
 | PR6（房间界面与常规连接） | 房间主界面、角色权限 UI、两个选用布局与常规 WS 客户端连接管理；命令与视图协议已就位。 |
 | PR7（恢复交互收口，已落地） | 断线重连同步门、结果未知同载荷重发核对与换人列表稳定反馈；全链路容量与端到端复核并入 PR10。 |
 | PR8（展示页，已落地） | 独立展示页 UI、只读展示客户端连接、URL 冻结布局与全量同屏代理人池；展示通道传输边界不变（只读、无身份、不计在线）。 |
-| PR9（归档与清理） | Alarm 与读写路径共用到期检查（读 `room_meta.last_member_left_at`）；到期经 `projectArchiveSnapshot` 生成快照或清理空房间；`GET /api/rooms/:roomId` 的 archived 分支替换为只读快照响应。 |
+| PR9（归档与清理，已落地） | Alarm 与读写路径共用到期裁决（读 `room_meta.last_member_left_at` 与快照 `expiresAt`）；到期经 `projectArchiveSnapshot` 生成快照或原子清理空房间；`GET /api/rooms/:roomId` 的 archived 分支返回只读快照，原链接进入只读记录页。 |
+| PR10（端到端与容量复核） | 全链路容量、端到端浏览器验证平台与长期验证收口；PR7 起累积的复核事项在此统一处理。 |

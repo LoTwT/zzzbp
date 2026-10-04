@@ -31,7 +31,7 @@ import {
 // - 目录经只读 /catalog 取房间固定快照（匿名读取，不派生成员 UI）；
 // - 断线保留最后画面并停用动效，顶部以文字与图标提示重连状态；
 // - ROOM_NOT_FOUND 按不存在收口（提供「创建新房间」）；ROOM_ARCHIVED
-//   终止实时重试并保留原房间链接（记录页由 PR9 提供），不冒充不存在。
+//   终止实时重试并保留原房间链接（只读记录页），不冒充不存在。
 
 const route = useRoute();
 const roomId = typeof route.params.roomId === "string" ? route.params.roomId : "";
@@ -73,6 +73,13 @@ async function loadCatalog(): Promise<void> {
   if (result.reason === "not-found") {
     // 目录只对不存在的房间 404：房间已消失，实时展示同样按不存在收口。
     phase.value = "not-found";
+    session.stop();
+    return;
+  }
+  if (result.reason === "archived") {
+    // 归档房间的目录随操作期数据清理（410）：按「已归档」收口，与展示
+    // 通道的 ROOM_ARCHIVED 终态一致，不冒充不存在。
+    phase.value = "archived";
     session.stop();
     return;
   }
@@ -167,7 +174,7 @@ const pickColumns = computed(() =>
     </div>
   </main>
 
-  <!-- 房间已归档：终止实时重试，保留通向原房间记录的路径（PR9 起提供）。 -->
+  <!-- 房间已归档：终止实时重试，保留通向原房间记录的路径。 -->
   <main
     v-else-if="phase === 'archived'"
     class="mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center gap-8 px-6"

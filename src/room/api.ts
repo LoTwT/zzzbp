@@ -8,6 +8,7 @@ import {
   roomCatalogResponseSchema,
   roomEntryResponseSchema,
 } from "../../shared/contracts/http";
+import type { ArchiveSnapshot } from "../../shared/contracts/records";
 import type { AgentCatalogData } from "../../shared/agents/schema";
 import type { RoomMemberView } from "../../shared/contracts/views";
 
@@ -23,7 +24,11 @@ import type { RoomMemberView } from "../../shared/contracts/views";
 /** 房间 HTTP 层失败原因。 */
 export type RoomHttpFailure =
   | "not-found"
-  /** 房间已归档：PR9 前读取归档分支是防御实现，界面按不可进入处理。 */
+  /**
+   * 房间已归档：本入口（入房、目录）对归档房间按 410 拒绝；房间入口
+   * GET 对归档房间是成功响应（只读快照，见 fetchRoomEntry），页面据此
+   * 分流到只读记录而不是提示不可进入。
+   */
   | "archived"
   /** 请求体未通过共享 schema（客户端已预检，正常流程不应出现）。 */
   | "invalid"
@@ -109,12 +114,19 @@ export async function createRoom(input: {
  * `GET /api/rooms/:roomId`：读取房间入口。
  *
  * live 且携带有效身份时返回成员视图（刷新恢复角色）；匿名返回 null，
- * 由页面渲染首次入房表单。归档房间按 archived 返回（PR9 接入只读记录）。
+ * 由页面渲染首次入房表单。归档房间是成功响应：返回同一份只读快照
+ * （原房主、成员与匿名一致），页面据此分流到只读记录页；快照由普通
+ * HTTP 读取，无需成员加入或任何实时连接。
  */
-export async function fetchRoomEntry(
-  roomId: string,
-): Promise<
-  RoomHttpResult<{ readonly roomName: string; readonly memberView: RoomMemberView | null }>
+export async function fetchRoomEntry(roomId: string): Promise<
+  RoomHttpResult<
+    | {
+        readonly kind: "live";
+        readonly roomName: string;
+        readonly memberView: RoomMemberView | null;
+      }
+    | { readonly kind: "archived"; readonly record: ArchiveSnapshot }
+  >
 > {
   const response = await requestJson(`/api/rooms/${encodeURIComponent(roomId)}`, {
     method: "GET",
@@ -122,10 +134,12 @@ export async function fetchRoomEntry(
   if (!response.ok) return response;
   const parsed = roomEntryResponseSchema.safeParse(response.value);
   if (!parsed.success) return { ok: false, reason: "network" };
-  if (parsed.data.kind === "archived") return { ok: false, reason: "archived" };
+  if (parsed.data.kind === "archived") {
+    return { ok: true, value: { kind: "archived", record: parsed.data.record } };
+  }
   return {
     ok: true,
-    value: { roomName: parsed.data.roomName, memberView: parsed.data.memberView },
+    value: { kind: "live", roomName: parsed.data.roomName, memberView: parsed.data.memberView },
   };
 }
 

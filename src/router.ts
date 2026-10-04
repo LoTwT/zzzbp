@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import HomePage from "./pages/HomePage.vue";
 
 // 页面入口见 docs/specs/implementation-plan.md「页面与接口边界」；
-// 只读记录页在 PR9 加入。
+// /rooms/:roomId 按生命周期分流为首次入房、实时房间或只读记录（PR9）。
 export default createRouter({
   history: createWebHistory(),
   routes: [

@@ -279,7 +279,7 @@ export async function waitForRoomQuery(
   }
 }
 
-/** 当前房间实例的 alarm 时间；PR9 前任何路径都不应设置。 */
+/** 当前房间实例的 alarm 时间；从未建房的实例不应设置任何 Alarm。 */
 export function currentAlarm(roomId: string): Promise<number | null> {
   const stub = exports.Room.get(exports.Room.idFromName(roomId));
   return runInDurableObject(stub, (_room, state) => state.storage.getAlarm());

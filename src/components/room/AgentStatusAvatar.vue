@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Check } from "@lucide/vue";
 import type { AgentPoolStatus } from "../../../shared/bp/agents";
-import type { RoomAgentDisplay } from "../../room/room-catalog";
+import type { AgentDisplayBase } from "../../room/room-catalog";
 import AgentAvatar from "./AgentAvatar.vue";
 
 // 代理人头像与状态视觉的共用展示单元：三种视觉状态（可选正常色彩；
@@ -11,7 +11,7 @@ import AgentAvatar from "./AgentAvatar.vue";
 // 尺寸，具体大小由外层决定。
 
 defineProps<{
-  readonly agent: RoomAgentDisplay;
+  readonly agent: AgentDisplayBase;
   readonly status: AgentPoolStatus;
 }>();
 </script>

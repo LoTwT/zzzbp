@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { RoomAgentDisplay } from "../../room/room-catalog";
+import type { AgentDisplayBase } from "../../room/room-catalog";
 import type { PickSlotView } from "../../room/view-projections";
 import AgentAvatar from "./AgentAvatar.vue";
 
@@ -11,7 +11,7 @@ import AgentAvatar from "./AgentAvatar.vue";
 defineProps<{
   readonly teamName: string;
   readonly rows: ReadonlyArray<ReadonlyArray<PickSlotView>>;
-  readonly preselectAgent: RoomAgentDisplay | null;
+  readonly preselectAgent: AgentDisplayBase | null;
   readonly breathing: boolean;
   readonly sideText: string;
 }>();

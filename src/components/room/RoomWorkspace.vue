@@ -47,6 +47,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (event: "identity-lost"): void;
   (event: "room-gone"): void;
+  (event: "room-archived"): void;
 }>();
 
 function memberWebSocketUrl(roomId: string): string {
@@ -89,6 +90,8 @@ onBeforeUnmount(() => {
 watch(session.status, (status) => {
   if (status === "auth-failed") emit("identity-lost");
   if (status === "room-gone") emit("room-gone");
+  // 归档不是消失：沿原房间链接转入只读记录读取。
+  if (status === "room-archived") emit("room-archived");
 });
 
 // ---- 视图与派生 ----
