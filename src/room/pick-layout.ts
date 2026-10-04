@@ -53,8 +53,9 @@ function browserStorage(): StorageLike | null {
 /**
  * 读取个人布局偏好：无存储、不可用或值非法时回退默认竖排。
  *
- * 实时展示页（PR8）打开时通过本函数继承原页面的布局设置；读取不修改
- * 存储，展示页后续独立保留该值。
+ * 实时展示页优先从 URL 布局参数继承打开时的布局（见 display-url.ts）；
+ * 仅当参数缺失或非法时以本函数的本地偏好兜底。读取不修改存储，展示页
+ * 之后独立保留打开时的布局。
  */
 export function readPickLayoutPreference(): PickLayout {
   const storage = browserStorage();

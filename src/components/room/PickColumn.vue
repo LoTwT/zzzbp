@@ -1,23 +1,12 @@
 <script setup lang="ts">
-import type { BpSlotId } from "../../../shared/bp/steps";
 import type { RoomAgentDisplay } from "../../room/room-catalog";
+import type { PickSlotView } from "../../room/view-projections";
 import AgentAvatar from "./AgentAvatar.vue";
 
 // 一方选用区：默认 9 格竖排或按 Pick 分行（行结构由 pickSlotRows 从
 // BP_STEPS / BP_PICK_SEGMENTS 推导）。顶部只显示队名，空席「待选择」，
 // 不加 A/B 前缀、昵称或「你」标记。当前操作位是本方选用时进入 active，
 // 公开预选直接展示在当前槽位。
-
-export interface PickSlotView {
-  readonly slotId: BpSlotId;
-  readonly step: PickSlotViewStep;
-  readonly agent: RoomAgentDisplay | null;
-  readonly active: boolean;
-}
-
-interface PickSlotViewStep {
-  readonly sideOrdinal: number;
-}
 
 defineProps<{
   readonly teamName: string;

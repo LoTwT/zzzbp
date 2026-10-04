@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import HomePage from "./pages/HomePage.vue";
 
 // 页面入口见 docs/specs/implementation-plan.md「页面与接口边界」；
-// 展示页与只读记录页在对应 PR 中加入。
+// 只读记录页在 PR9 加入。
 export default createRouter({
   history: createWebHistory(),
   routes: [
@@ -15,6 +15,11 @@ export default createRouter({
       path: "/rooms/:roomId",
       name: "room",
       component: () => import("./pages/RoomPage.vue"),
+    },
+    {
+      path: "/rooms/:roomId/display",
+      name: "room-display",
+      component: () => import("./pages/DisplayPage.vue"),
     },
     {
       path: "/:pathMatch(.*)*",
