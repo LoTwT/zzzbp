@@ -1,8 +1,8 @@
 import { createRouter, createWebHistory } from "vue-router";
 import HomePage from "./pages/HomePage.vue";
 
-// 首版页面入口见 docs/specs/implementation-plan.md；
-// 房间、展示与记录页在对应 PR 中逐步加入。
+// 页面入口见 docs/specs/implementation-plan.md「页面与接口边界」；
+// 展示页与只读记录页在对应 PR 中加入。
 export default createRouter({
   history: createWebHistory(),
   routes: [
@@ -10,6 +10,11 @@ export default createRouter({
       path: "/",
       name: "home",
       component: HomePage,
+    },
+    {
+      path: "/rooms/:roomId",
+      name: "room",
+      component: () => import("./pages/RoomPage.vue"),
     },
     {
       path: "/:pathMatch(.*)*",
