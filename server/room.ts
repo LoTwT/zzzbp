@@ -400,35 +400,51 @@ export class Room extends DurableObject {
    * 两阶段结构（修复「Alarm 收敛失败留下无凭据孤儿成员」）：
    * - 阶段一（前置生命周期收敛）：会失败的异步 Alarm 应用放在成员写入
    *   之前——失败时上抛，HTTP 500、零成员写入、无凭据交付（保持 PR4
-   *   的失败零写入契约，客户端重试不产生孤儿）；到期房间在此完成
-   *   归档/清理（含终态连接收口）并按终态拒绝入房。
-   * - 阶段二（入房事务）：成员写入与 revision 递增、写入后的视图装配
-   *   在一个事务闭包内，任一步骤失败整体回滚；事务内重新裁决——阶段
-   *   一的 await 期间时钟推进或连接事件都可能改变结论，到期在此归档
-   *   并拒绝，不能因前置已判定 live 而让过期房间被入房复活。
-   * - 阶段三（收口）：终态（归档/清理）走统一收口；live 不再重复应用
-   *   Alarm——阶段一已收敛，此后 last_member_left_at 的任何变化都由
-   *   连接/断开/命令路径各自收敛（见 settleLifecycle 注释），此处重复
-   *   应用一旦失败会把已提交成员变成无凭据孤儿。
+   *   的失败零写入契约，客户端重试不产生孤儿）。先做在线协调再裁决：
+   *   协调可能修复「存储在线但实际无连接」的持久残留（最后断开写入
+   *   失败且重试链/实例已丢失）并补写全员离开时间，裁决的 Alarm 期望
+   *   值因此按协调后的最终期限推导——新期限的 Alarm 与协调写入都在
+   *   成员事务之前完成。到期房间在此完成归档/清理（含终态连接收口）
+   *   并按终态拒绝入房。
+   * - 阶段二（入房事务）：先重新裁决守住到期/存在性边界——阶段一的
+   *   await 期间时钟推进或连接事件都可能改变结论，到期在此归档并
+   *   拒绝，不能因前置已判定 live 而让过期房间被入房复活；live 时做
+   *   兜底协调（阶段一之后的事件间隙若再留下分叉在此修复，正常无
+   *   变化），成员写入与 revision 递增、写入后的视图装配在一个事务
+   *   闭包内，任一步骤失败整体回滚。
+   * - 阶段三（收口）：终态（归档/清理）走统一收口；live 不再应用
+   *   Alarm——阶段一已按协调后的状态收敛，兜底协调若再写计时，其
+   *   源头断开事件的重试链负责收敛（持久残留由下一个入房的阶段一
+   *   兜底），此处重复应用一旦失败会把已提交成员变成无凭据孤儿。
    *
    * HTTP 身份登记本身不取消、不延长保留期限（last_member_left_at 只由
    * 实际成员 WS 连接维护）；未建房的实例不做任何写入（不建表、不动
-   * Alarm），直接按 not_found 返回。新成员写入成功、或在线协调修复了
-   * 历史分叉时，向已连接的成员/展示连接广播最新视图（房主的成员列表
-   * 因此实时更新）。
+   * Alarm），直接按 not_found 返回。新成员写入成功、或任一阶段协调修复
+   * 了历史分叉时，向已连接的成员/展示连接广播最新视图（房主的成员
+   * 列表因此实时更新）。
    */
   async joinRoom(input: JoinRoomInput): Promise<JoinRoomResult> {
-    // 阶段一：前置生命周期收敛（裁决 + Alarm 应用 + 终态收口）。
-    const preAdjudication = this.ctx.storage.transactionSync((): LifecycleAdjudication => {
-      if (!hasRoomSchema(this.sql)) return { kind: "not_found", alarm: null };
-      ensureRoomSchema(this.sql);
-      return this.adjudicateLifecycleInTransaction(this.connectedMemberIds());
-    });
-    const preEffective = await this.settleLifecycle(preAdjudication);
+    // 阶段一：前置生命周期收敛（在线协调 + 裁决 + Alarm 应用 + 终态收口）。
+    const pre = this.ctx.storage.transactionSync(
+      (): {
+        adjudication: LifecycleAdjudication;
+        reconciled: boolean;
+      } => {
+        if (!hasRoomSchema(this.sql)) {
+          return { adjudication: { kind: "not_found", alarm: null }, reconciled: false };
+        }
+        ensureRoomSchema(this.sql);
+        // 协调先于裁决（见方法注释）：非 live/未建房时协调零写入跳过。
+        const presence = this.reconcilePresenceInTransaction();
+        const adjudication = this.adjudicateLifecycleInTransaction(this.connectedMemberIds());
+        return { adjudication, reconciled: presence.changed };
+      },
+    );
+    const preEffective = await this.settleLifecycle(pre.adjudication);
     if (preEffective.kind === "not_found") return { kind: "not_found" };
     if (preEffective.kind === "archived") return { kind: "archived" };
 
-    // 阶段二：入房事务（重新裁决，防阶段一之后状态/时钟变化）。
+    // 阶段二：入房事务（重新裁决守住到期/存在性边界 + 兜底协调 + 成员写入）。
     const outcome = this.ctx.storage.transactionSync(
       (): {
         result: JoinRoomResult | null;
@@ -451,8 +467,8 @@ export class Room extends DurableObject {
           return { result: null, adjudication, reconciled: false };
         }
 
-        // live：入房是写路径，顺带做一次在线协调（以实际连接为权威，修复
-        // 任何历史分叉），与成员写入同事务提交或回滚。
+        // live：兜底在线协调（以实际连接为权威），与成员写入同事务提交
+        // 或回滚；阶段一刚协调过，正常无变化。
         const presence = this.reconcilePresenceInTransaction();
 
         const existingMemberId = this.resolveCredential(input.credentialDigest);
@@ -499,9 +515,10 @@ export class Room extends DurableObject {
       throw new Error("live 裁决后缺少入房结果，存储状态异常");
     }
 
-    // 新成员加入或在线协调修复了分叉时，向已连接的成员/展示连接广播
-    // 最新视图（房主的成员列表因此实时更新）；单纯恢复身份不产生广播。
-    if (outcome.result.kind === "created" || outcome.reconciled) {
+    // 新成员加入或任一阶段的在线协调修复了分叉时，向已连接的成员/展示
+    // 连接广播最新视图（房主的成员列表因此实时更新）；单纯恢复身份不
+    // 产生广播。
+    if (outcome.result.kind === "created" || outcome.reconciled || pre.reconciled) {
       this.broadcastCurrentViews();
     }
     return outcome.result;
@@ -673,10 +690,13 @@ export class Room extends DurableObject {
    * 一旦持久成立，任何入口（读取、入房、目录、WS 接纳、命令、Alarm
    * 及其故障后的重试）重放收口都向现存实时连接发送终态通知并关闭——
    * 无心跳的展示客户端不会自己发现房间已终态，遗漏一次通知就会永远
-   * 保留「已连接」的旧画面。幂等：通知/关闭只影响仍存活的连接；早已
-   * 收口的房间重放时没有连接可发。SQL 归档/清理失败（事务回滚）不会
-   * 到达这里，不发假终态；Alarm 应用失败时在通知之前上抛，由平台
-   * 重试或下一事件在恢复后完成通知（持久终态不变，重放结论相同）。
+   * 保留「已连接」的旧画面。not_found 同样收口：未知房间没有连接可发
+   * （升级即拒，conclude 是无存储写入的空操作），而「deleteAll 已成功、
+   * 冗余 deleteAlarm 失败」的半收口故障会留下旧实时连接，后续任何
+   * not_found 重放都要能幂等补齐。幂等：通知/关闭只影响仍存活的连接。
+   * SQL 归档/清理失败（事务回滚/deleteAll 抛错）不会到达收口，不发假
+   * 终态；Alarm 应用失败时在通知之前上抛，由平台重试或下一事件在
+   * 恢复后完成通知（持久终态不变，重放结论相同）。
    *
    * `beforeConclude` 供命令通道保序：commandResult 必须先于终态通知与
    * 关闭送达操作者连接（挂起命令以服务端回执结算，随后连接按终态
@@ -688,14 +708,23 @@ export class Room extends DurableObject {
   ): Promise<LifecycleEffective> {
     switch (adjudication.kind) {
       case "not_found":
-        // 不触碰 Alarm 与连接：房间从未存在（或早已清理且无连接可发），
-        // 空实例的孤立 Alarm（如建房事务回滚的残留）触发时由 alarm()
-        // 按无房间自清。
+        // 幂等补齐半收口故障遗留的旧连接；不触碰 Alarm 与存储（未知
+        // 房间保持零写入，空实例的孤立 Alarm 由 alarm() 触发时自清）。
+        this.concludeConnections("ROOM_NOT_FOUND", "房间不存在或已过期");
         return { kind: "not_found" };
       case "cleanup":
+        // deleteAll 原子成功即持久终态成立：先收口连接，再做冗余的
+        // Alarm 显式清理。deleteAlarm 失败不阻止终态通知——本兼容日期
+        // 下 deleteAll 已删除 Active Alarm，残留（旧运行时语义）触发时
+        // 由 alarm() 按 not_found 自清；deleteAll 自身失败在此前抛出，
+        // 不发假终态。
         await this.ctx.storage.deleteAll();
-        await this.ctx.storage.deleteAlarm();
         this.concludeConnections("ROOM_NOT_FOUND", "房间不存在或已过期");
+        try {
+          await this.ctx.storage.deleteAlarm();
+        } catch {
+          this.logLifecycleInternalError("cleanup-alarm-clear");
+        }
         return { kind: "not_found" };
       case "live":
         await this.applyLifecycleAlarm(adjudication.alarm);

@@ -1046,6 +1046,148 @@ describe("终态连接收口：任何入口与重试都幂等收敛现存实时�
     ).toBeLessThanOrEqual(5_000);
   });
 
+  it("清理的冗余 deleteAlarm 失败：deleteAll 成功即完成收口，Alarm 清理独立自清", async () => {
+    // 半收口故障边界：deleteAll 原子成功（持久数据已删除 = ROOM_NOT_FOUND
+    // 终态），其后的冗余 deleteAlarm 失败不得挡住旧连接的终止——收口在
+    // deleteAll 成功后立即执行；残留 Alarm（仅旧运行时语义）触发时由
+    // alarm() 按 not_found 自清，无需平台重试。deleteAll 自身失败仍会
+    // 上抛、不发假终态。
+    const host = await createRoomViaHttp("清理收口故障赛", "主持人");
+    const roomId = host.roomId;
+    const display = await TestWsClient.connectDisplay(roomId);
+    await display.next("displayView");
+    await setLeftAt(roomId, -1);
+    const stub = exports.Room.get(exports.Room.idFromName(roomId));
+    try {
+      const first = await runInDurableObject(stub, async (instance, state) => {
+        const original = state.storage.deleteAlarm.bind(state.storage);
+        state.storage.deleteAlarm = async () => {
+          throw new Error("review injected deleteAlarm failure");
+        };
+        try {
+          await (instance as unknown as { alarm(): Promise<void> }).alarm();
+          return "success";
+        } catch {
+          return "failure";
+        } finally {
+          state.storage.deleteAlarm = original;
+        }
+      });
+      // 冗余清理失败被独立处理：alarm() 不抛错，deleteAll 已完成，
+      // 终态收口（通知 + 关闭）在本次执行内送达。
+      expect(first).toBe("success");
+      expect(
+        await queryRoomRows(
+          roomId,
+          "SELECT COUNT(*) AS n FROM sqlite_master WHERE name = 'room_meta'",
+        ),
+      ).toEqual([{ n: 0 }]);
+      await waitNotice(display, "ROOM_NOT_FOUND", "清理收口通知");
+      expect((await display.waitForClose("清理收口关闭")).code).toBe(1008);
+      expect(await currentAlarm(roomId)).toBeNull();
+      // 恢复后的任何入口重放（含 not_found 路径）不再依赖重试补齐。
+      expect((await getEntry(roomId)).status).toBe(404);
+    } finally {
+      display.close();
+    }
+  });
+
+  it("入房兜底修复持久在线残留：补写离开时间并设新期限 Alarm", async () => {
+    // 持久恢复状态：最后断开的协调写入失败且旧实例/重试链已丢失——
+    // 存储 online=1、last_member_left_at=null、无连接、无 Alarm（schema
+    // 合法，正是文档承诺由下一个入房事件兜底的状态）。入房的阶段一先
+    // 协调（修复残留并补写离开时间）再裁决：新期限的 Alarm 应用与协调
+    // 写入都在成员事务之前完成。
+    const host = await createRoomViaHttp("入房兜底修复赛", "主持人");
+    const roomId = host.roomId;
+    const stub = exports.Room.get(exports.Room.idFromName(roomId));
+    await execInRoom(
+      roomId,
+      "UPDATE members SET online = 1; UPDATE room_meta SET last_member_left_at = NULL",
+    );
+    await runInDurableObject(stub, async (_r, state) => {
+      await state.storage.deleteAlarm();
+    });
+    expect(await runInDurableObject(stub, (_r, state) => state.getWebSockets().length)).toBe(0);
+
+    const response = await exports.default.fetch(
+      new Request(`${BASE_URL}/api/rooms/${roomId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname: "兜底修复观众" }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.has("Set-Cookie")).toBe(true);
+    const leftAt = (await queryRoomRows(roomId, "SELECT last_member_left_at FROM room_meta"))[0]
+      ?.last_member_left_at;
+    expect(typeof leftAt).toBe("string");
+    expect(await queryRoomRows(roomId, "SELECT online FROM members")).toEqual([
+      { online: 0 },
+      { online: 0 },
+    ]);
+    // 新离开时间有对应的空房期限 Alarm（否则无人访问时永不自动清理）。
+    expect(await currentAlarm(roomId)).toBe(Date.parse(String(leftAt)) + RETENTION_MS);
+  });
+
+  it("入房兜底修复路径的 setAlarm 故障：零成员写入，恢复后重试正常", async () => {
+    const host = await createRoomViaHttp("入房兜底故障赛", "主持人");
+    const roomId = host.roomId;
+    const stub = exports.Room.get(exports.Room.idFromName(roomId));
+    await execInRoom(
+      roomId,
+      "UPDATE members SET online = 1; UPDATE room_meta SET last_member_left_at = NULL",
+    );
+    await runInDurableObject(stub, async (_r, state) => {
+      await state.storage.deleteAlarm();
+      const target = state.storage as unknown as {
+        setAlarm: (...args: unknown[]) => Promise<void>;
+        __restore?: () => void;
+      };
+      const original = target.setAlarm.bind(target);
+      target.setAlarm = async () => {
+        throw new Error("review injected setAlarm failure");
+      };
+      target.__restore = () => {
+        target.setAlarm = original;
+      };
+    });
+    try {
+      const response = await exports.default.fetch(
+        new Request(`${BASE_URL}/api/rooms/${roomId}/members`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nickname: "不应存在" }),
+        }),
+      );
+      // 阶段一（协调 + 新期限 Alarm）失败在成员事务之前：500、零成员
+      // 写入、无凭据交付。
+      expect(response.status).toBe(500);
+      expect(response.headers.has("Set-Cookie")).toBe(false);
+      expect(await queryRoomRows(roomId, "SELECT COUNT(*) AS n FROM members")).toEqual([{ n: 1 }]);
+    } finally {
+      await runInDurableObject(stub, (_r, state) => {
+        (state.storage as unknown as { __restore: () => void }).__restore();
+      });
+    }
+
+    // 恢复后重试：协调已修复（幂等），Alarm 设上新期限，成员正常写入。
+    const retry = await exports.default.fetch(
+      new Request(`${BASE_URL}/api/rooms/${roomId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname: "恢复后观众" }),
+      }),
+    );
+    expect(retry.status).toBe(200);
+    expect(retry.headers.has("Set-Cookie")).toBe(true);
+    expect(await queryRoomRows(roomId, "SELECT COUNT(*) AS n FROM members")).toEqual([{ n: 2 }]);
+    const leftAt = (await queryRoomRows(roomId, "SELECT last_member_left_at FROM room_meta"))[0]
+      ?.last_member_left_at;
+    expect(typeof leftAt).toBe("string");
+    expect(await currentAlarm(roomId)).toBe(Date.parse(String(leftAt)) + RETENTION_MS);
+  });
+
   it("终态收口触发的成员 close 回调不产生无意义重试", async () => {
     const host = await createRoomViaHttp("归档关闭回调赛", "主持人");
     const roomId = host.roomId;
