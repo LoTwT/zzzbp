@@ -89,7 +89,7 @@ test("startBlockers：条件满足时为空", () => {
   ).toEqual([]);
 });
 
-test("seatSelectionRows：现任选手 + 在线且未占另一席的候选（含房主、排除另一队选手与离线者）", () => {
+test("seatSelectionRows：按成员顺序原位排列；现任选手保留、另一队选手与离线者不进入候选", () => {
   const view = hostView({
     bpStatus: "paused",
     members: [
@@ -102,14 +102,102 @@ test("seatSelectionRows：现任选手 + 在线且未占另一席的候选（含
     ],
   });
   const rows = seatSelectionRows(view, "A");
-  expect(rows.current?.memberId).toBe("pa");
-  expect(rows.candidates.map((candidate) => candidate.memberId)).toEqual(["host", "sub1", "sub2"]);
+  // 行序沿成员顺序（服务端按加入顺序返回），不以当前选手置顶。
+  expect(rows.map((row) => row.member.memberId)).toEqual(["host", "pa", "sub1", "sub2"]);
+  expect(rows.map((row) => row.isCurrent)).toEqual([false, true, false, false]);
+  expect(rows.map((row) => row.eligible)).toEqual([true, false, true, true]);
 });
 
-test("seatSelectionRows：空席时 current 为 null，仍列出候选", () => {
+test("seatSelectionRows：空席时无现任行，仍列出候选", () => {
   const rows = seatSelectionRows(hostView(), "A");
-  expect(rows.current).toBeNull();
-  expect(rows.candidates.map((candidate) => candidate.memberId)).toEqual(["host"]);
+  expect(rows.map((row) => row.member.memberId)).toEqual(["host"]);
+  expect(rows.every((row) => !row.isCurrent && row.eligible)).toBe(true);
+});
+
+test("seatSelectionRows：离线现任选手保留原行（按钮由视图层禁用）", () => {
+  const rows = seatSelectionRows(
+    hostView({
+      bpStatus: "paused",
+      members: [
+        member("host", { isHost: true }),
+        member("pa", { seatTeam: "A", online: false }),
+        member("sub1"),
+      ],
+    }),
+    "A",
+  );
+  expect(rows.map((row) => row.member.memberId)).toEqual(["host", "pa", "sub1"]);
+  const current = rows.find((row) => row.member.memberId === "pa")!;
+  expect(current.isCurrent).toBe(true);
+  expect(current.eligible).toBe(false);
+});
+
+test("seatSelectionRows：房主占另一席时不进入本队候选", () => {
+  const rows = seatSelectionRows(
+    hostView({
+      bpStatus: "paused",
+      members: [
+        member("host", { isHost: true, seatTeam: "B" }),
+        member("pa", { seatTeam: "A" }),
+        member("sub1"),
+      ],
+    }),
+    "A",
+  );
+  // 房主已占 B 席：不出现在 A 队列表（服务端也按此拒绝）。
+  expect(rows.map((row) => row.member.memberId)).toEqual(["pa", "sub1"]);
+});
+
+test("seatSelectionRows：已展示过的行在资格消失后保留（如离线），未展示的离线成员不进入", () => {
+  const view = hostView({
+    bpStatus: "paused",
+    members: [
+      member("host", { isHost: true }),
+      member("pa", { seatTeam: "A" }),
+      member("wasShown", { online: false }),
+      member("neverShown", { online: false }),
+      member("sub1"),
+    ],
+  });
+  const rows = seatSelectionRows(view, "A", new Set(["wasShown"]));
+  expect(rows.map((row) => row.member.memberId)).toEqual(["host", "pa", "wasShown", "sub1"]);
+  const retained = rows.find((row) => row.member.memberId === "wasShown")!;
+  expect(retained.isCurrent).toBe(false);
+  expect(retained.eligible).toBe(false);
+});
+
+test("seatSelectionRows：换人后行序不变，仅原行角色变化（稳定行序回归）", () => {
+  const before = hostView({
+    bpStatus: "paused",
+    members: [
+      member("host", { isHost: true }),
+      member("oldPlayer", { seatTeam: "A", nickname: "选手 01" }),
+      member("newPlayer", { nickname: "小鱼" }),
+      member("sub1"),
+    ],
+  });
+  const after = hostView({
+    bpStatus: "paused",
+    revision: before.revision + 1,
+    members: [
+      member("host", { isHost: true }),
+      member("oldPlayer", { nickname: "选手 01" }),
+      member("newPlayer", { seatTeam: "A", nickname: "小鱼" }),
+      member("sub1"),
+    ],
+  });
+  const rowsBefore = seatSelectionRows(before, "A");
+  const rowsAfter = seatSelectionRows(
+    after,
+    "A",
+    new Set(rowsBefore.map((r) => r.member.memberId)),
+  );
+  // 换人前后各成员行位置完全一致（线框更换选手 v3 before/after）。
+  expect(rowsAfter.map((row) => row.member.memberId)).toEqual(
+    rowsBefore.map((row) => row.member.memberId),
+  );
+  expect(rowsAfter.find((row) => row.member.memberId === "oldPlayer")?.eligible).toBe(true);
+  expect(rowsAfter.find((row) => row.member.memberId === "newPlayer")?.isCurrent).toBe(true);
 });
 
 test("otherMemberRows：仅双方选手以外成员（未占席房主计入，含离线）", () => {

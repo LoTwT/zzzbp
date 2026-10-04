@@ -1,6 +1,6 @@
 # 首版开发方案（草案）
 
-本稿整理技术选型、模块职责、实现顺序和验收重点，更新于 2026-10-04。工程引导已完成：仓库内已有应用包、Worker 与运行配置，`shared/` 与 `server/` 已落地 BP 规则、房间命令契约、HTTP 建房/入房/读取/目录入口与成员/展示 WS 实时通道（命令执行、去重回执与在线同步，见[架构与协议](../architecture.md)）；PR6 已交付常规浏览器房间界面（首页/入房/房间工作区、两选用布局与控制面板）及 WS 客户端连接管理，断线恢复等异常收口与展示页、归档记录随后续 PR 提供，规格与线框保留。前端沿用 Vue 3 与 TypeScript，由 `pnpm create vite` 的 `vue-ts` 模板初始化；代码质量采用 Oxlint、Oxfmt、simple-git-hooks 与 lint-staged，样式采用 Tailwind CSS 与 `@ayingott/theme`，Cloudflare 命令入口采用 `cf`，测试统一使用 Vitest 及其生态，输入校验采用 Zod。具体接入方式和兼容版本如下；依赖已安装并锁定在锁文件中，日常开发与验证命令见[开发指南](../development.md)。
+本稿整理技术选型、模块职责、实现顺序和验收重点，更新于 2026-10-04。工程引导已完成：仓库内已有应用包、Worker 与运行配置，`shared/` 与 `server/` 已落地 BP 规则、房间命令契约、HTTP 建房/入房/读取/目录入口与成员/展示 WS 实时通道（命令执行、去重回执与在线同步，见[架构与协议](../architecture.md)）；PR6 已交付常规浏览器房间界面（首页/入房/房间工作区、两选用布局与控制面板）及 WS 客户端连接管理；PR7 已交付断线重连同步门、结果未知同载荷核对与换人列表稳定反馈（见[架构与协议](../architecture.md)「后续运行时接入位置」），展示页与归档记录随后续 PR 提供，规格与线框保留。前端沿用 Vue 3 与 TypeScript，由 `pnpm create vite` 的 `vue-ts` 模板初始化；代码质量采用 Oxlint、Oxfmt、simple-git-hooks 与 lint-staged，样式采用 Tailwind CSS 与 `@ayingott/theme`，Cloudflare 命令入口采用 `cf`，测试统一使用 Vitest 及其生态，输入校验采用 Zod。具体接入方式和兼容版本如下；依赖已安装并锁定在锁文件中，日常开发与验证命令见[开发指南](../development.md)。
 
 ## 目标与依据
 

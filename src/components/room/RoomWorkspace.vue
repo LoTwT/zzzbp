@@ -27,6 +27,8 @@ import {
   type PickLayout,
 } from "../../room/pick-layout";
 import { RoomSession } from "../../room/room-session";
+import { IDENTITY_CHANGED } from "../../room/command-errors";
+import { pendingOperationText } from "../../room/operation-feedback";
 
 // 房间工作区：顶部（两侧禁用区 + 赛事信息）与主体（两侧选用区 + 中央代理
 // 人池）两层结构（docs/specs/room-layout.md「整体结构」，线框
@@ -265,8 +267,6 @@ const confirmVisible = computed(
   () => view.value !== null && currentStep.value !== null && isCurrentPlayerSide.value,
 );
 
-const confirmPending = computed(() => session.isScopePending("confirmPreselect"));
-
 const confirmDisabled = computed(() => {
   if (view.value === null) return true;
   return (
@@ -278,8 +278,32 @@ const confirmDisabled = computed(() => {
 });
 
 const confirmLabel = computed(() => {
+  if (slotOperationPending.value) {
+    // 预选/确认任一在途或待核对：首发显示「提交中…」，结果未知（回执
+    // 超时或断线）显示「正在核对结果…」，禁止同操作盲目重复。
+    return session.isScopeChecking("confirmPreselect") || session.isScopeChecking("setPreselect")
+      ? "正在核对结果…"
+      : "提交中…";
+  }
   if (currentStep.value === null) return "确认提交";
   return currentStep.value.action === "ban" ? "确认禁用" : "确认选用";
+});
+
+/**
+ * 挂起操作反馈：与确认按钮可见性解耦。
+ *
+ * 操作位轮到对方、BP 完成或本成员被换下后，确认按钮按角色规则消失，
+ * 但已发出的命令仍可能处于提交中或「结果未知、正在核对」阶段——
+ * 此时在底栏显示紧凑的持久提示；确认按钮仍可见时由按钮标签展示
+ * 同一状态，不重复提示。
+ */
+const slotOperationFeedbackText = computed(() => {
+  if (!slotOperationPending.value || confirmVisible.value) return null;
+  const checking =
+    session.isScopeChecking("confirmPreselect") ||
+    session.isScopeChecking("setPreselect") ||
+    session.isScopeChecking("clearPreselect");
+  return pendingOperationText(true, checking);
 });
 
 function sendConfirm(): void {
@@ -288,12 +312,17 @@ function sendConfirm(): void {
   session.sendCommand({ type: "confirmPreselect", slotId: view.value.currentSlotId });
 }
 
-const confirmErrorText = computed(
-  () =>
-    session.scopeError("confirmPreselect")?.text ??
-    session.scopeError("setPreselect")?.text ??
-    null,
-);
+const confirmErrorText = computed(() => {
+  // 身份变化结论由底栏的通用身份提示统一展示（同一结论不重复两行）。
+  // 过滤只丢弃该结论本身，不跳过其后的候选：旧 confirm 的身份结论仍在
+  // 保留期时，后续预选的新错误（如并发选择被拒）仍按既有优先级在
+  // 操作区可见。
+  const candidates = [session.scopeError("confirmPreselect"), session.scopeError("setPreselect")];
+  for (const error of candidates) {
+    if (error !== null && error.code !== IDENTITY_CHANGED) return error.text;
+  }
+  return null;
+});
 
 // ---- 控制面板 ----
 
@@ -413,8 +442,28 @@ function closePanel(): void {
           控制面板入口固定右下，二者始终可见可达。
         -->
         <div class="shrink-0 border-t border-(--border-default) px-3 py-2.5">
+          <!-- 挂起操作提示：与确认按钮可见性解耦（轮到对方/完成/被换下仍可见）。 -->
           <p
-            v-if="confirmVisible && confirmErrorText !== null"
+            v-if="slotOperationFeedbackText !== null"
+            class="pb-1.5 text-center text-xs text-amber-800"
+            role="status"
+          >
+            {{ slotOperationFeedbackText }}
+          </p>
+          <!-- 通用身份提示：旧身份挂起命令被放弃时的结论（可能来自新身份
+               不可见的房主面板操作），任何角色可见，不随视图推进清掉。 -->
+          <p
+            v-if="session.identityNotice.value !== null"
+            class="pb-1.5 text-center text-xs text-amber-800"
+            role="status"
+          >
+            {{ session.identityNotice.value }}
+          </p>
+          <!-- 操作错误提示：不再要求当前持有确认入口；旧命令收敛为
+               「结果未知」时，即使已非当前操作方也要可见（身份变化结论
+               由上方通用提示展示，不重复）。 -->
+          <p
+            v-if="confirmErrorText !== null"
             class="pb-1.5 text-center text-xs text-danger-700"
             role="alert"
           >
@@ -428,7 +477,7 @@ function closePanel(): void {
               :disabled="confirmDisabled"
               @click="sendConfirm"
             >
-              {{ confirmPending ? "提交中…" : confirmLabel }}
+              {{ confirmLabel }}
             </button>
             <button
               ref="panelEntryEl"

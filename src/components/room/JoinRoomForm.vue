@@ -10,6 +10,8 @@ import { joinRoom, type RoomHttpFailure } from "../../room/api";
 const props = defineProps<{
   readonly roomId: string;
   readonly roomName: string;
+  /** 回到入房表单的原因提示（如原身份失效）；无则为 null。 */
+  readonly notice?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -60,6 +62,14 @@ async function submit(): Promise<void> {
       @submit.prevent="submit"
     >
       <h2 class="text-center text-xl font-semibold">进入房间</h2>
+
+      <p
+        v-if="props.notice !== null && props.notice !== undefined"
+        class="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-center text-xs leading-5 text-amber-800"
+        role="status"
+      >
+        {{ props.notice }}
+      </p>
 
       <p class="mt-4 text-center text-lg font-medium break-all text-neutral-900">{{ roomName }}</p>
       <p class="mt-1 text-center text-xs text-neutral-500">进入后为观众，选手由房主安排。</p>

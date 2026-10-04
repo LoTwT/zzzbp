@@ -58,21 +58,48 @@ export function memberRoleText(member: {
   return member.seatTeam === null ? "观众" : "选手";
 }
 
-/** 席位选择列表：目标队伍现任选手 + 可指派的在线候选（含未占另一席的房主）。 */
+/**
+ * 席位选择/换人列表的稳定行。
+ *
+ * 行序沿用房主管理视图的成员顺序（服务端按加入顺序返回）：换人、资格
+ * 变化都只在原行上更新角色文案与按钮，不重排、不把新选手抽到列表顶部
+ * （docs/specs/room-layout.md「成员列表与换人」，线框更换选手 v3
+ * before/after：两名成员始终位于相同行）。
+ */
+export interface SeatSelectionRow {
+  readonly member: ManagedMember;
+  /** 该队现任选手；即使离线也保留在本列表中，按钮禁用为「当前选手」。 */
+  readonly isCurrent: boolean;
+  /** 当前可指派：在线且未占另一席（未占席的房主本人也在候选内）。 */
+  readonly eligible: boolean;
+}
+
+/**
+ * 席位选择列表行：目标队现任选手 + 合格候选，按成员顺序原位排列。
+ *
+ * 另一方的在席选手不进入本队列表；候选要求在线。`retainedMemberIds` 是
+ * 本列表已展示过的成员：资格消失（如离线、被安排到另一席之外的调整）
+ * 后保留原行并禁用按钮，避免行在待处理期间闪烁消失；不含在其中的
+ * 离线成员（从未展示过）不进入列表。真正的权限与前提始终由服务端
+ * 命令管线裁决，这里只做展示派生。
+ */
 export function seatSelectionRows(
   view: HostManagementView,
   team: BpTeam,
-): {
-  readonly current: ManagedMember | null;
-  readonly candidates: readonly ManagedMember[];
-} {
-  const current = view.members.find((member) => member.seatTeam === team) ?? null;
+  retainedMemberIds: ReadonlySet<string> = new Set(),
+): readonly SeatSelectionRow[] {
   const otherTeam: BpTeam = team === "A" ? "B" : "A";
-  const candidates = view.members.filter(
-    (member) =>
-      member.online && member.seatTeam !== otherTeam && member.memberId !== current?.memberId,
-  );
-  return { current, candidates };
+  const currentMemberId = view.members.find((member) => member.seatTeam === team)?.memberId ?? null;
+  const rows: SeatSelectionRow[] = [];
+  for (const member of view.members) {
+    if (member.seatTeam === otherTeam) continue;
+    const isCurrent = member.memberId === currentMemberId;
+    const eligible =
+      member.online && member.seatTeam === null && member.memberId !== currentMemberId;
+    if (!isCurrent && !eligible && !retainedMemberIds.has(member.memberId)) continue;
+    rows.push({ member, isCurrent, eligible });
+  }
+  return rows;
 }
 
 /** 其他成员列表：双方选手以外的全部成员（含房主未占席时），在线与离线都展示。 */
