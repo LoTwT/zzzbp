@@ -8,6 +8,7 @@ import { validateTeamName } from "../../lib/form-validation";
 import type { RoomSession } from "../../room/room-session";
 import { isHostManagementView, type RoomView } from "../../room/room-session";
 import type { RoomCatalogModel } from "../../room/room-catalog";
+import { TeamNameDraft } from "../../room/team-name-draft";
 import {
   memberRoleText,
   otherMemberRows,
@@ -45,14 +46,13 @@ const restartConfirming = ref(false);
 const pendingSeatMemberId = ref<string | null>(null);
 const teamNameErrors = reactive<{ A: string | null; B: string | null }>({ A: null, B: null });
 /**
- * 队名草稿：仅当草稿仍等于上一份权威值（用户未改动）时才跟随新视图同步；
- * 有未保存编辑（含保存请求在途时继续输入）一律保留，等待明确的成功回执
- * 后由权威值自然追平（草稿===新权威值时保存按钮恢复禁用）。失败或无关
- * 广播都不会覆盖草稿。
+ * 队名草稿：编辑代次 + 提交快照的状态机（见 src/room/team-name-draft.ts）。
+ * 未编辑时跟随外部改名；保存中继续编辑、无关广播、失败回执都不覆盖草稿；
+ * 成功仅收敛与该次提交对应且未被后续编辑替代的草稿（含 trim 规范化）。
  */
-const teamDrafts = reactive<{ A: string; B: string }>({
-  A: props.view.teamNames.A,
-  B: props.view.teamNames.B,
+const teamDrafts = reactive<{ A: TeamNameDraft; B: TeamNameDraft }>({
+  A: new TeamNameDraft(props.view.teamNames.A),
+  B: new TeamNameDraft(props.view.teamNames.B),
 });
 
 const isHost = computed(() => isHostManagementView(props.view));
@@ -86,14 +86,28 @@ function seatedMemberOf(view: HostManagementView, team: BpTeam): ManagedMember |
   return view.members.find((member) => member.seatTeam === team) ?? null;
 }
 
-// 队名草稿与权威值同步：草稿仍等于旧权威值（未编辑）才跟随；否则保留输入。
+// 队名草稿与权威值同步（未编辑时跟随；编辑后由状态机自行保留）。
 watch(
   () => [props.view.teamNames.A, props.view.teamNames.B] as const,
-  ([nextA, nextB], [prevA, prevB]) => {
-    if (teamDrafts.A === prevA) teamDrafts.A = nextA;
-    if (teamDrafts.B === prevB) teamDrafts.B = nextB;
+  ([nextA, nextB]) => {
+    teamDrafts.A.setAuthority(nextA);
+    teamDrafts.B.setAuthority(nextB);
   },
 );
+
+// 保存结算：同 scope 命令回执到达（pending 消失）时按有无 scope 错误判定
+// 成败并收敛草稿；未发起过保存（无提交快照）时状态机自动忽略。
+for (const team of ["A", "B"] as const) {
+  const scope = `setTeamName:${team}`;
+  watch(
+    () => props.session.isScopePending(scope),
+    (pending, previous) => {
+      if (previous && !pending) {
+        teamDrafts[team].settleSave({ ok: props.session.scopeError(scope) === null });
+      }
+    },
+  );
+}
 
 const panelTitle = computed(() => {
   switch (subview.value) {
@@ -168,15 +182,20 @@ function scopeErrorText(scope: string): string | null {
 }
 
 function saveTeamName(team: BpTeam): void {
-  const error = validateTeamName(teamDrafts[team]);
+  const error = validateTeamName(teamDrafts[team].draft);
   teamNameErrors[team] = error;
   if (error !== null) return;
-  // 草稿不在这里标记为已同步：成功与否由回执决定，权威值追平前保持输入。
-  props.session.sendCommand({ type: "setTeamName", team, teamName: teamDrafts[team] });
+  // 登记提交快照（trim 规范化值）；发送被会话拒绝时撤销登记，草稿保持待保存。
+  const submitted = teamDrafts[team].beginSave();
+  if (submitted === null) return;
+  const result = props.session.sendCommand({ type: "setTeamName", team, teamName: submitted });
+  if (!result.sent) {
+    teamDrafts[team].abortSave();
+  }
 }
 
 function onTeamNameInput(team: BpTeam, value: string): void {
-  teamDrafts[team] = value;
+  teamDrafts[team].edit(value);
   teamNameErrors[team] = null;
   props.session.clearScopeError(`setTeamName:${team}`);
 }
@@ -368,7 +387,7 @@ function assignSeat(memberId: string): void {
               </label>
               <input
                 :id="`team-name-${team}`"
-                :value="teamDrafts[team]"
+                :value="teamDrafts[team].draft"
                 class="min-w-0 flex-1 rounded-lg border border-(--border-default) bg-(--surface-elevated) px-2.5 py-1.5 text-sm focus-ring"
                 :class="{ 'border-danger-500': teamNameErrors[team] !== null }"
                 type="text"
@@ -381,7 +400,7 @@ function assignSeat(memberId: string): void {
                 :disabled="
                   commandButtonState(
                     `setTeamName:${team}`,
-                    teamDrafts[team].trim() === '' || teamDrafts[team] === hostView.teamNames[team],
+                    teamDrafts[team].draft.trim() === '' || !teamDrafts[team].dirty,
                   ).disabled
                 "
                 @click="saveTeamName(team)"
