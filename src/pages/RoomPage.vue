@@ -1,19 +1,23 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, shallowRef } from "vue";
 import { useRoute } from "vue-router";
+import type { ArchiveSnapshot } from "../../shared/contracts/records";
 import type { RoomMemberView } from "../../shared/contracts/views";
 import JoinRoomForm from "../components/room/JoinRoomForm.vue";
+import RecordView from "../components/room/RecordView.vue";
 import RoomWorkspace from "../components/room/RoomWorkspace.vue";
 import { fetchRoomEntry } from "../room/api";
 
 // 房间入口（/rooms/:roomId）：按生命周期与身份分流。
-// - 不存在/已过期：提示并提供「创建新房间」入口；
+// - 不存在/已过期（真正 404）：提示并提供「创建新房间」入口；
 // - live + 有效身份（HttpOnly Cookie 自动携带）：直接恢复角色进入房间；
 // - live + 匿名：首次入房表单；
+// - archived：成功只读响应，同一套只读记录界面（原房主、成员与匿名
+//   一致）；记录经普通 HTTP 快照读取，不建立成员/展示实时连接；
 // - 会话内身份失效（AUTH_FAILED）：回到首次入房表单重新加入。
-// 归档房间在 PR9 前没有只读记录页，按不可进入提示。
+// 网络/服务端故障可重试，不误报「房间不存在」。
 
-type Phase = "loading" | "not-found" | "join" | "room";
+type Phase = "loading" | "not-found" | "join" | "room" | "record";
 
 const route = useRoute();
 const roomId = typeof route.params.roomId === "string" ? route.params.roomId : "";
@@ -21,6 +25,7 @@ const roomId = typeof route.params.roomId === "string" ? route.params.roomId : "
 const phase = ref<Phase>("loading");
 const roomName = ref<string>("");
 const memberView = ref<RoomMemberView | null>(null);
+const snapshot = shallowRef<ArchiveSnapshot | null>(null);
 const loadFailed = ref(false);
 /** 回到首次入房时的原因提示（如 WS AUTH_FAILED：原身份已失效）。 */
 const joinNotice = ref<string | null>(null);
@@ -30,13 +35,21 @@ async function loadEntry(): Promise<void> {
   loadFailed.value = false;
   const result = await fetchRoomEntry(roomId);
   if (result.ok) {
+    if (result.value.kind === "archived") {
+      snapshot.value = result.value.record;
+      memberView.value = null;
+      phase.value = "record";
+      return;
+    }
+    snapshot.value = null;
     roomName.value = result.value.roomName;
     memberView.value = result.value.memberView;
     phase.value = result.value.memberView === null ? "join" : "room";
     return;
   }
   if (result.reason === "network" || result.reason === "server") {
-    // 网络/服务端故障可重试：房间不一定不存在，保留重新加载入口。
+    // 网络/服务端故障可重试：房间不一定不存在（含归档房间读取失败），
+    // 保留重新加载入口，不误报「不存在或已过期」。
     loadFailed.value = true;
     phase.value = "loading";
     return;
@@ -64,11 +77,30 @@ function onRoomGone(): void {
   phase.value = "not-found";
 }
 
+function onRoomArchived(): void {
+  // 入房后或重连时房间被归档：沿原链接转入只读记录读取，不回到表单
+  // 或不存在页；记录内容以服务端快照为准。
+  memberView.value = null;
+  void loadEntry();
+}
+
+function onJoinArchived(): void {
+  // 入房请求进行中房间被归档（410）：同样转记录读取。
+  memberView.value = null;
+  void loadEntry();
+}
+
 onMounted(loadEntry);
 </script>
 
 <template>
-  <main class="mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center gap-8 px-6">
+  <!-- 只读记录：所有访问者同一套界面，快照是唯一数据来源；全屏布局。 -->
+  <RecordView v-if="phase === 'record' && snapshot !== null" :record="snapshot" />
+
+  <main
+    v-else
+    class="mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center gap-8 px-6"
+  >
     <template v-if="phase === 'loading'">
       <p v-if="loadFailed" class="max-w-sm text-center text-sm text-danger-700" role="alert">
         房间信息加载失败，请检查网络后重试。
@@ -103,6 +135,7 @@ onMounted(loadEntry);
       :room-name="roomName"
       :notice="joinNotice"
       @joined="onJoined"
+      @archived="onJoinArchived"
     />
 
     <RoomWorkspace
@@ -111,6 +144,7 @@ onMounted(loadEntry);
       :initial-view="memberView"
       @identity-lost="onIdentityLost"
       @room-gone="onRoomGone"
+      @room-archived="onRoomArchived"
     />
   </main>
 </template>

@@ -1,6 +1,6 @@
 import { getBpStep, type BpSlotId, type BpTeam } from "../../shared/bp/steps";
 import type { BpPublicView } from "../../shared/contracts/views";
-import type { RoomAgentDisplay, RoomCatalogModel } from "./room-catalog";
+import type { RoomAgentDisplay, RoomCatalogModel, AgentDisplayBase } from "./room-catalog";
 import { banStepsOfTeam, pickSlotRows, type PickLayout } from "./pick-layout";
 
 /**
@@ -10,13 +10,13 @@ import { banStepsOfTeam, pickSlotRows, type PickLayout } from "./pick-layout";
  * 空席「待选择」、公开预选展示与队伍名规则在两个场景保持一致，行结构
  * 一律由权威顺序（BP_STEPS / BP_PICK_SEGMENTS）经 pick-layout 推导。
  * 输入是公开视图（RoomMemberView / DisplayView 同形），不含成员专属
- * 字段的依赖。
+ * 字段的依赖。只读记录页的快照投影见 record-view.ts（同一套行结构）。
  */
 
 /** 单个禁用槽位的展示信息（顶部禁用区）。 */
 export interface BanSlotView {
   readonly slotId: BpSlotId;
-  readonly agent: RoomAgentDisplay | null;
+  readonly agent: AgentDisplayBase | null;
   readonly active: boolean;
 }
 
@@ -24,7 +24,7 @@ export interface BanSlotView {
 export interface PickSlotView {
   readonly slotId: BpSlotId;
   readonly step: PickSlotViewStep;
-  readonly agent: RoomAgentDisplay | null;
+  readonly agent: AgentDisplayBase | null;
   readonly active: boolean;
 }
 

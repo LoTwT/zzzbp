@@ -67,7 +67,7 @@ async function businessTableNames(roomId: string): Promise<string[]> {
   return rows.map((row) => String(row.name)).sort();
 }
 
-/** 该实例当前的 alarm 时间戳；房间到期清理（PR9）前任何路径都不应设置。 */
+/** 该实例当前的 alarm 时间戳；从未建房的实例不应设置任何 Alarm。 */
 function currentAlarm(roomId: string): Promise<number | null> {
   const stub = roomStub(roomId);
   return runInDurableObject(stub, (_room, state) => state.storage.getAlarm());
@@ -156,15 +156,15 @@ describe("目录快照按房间固定", () => {
     });
 
     // 「升级部署」后（房间 B 以新目录创建）房间 A 的读取仍返回旧快照。
-    expect(await roomStub(roomIdA).getRoomCatalog()).toEqual(catalogA);
-    expect(await roomStub(roomIdB).getRoomCatalog()).toEqual(catalogB);
+    const persistedA = await roomStub(roomIdA).getRoomCatalog();
+    const persistedB = await roomStub(roomIdB).getRoomCatalog();
+    expect(persistedA).toEqual({ kind: "catalog", data: catalogA });
+    expect(persistedB).toEqual({ kind: "catalog", data: catalogB });
 
     // 规则名单与归档展示 lookup 均从持久快照派生，而非全局当前目录。
-    const persisted = await roomStub(roomIdA).getRoomCatalog();
-    expect(persisted).not.toBeNull();
-    if (persisted === null) return;
-    expect(toAgentCatalog(persisted).agentIds).toEqual(["9001", "9002"]);
-    const display = toAgentDisplayLookup(persisted);
+    if (persistedA.kind !== "catalog") throw new Error("房间 A 目录读取失败");
+    expect(toAgentCatalog(persistedA.data).agentIds).toEqual(["9001", "9002"]);
+    const display = toAgentDisplayLookup(persistedA.data);
     expect(display.get("9001")).toEqual({ name: "甲", avatarUrl: null });
     expect(display.get("9002")).toEqual({
       name: "乙",
@@ -214,7 +214,11 @@ describe("SQLite 持久化与表结构", () => {
       await queryRows(roomId, "SELECT position, slot_id, agent_id FROM bp_submissions"),
     ).toEqual([]);
     expect(await queryRows(roomId, "SELECT COUNT(*) AS n FROM room_catalog")).toEqual([{ n: 1 }]);
-    expect(await queryRows(roomId, "SELECT version FROM schema_meta")).toEqual([{ version: 2 }]);
+    // schema v3：v2 基础上新增 archive_snapshot 表（PR9 归档快照）。
+    expect(await queryRows(roomId, "SELECT version FROM schema_meta")).toEqual([{ version: 3 }]);
+    expect(await queryRows(roomId, "SELECT COUNT(*) AS n FROM archive_snapshot")).toEqual([
+      { n: 0 },
+    ]);
 
     // 新观众加入：只新增一行 members 并递增 revision，不动目录与其他数据。
     const join = await exports.default.fetch(
@@ -270,7 +274,7 @@ describe("SQLite 持久化与表结构", () => {
     expect(apiErrorResponseBodySchema.parse(await join.json()).error.code).toBe("ROOM_NOT_FOUND");
 
     // 从未建房的实例保持完全空存储：没有任何业务表（含 schema_meta），
-    // 也没有 alarm；不能像旧实现那样留下 7 张表与版本行。
+    // 也没有 alarm；不能像旧实现那样留下 8 张表与版本行。
     for (const roomId of [entryRoomId, catalogRoomId, joinRoomId]) {
       expect(await businessTableNames(roomId)).toEqual([]);
       expect(await currentAlarm(roomId)).toBeNull();

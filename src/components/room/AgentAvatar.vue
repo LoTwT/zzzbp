@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { ImageOff } from "@lucide/vue";
-import type { RoomAgentDisplay } from "../../room/room-catalog";
+import type { AgentDisplayBase } from "../../room/room-catalog";
 
 // 代理人头像：真实数据路径派生的远程图片（toAgentImageUrl）+ 加载失败与
 // 缺路径时的占位后备。缺头像不改变代理人的身份、可用性或禁选结果，
 // 名称始终由外层展示（docs/specs/room-layout.md「代理人头像」）。
+// 展示按最小信息声明依赖（AgentDisplayBase）：实时房间目录与归档快照
+// （归档时固定的名称与头像）共用同一实现。
 
 const props = defineProps<{
-  readonly agent: RoomAgentDisplay | null;
+  readonly agent: AgentDisplayBase | null;
   /** 无障碍名称前缀，与外层展示文案组合。 */
   readonly altName?: string;
 }>();

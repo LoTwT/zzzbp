@@ -769,6 +769,18 @@ test("ROOM_NOT_FOUND 通知进入 room-gone 终态", () => {
   expect(handles).toHaveLength(1);
 });
 
+test("ROOM_ARCHIVED 通知进入 room-archived 终态：与不存在分开表达", () => {
+  // 归档不是消失：会话终止实时重连，页面沿原房间链接转入只读记录，
+  // 不能按 room-gone 误报「不存在或已过期」。
+  const session = createSession();
+  const handle = connectAndSync(session, memberView());
+  handle.receive({ kind: "notice", code: "ROOM_ARCHIVED", message: "房间已归档" });
+  expect(session.status.value).toBe("room-archived");
+  handle.close();
+  vi.advanceTimersByTime(60_000);
+  expect(handles).toHaveLength(1);
+});
+
 test("旧连接的迟到消息被隔离：不覆盖视图、不触发重发", () => {
   const session = createSession(memberView({ revision: 3 }));
   const first = connectAndSync(session, memberView({ revision: 3 }));

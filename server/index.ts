@@ -260,9 +260,9 @@ async function handleRoomEntry(
     return apiError(404, "ROOM_NOT_FOUND", "房间不存在");
   }
   if (entry.kind === "archived") {
-    // 防御分支：本 PR 没有任何把房间转为 archived 的路径；只读快照的读取
-    // 由 PR9 实现并替换本分支。
-    return apiError(410, "ROOM_ARCHIVED", "房间已归档");
+    // 归档房间的原链接返回只读快照：原房主、成员与匿名访客取得同一份
+    // 记录；读取不建立成员或展示连接，不刷新快照期限。
+    return jsonResponse(200, { kind: "archived", record: entry.record });
   }
 
   return jsonResponse(200, {
@@ -319,13 +319,22 @@ async function handleJoinRoom(
   );
 }
 
-/** GET /api/rooms/:roomId/catalog：该房间固定的目录快照（只读，无需身份）。 */
+/**
+ * GET /api/rooms/:roomId/catalog：该房间固定的目录快照（只读，无需身份）。
+ *
+ * 归档房间不再提供实时目录（归档时目录行已随操作期数据清理，只读记录
+ * 的一切展示信息固定在快照内）：按 410 ROOM_ARCHIVED 分流，展示页据此
+ * 以「已归档」而非「不存在」收口。
+ */
 async function handleRoomCatalog(ctx: ExecutionContext, roomId: string): Promise<Response> {
-  const catalog = await roomStub(ctx, roomId).getRoomCatalog();
-  if (catalog === null) {
+  const result = await roomStub(ctx, roomId).getRoomCatalog();
+  if (result.kind === "not_found") {
     return apiError(404, "ROOM_NOT_FOUND", "房间不存在");
   }
-  return jsonResponse(200, catalog);
+  if (result.kind === "archived") {
+    return apiError(410, "ROOM_ARCHIVED", "房间已归档");
+  }
+  return jsonResponse(200, result.data);
 }
 
 /**

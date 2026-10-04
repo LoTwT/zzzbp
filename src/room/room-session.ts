@@ -54,13 +54,14 @@ import {
  *   由服务端视图恢复，绝不自动 resume BP；
  * - AUTH_FAILED 明确结束原身份会话：终止重连与核对重发，页面回首次
  *   入房流程（凭据仅经 HttpOnly Cookie 由浏览器携带，会话不读取身份
- *   秘密，也不以昵称推断身份）；ROOM_NOT_FOUND/ROOM_ARCHIVED 同样按
- *   终态终止重试；
+ *   秘密，也不以昵称推断身份）；ROOM_NOT_FOUND 与 ROOM_ARCHIVED 同为
+ *   终态但分开表达：前者按不存在收口，后者由页面沿原房间链接转入
+ *   只读记录（归档不是消失，不能误报「不存在或已过期」）；
  * - 组件卸载必须调用 stop()：清理重连、首帧与回执计时器，挂起命令
  *   视为放弃且不落任何存储；刷新后按服务器当前状态恢复，不猜测重放。
  */
 
-/** 会话状态。auth-failed/room-gone/stopped 为终态，不再自动重连。 */
+/** 会话状态。auth-failed/room-gone/room-archived/stopped 为终态，不再自动重连。 */
 export type RoomSessionStatus =
   | "idle"
   | "connecting"
@@ -69,6 +70,7 @@ export type RoomSessionStatus =
   | "interrupted"
   | "auth-failed"
   | "room-gone"
+  | "room-archived"
   | "stopped";
 
 /** 房间视图联合：普通成员视图或房主管理视图（后者是其超集）。 */
@@ -399,6 +401,7 @@ export class RoomSession {
     if (
       this.status.value === "auth-failed" ||
       this.status.value === "room-gone" ||
+      this.status.value === "room-archived" ||
       this.status.value === "stopped"
     ) {
       return;
@@ -594,8 +597,11 @@ export class RoomSession {
         this.terminateSession("auth-failed");
         return;
       case "ROOM_NOT_FOUND":
-      case "ROOM_ARCHIVED":
         this.terminateSession("room-gone");
+        return;
+      case "ROOM_ARCHIVED":
+        // 房间归档：终止实时会话，页面沿原房间链接转入只读记录。
+        this.terminateSession("room-archived");
         return;
       case "INTERNAL":
         this.globalNotice.value = "服务器连接异常，正在重试";

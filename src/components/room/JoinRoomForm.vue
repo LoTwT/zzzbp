@@ -16,6 +16,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: "joined", view: RoomMemberView): void;
+  /**
+   * 入房请求进行中房间被归档（410 ROOM_ARCHIVED）：父级沿原链接转入
+   * 只读记录读取，本表单不再以「不存在」误导。
+   */
+  (event: "archived"): void;
 }>();
 
 const nickname = ref("");
@@ -27,7 +32,7 @@ const canSubmit = computed(() => !submitting.value && nickname.value.trim() !== 
 
 const FAILURE_TEXTS: Record<RoomHttpFailure, string> = {
   "not-found": "房间不存在或已过期",
-  archived: "房间不存在或已过期",
+  archived: "房间已归档，正在转至只读记录…",
   invalid: "提交内容不合法，请检查后重试",
   server: "服务器暂时不可用，请稍后重试",
   network: "网络异常，进入失败，请重试",
@@ -43,6 +48,11 @@ async function submit(): Promise<void> {
   submitting.value = false;
   if (result.ok) {
     emit("joined", result.value.memberView);
+    return;
+  }
+  if (result.reason === "archived") {
+    // 归档房间不需要也无法加入成员：转由父级读取只读记录。
+    emit("archived");
     return;
   }
   formError.value = FAILURE_TEXTS[result.reason];

@@ -2,6 +2,7 @@ import { agentCatalogSchema, type AgentCatalogData } from "../shared/agents/sche
 import { roomOperationErrorCodeSchema, type RoomOperationErrorCode } from "../shared/commands";
 import type { RoomLifecycle, RoomState } from "../shared/room";
 import { roomStateSchema } from "../shared/room";
+import { archiveSnapshotSchema, type ArchiveSnapshot } from "../shared/contracts/records";
 
 /**
  * 房间 Durable Object 的 SQLite 持久化模块。
@@ -26,7 +27,7 @@ import { roomStateSchema } from "../shared/room";
  */
 
 /** 房间业务表结构的当前版本；升级入口见 ensureRoomSchema。 */
-const ROOM_SCHEMA_VERSION = 2;
+const ROOM_SCHEMA_VERSION = 3;
 
 /** 已初始化实例的事务标志表；它的存在等价于全部业务表已按当前结构建立。 */
 const ROOM_SCHEMA_MARKER_TABLE = "schema_meta";
@@ -144,6 +145,12 @@ export function ensureRoomSchema(sql: RoomSql): void {
       PRIMARY KEY (member_id, operation_id)
     )
   `);
+  sql.exec(`
+    CREATE TABLE IF NOT EXISTS archive_snapshot (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      snapshot_json TEXT NOT NULL
+    )
+  `);
 
   const row = sql
     .exec<SqlRow<{ version: number }>>("SELECT version FROM schema_meta WHERE id = 1")
@@ -160,9 +167,12 @@ export function ensureRoomSchema(sql: RoomSql): void {
     );
   }
   if (version < ROOM_SCHEMA_VERSION) {
-    // 版本升级入口：按版本逐步迁移。v1 → v2 只新增 command_receipts 表
-    // （上方 IF NOT EXISTS 已建立，无历史数据需要搬移），更新版本号即可；
+    // 版本升级入口：按版本逐步迁移。v1 → v2 只新增 command_receipts 表，
+    // v2 → v3 只新增 archive_snapshot 表（归档快照，PR9）；两次迁移都
+    // 无历史数据需要搬移，上方 IF NOT EXISTS 已建立表，更新版本号即可；
     // 迁移与所在业务单元同事务提交或回滚。未来结构变更在此追加步骤。
+    // 既有 v2 房间首次访问经此迁移后，由调用方按当前持久状态补设生命
+    // 周期 Alarm（见 server/room.ts 的 applyLifecycleAlarm 与裁决入口）。
     sql.exec("UPDATE schema_meta SET version = ? WHERE id = 1", ROOM_SCHEMA_VERSION);
   }
 }
@@ -173,7 +183,7 @@ export function ensureRoomSchema(sql: RoomSql): void {
  *
  * 读取路径（房间入口、目录、入房失败前）先经此检查：从未建房的实例
  * 保持完全空存储，随机或错误的 roomId 不会因一次 GET/入房失败就建立
- * 7 张业务表与版本行、留下永不回收的持久数据（依据见 docs/architecture.md
+ * 8 张业务表与版本行、留下永不回收的持久数据（依据见 docs/architecture.md
  * 「房间持久化与固定目录」）。表结构已存在时才调用 ensureRoomSchema 做
  * 幂等校验或迁移，建房与既有房间的事务语义不变。
  *
@@ -455,10 +465,67 @@ function commonSubmissionCount(
  *
  * 语义见 docs/architecture.md「生命周期与归档记录」：实际成员连接把计时
  * 取消（置 NULL），最后一名在线成员离开时写入当前时刻；展示连接与
- * HTTP 读写不触碰该字段。到期执行与 Alarm 在 PR9。
+ * HTTP 读写不触碰该字段。到期裁决与 Alarm 调度由 server/room.ts 的
+ * 生命周期入口统一执行（PR9）。
  */
 export function setLastMemberLeftAt(sql: RoomSql, value: string | null): void {
   sql.exec("UPDATE room_meta SET last_member_left_at = ? WHERE id = 1", value);
+}
+
+/**
+ * 更新房间生命周期标记（live → archived）。归档转换（快照写入、操作期
+ * 数据清理、生命周期标记）由调用方放在同一 transactionSync 闭包内：
+ * 任一语句失败时整体回滚，不会出现「标记已归档但快照缺失」的半归档。
+ */
+export function setRoomLifecycle(sql: RoomSql, lifecycle: RoomLifecycle): void {
+  sql.exec("UPDATE room_meta SET lifecycle = ? WHERE id = 1", lifecycle);
+}
+
+/**
+ * 写入归档快照（单行）。快照 JSON 由 shared/contracts/records.ts 的
+ * archiveSnapshotSchema 生成并校验；写入与生命周期标记、操作期数据
+ * 清理同事务，作为归档转换的原子单元。
+ */
+export function writeArchiveSnapshot(sql: RoomSql, snapshot: ArchiveSnapshot): void {
+  sql.exec(
+    "INSERT INTO archive_snapshot (id, snapshot_json) VALUES (1, ?)",
+    JSON.stringify(snapshot),
+  );
+}
+
+/**
+ * 读取归档快照并经 archiveSnapshotSchema 校验；未归档或行缺失返回 null。
+ *
+ * 读取失败（存储损坏、schema 不符）按异常上抛，由调用方以 INTERNAL 收口：
+ * 归档房间的快照是唯一可服务数据，静默降级会把有记录的房间伪装成
+ * 不存在或加载失败。
+ */
+export function readArchiveSnapshot(sql: RoomSql): ArchiveSnapshot | null {
+  const row = sql
+    .exec<SqlRow<{ snapshot_json: string }>>(
+      "SELECT snapshot_json FROM archive_snapshot WHERE id = 1",
+    )
+    .toArray()[0];
+  if (row === undefined) return null;
+  return archiveSnapshotSchema.parse(JSON.parse(row.snapshot_json));
+}
+
+/**
+ * 清空归档后的操作期业务数据：成员（含凭据摘要）、席位、队名、当前
+ * 有效序列、命令回执与固定目录快照。
+ *
+ * 归档只保留只读快照与必要生命周期元数据（room_meta 的房间标识、名称、
+ * 生命周期、创建时间与版本来源），旧选择不作为额外历史长期保留；快照
+ * 读取路径不依赖这些已清理的 live 行（readArchiveSnapshot 只读快照行）。
+ * 与快照写入、生命周期标记同事务执行。
+ */
+export function deleteRoomOperationalData(sql: RoomSql): void {
+  sql.exec("DELETE FROM members");
+  sql.exec("DELETE FROM seats");
+  sql.exec("DELETE FROM team_names");
+  sql.exec("DELETE FROM bp_submissions");
+  sql.exec("DELETE FROM command_receipts");
+  sql.exec("DELETE FROM room_catalog");
 }
 
 /** 房间当前版本信息：命令结果与错误回执关联的 bp.version / revision。 */

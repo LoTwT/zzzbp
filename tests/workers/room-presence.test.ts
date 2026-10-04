@@ -365,7 +365,7 @@ describe("暂停规则与换人（服务端规则）", () => {
   });
 });
 
-describe("空房计时元数据（PR9 前：只记录，无 Alarm/到期执行）", () => {
+describe("空房计时元数据与 Alarm 调度（PR9 生命周期）", () => {
   it("成员连接取消计时；最后一名成员离开重新记录；展示与 HTTP 读取不影响", async () => {
     const host = await createRoomViaHttp("计时赛", "主持人");
     const roomId = host.roomId;
@@ -411,14 +411,34 @@ describe("空房计时元数据（PR9 前：只记录，无 Alarm/到期执行�
     expect(leftAgain).not.toBeNull();
   });
 
-  it("连接与断开路径不设置任何 Alarm（到期执行与裁决在 PR9）", async () => {
-    const host = await createRoomViaHttp("无 Alarm 赛", "主持人");
-    const client = await TestWsClient.connectMember(host.roomId, host.secret);
+  it("Alarm 随生命周期调度：建防空房期限、连接取消、全员离开按新期限重设", async () => {
+    const host = await createRoomViaHttp("Alarm 调度赛", "主持人");
+    const roomId = host.roomId;
+
+    // 建房即调度空房期限：createdAt + 12h（从未有成员连接的自创建起计）。
+    const createdAt = Date.parse(
+      String((await queryRoomRows(roomId, "SELECT created_at FROM room_meta"))[0]?.created_at),
+    );
+    const createdAlarm = await currentAlarm(roomId);
+    expect(createdAlarm).not.toBeNull();
+    expect(Math.abs((createdAlarm ?? 0) - (createdAt + 12 * 60 * 60 * 1000))).toBeLessThanOrEqual(
+      5_000,
+    );
+
+    // 成员连接：取消计时与 Alarm（期限前回归取消本次到期）。
+    const client = await TestWsClient.connectMember(roomId, host.secret);
     await client.next("hostView");
-    expect(await currentAlarm(host.roomId)).toBeNull();
+    expect(await lastMemberLeftAt(roomId)).toBeNull();
+    expect(await currentAlarm(roomId)).toBeNull();
+
+    // 全员离开：按新的离开时间重设 Alarm（不沿用建房的旧期限）。
     client.close();
-    expect(await waitMemberOnline(host.roomId, host.memberId, 0)).toBe(true);
-    expect(await currentAlarm(host.roomId)).toBeNull();
+    expect(await waitMemberOnline(roomId, host.memberId, 0)).toBe(true);
+    const leftAt = Date.parse(String(await lastMemberLeftAt(roomId)));
+    const leftAlarm = await currentAlarm(roomId);
+    expect(leftAlarm).not.toBeNull();
+    expect(Math.abs((leftAlarm ?? 0) - (leftAt + 12 * 60 * 60 * 1000))).toBeLessThanOrEqual(5_000);
+    expect(leftAlarm ?? 0).toBeGreaterThan(createdAt + 12 * 60 * 60 * 1000);
   });
 });
 

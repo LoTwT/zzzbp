@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { BpSlotId } from "../../../shared/bp/steps";
-import type { RoomAgentDisplay } from "../../room/room-catalog";
+import type { AgentDisplayBase } from "../../room/room-catalog";
 import AgentAvatar from "./AgentAvatar.vue";
 
 // 顶部禁用槽位（每方 4 个）：已提交的禁用结果显示头像与斜杠；当前操作位
@@ -9,11 +9,11 @@ import AgentAvatar from "./AgentAvatar.vue";
 defineProps<{
   readonly slots: ReadonlyArray<{
     readonly slotId: BpSlotId;
-    readonly agent: RoomAgentDisplay | null;
+    readonly agent: AgentDisplayBase | null;
     readonly active: boolean;
   }>;
   /** 当前操作位的公开预选（显示在 active 槽位内）。 */
-  readonly preselectAgent: RoomAgentDisplay | null;
+  readonly preselectAgent: AgentDisplayBase | null;
   /** 是否允许呼吸动效：进行中且连接正常；暂停/断线保留静态高亮。 */
   readonly breathing: boolean;
   /** 槽位内容描述的前缀（如「A 方」），仅用于无障碍标签。 */

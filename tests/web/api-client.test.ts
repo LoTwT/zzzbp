@@ -96,6 +96,37 @@ test("网络层异常归为 network", async () => {
   });
 });
 
+test("归档房间的 200 快照响应按只读记录成功返回，不是失败", async () => {
+  // GET 房间入口对归档房间是成功只读响应：页面据此分流到记录页，
+  // 不建立成员/展示连接；同一份快照对所有访问者一致。
+  const archivedAt = "2026-10-05T00:00:00.000Z";
+  const record = {
+    roomId: "room-1",
+    roomName: "归档赛事",
+    teamNames: { A: "左方队", B: "右方队" },
+    bpCompleted: false,
+    operations: [
+      {
+        slotId: "AB1",
+        team: "A",
+        action: "ban",
+        agentId: "9001",
+        agentName: "代理人甲",
+        agentAvatarUrl: null,
+      },
+    ],
+    versions: { ruleVersion: "rules-test", agentDataVersion: "agents-test" },
+    archivedAt,
+    expiresAt: "2027-01-03T00:00:00.000Z",
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => jsonResponse(200, { kind: "archived", record })),
+  );
+  const result = await fetchRoomEntry("room-1");
+  expect(result).toEqual({ ok: true, value: { kind: "archived", record } });
+});
+
 test("2xx 非 JSON 响应归为 network（服务端合同违背，可重试）", async () => {
   vi.stubGlobal(
     "fetch",

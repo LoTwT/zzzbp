@@ -11,15 +11,25 @@ import type { AgentId } from "../../shared/ids";
  * 与分类表，供代理人池、禁选槽位与控制面板共用。
  */
 
-/** 单个代理人的展示信息（含筛选所需的分类 ID，是 AgentEntry 的结构超集）。 */
-export interface RoomAgentDisplay {
+/**
+ * 头像展示所需的最小代理人信息。
+ *
+ * 只读记录页的展示信息来自归档快照（归档时固定，无分类等实时目录
+ * 字段）；RoomAgentDisplay 是本接口的结构超集，头像组件与槽位组件按
+ * 最小接口声明依赖，两个数据来源共用同一套展示实现。
+ */
+export interface AgentDisplayBase {
   readonly id: AgentId;
   /** 官方中文名称（简短名）。 */
   readonly name: string;
-  /** 官方中文全名；来源未记录时为 null。 */
-  readonly fullName: string | null;
   /** 由来源路径派生的头像 URL；缺头像为 null，展示走占位后备。 */
   readonly avatarUrl: string | null;
+}
+
+/** 单个代理人的展示信息（含筛选所需的分类 ID，是 AgentDisplayBase 的结构超集）。 */
+export interface RoomAgentDisplay extends AgentDisplayBase {
+  /** 官方中文全名；来源未记录时为 null。 */
+  readonly fullName: string | null;
   /** 数据包记录的原始头像路径；缺失为 null（展示派生见 avatarUrl）。 */
   readonly avatarPath: string | null;
   /** 属性分类 ID（共享筛选维度，见 shared/agents/filter.ts）。 */
