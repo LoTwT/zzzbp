@@ -214,7 +214,7 @@ describe("SQLite 持久化与表结构", () => {
       await queryRows(roomId, "SELECT position, slot_id, agent_id FROM bp_submissions"),
     ).toEqual([]);
     expect(await queryRows(roomId, "SELECT COUNT(*) AS n FROM room_catalog")).toEqual([{ n: 1 }]);
-    expect(await queryRows(roomId, "SELECT version FROM schema_meta")).toEqual([{ version: 1 }]);
+    expect(await queryRows(roomId, "SELECT version FROM schema_meta")).toEqual([{ version: 2 }]);
 
     // 新观众加入：只新增一行 members 并递增 revision，不动目录与其他数据。
     const join = await exports.default.fetch(

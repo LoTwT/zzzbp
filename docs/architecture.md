@@ -14,9 +14,9 @@
 | `shared/`（根） | 房间状态、命令契约与纯函数状态转换（`room.ts`、`commands.ts`、`transitions.ts`、`ids.ts`）。 | 依赖 `shared/bp/` |
 | `shared/contracts/` | 网络合同：HTTP、视图投影、WebSocket、归档记录、版本信息。 | 依赖 `shared/` 根、`shared/bp/` 与 `shared/agents/` 的 schema（房间目录合同复用） |
 | `shared/api.ts` | 引导期的 `/api/health` 契约，保留兼容；房间协议不在此扩展。 | — |
-| `server/` | Worker 动态入口与房间 Durable Object：HTTP 路由与输入校验（`index.ts`）、房间对象编排（`room.ts`）、身份凭据与 Cookie（`credentials.ts`）、SQLite 持久化（`persistence.ts`）；BP 命令与 WS 随 PR5 接入。 | 依赖 `shared/` |
+| `server/` | Worker 动态入口与房间 Durable Object：HTTP 路由与输入校验（`index.ts`）、房间对象编排与 WS 生命周期（`room.ts`）、身份凭据与 Cookie（`credentials.ts`）、SQLite 持久化与命令回执（`persistence.ts`）、WS 协议构件（`ws.ts`）。 | 依赖 `shared/` |
 | `tests/rules/` | 纯规则与合同测试（Node 环境）。 | — |
-| `tests/workers/` | Worker 与房间对象集成测试（真实 workerd）。 | — |
+| `tests/workers/` | Worker 与房间对象集成测试（真实 workerd）：HTTP/身份/Cookie（`rooms.test.ts`）、SQLite 持久化与实例重建（`room-storage.test.ts`）、WS 通道边界（`room-websocket.test.ts`）、命令管线与去重回执（`room-commands.test.ts`）、在线计数与休眠恢复（`room-presence.test.ts`），共享辅助 `ws-helpers.ts`。 | — |
 
 `shared/` 不依赖前端与服务端实现；服务端把 `shared/` 的纯函数作为唯一状态
 权威，前端只用它做类型与展示推导。
@@ -54,8 +54,10 @@
 |---|---|
 | `POST /api/rooms` | 建房（房名 + 首次昵称），创建者成为房主；响应房间 ID 与其成员视图，并经 Set-Cookie 下发房主身份。 |
 | `GET /api/rooms/:roomId` | 按生命周期分流：live 返回房名（携带有效身份时附成员视图以恢复角色，匿名为 null 供首次入房）；archived 返回只读快照（PR9 接入）；不存在返回 404 错误体。 |
-| `POST /api/rooms/:roomId/members` | 新成员以昵称作为观众加入并取得新身份；携带有效身份时恢复原身份（昵称被忽略、凭据不轮换、不重复建成员）。 |
+| `POST /api/rooms/:roomId/members` | 新成员以昵称作为观众加入并取得新身份；携带有效身份时恢复原身份（昵称被忽略、凭据不轮换、不重复建成员）。新成员写入成功后向已连接的成员/展示连接广播最新视图。 |
 | `GET /api/rooms/:roomId/catalog` | 返回该房间建房时固定的代理人目录快照（含来源版本）；只读，无需身份，不含成员或凭据数据，不计在线、不影响保留计时。 |
+| `GET /api/rooms/:roomId/ws` | 成员实时连接升级（详见[WebSocket 通道](#websocket-通道)）。非 GET 返回 405；缺少 `Upgrade: websocket` 头返回 426；第三方 Origin 返回 403。 |
+| `GET /api/rooms/:roomId/display/ws` | 匿名展示连接升级（同上协议校验）；通道语义见[WebSocket 通道](#websocket-通道)。 |
 | `GET /api/health` | 引导期存储链路自检。 |
 
 归档房间的原 URL 经普通 HTTP 读取快照，无需成员加入或 WebSocket。
@@ -105,8 +107,9 @@
 | `members` | 成员昵称、凭据 SHA-256 摘要（唯一约束）、加入时间、在线标志（初始恒为 0，仅实际成员 WS 连接可改变）。 |
 | `seats` / `team_names` | A/B 席位占用与双方队名（初始空席、空队名）。 |
 | `bp_submissions` | 当前有效序列：按 position 递增，装配时与权威顺序前缀校验。 |
+| `command_receipts` | operationId 去重回执：按 (member_id, operation_id) 主键，保存规范化载荷与原结果（含稳定错误码与版本），写入时裁剪到每房间 2048 条的保留窗口（见[WebSocket 通道](#websocket-通道)）。 |
 | `room_catalog`（单行） | 建房时一次性保存的目录快照 JSON 文本。 |
-| `schema_meta`（单行） | 业务表结构版本；`ensureRoomSchema` 是幂等的初始化/版本升级入口（当前版本 1，尚无更旧的已发布数据需要迁移）；读取路径先经只读的 `hasRoomSchema` 判断实例是否已初始化。 |
+| `schema_meta`（单行） | 业务表结构版本；`ensureRoomSchema` 是幂等的初始化/版本升级入口（当前版本 2：v1 → v2 只新增 `command_receipts`，无历史数据搬移；更高版本拒绝加载，防降级误读）；读取路径先经只读的 `hasRoomSchema` 判断实例是否已初始化。 |
 | `room_info`（legacy） | 引导期 `/api/health` 的存储自检记录（`shared/api.ts` 合同），由 DO 的 health 方法单独维护，与业务表互不干扰。 |
 
 - 建房与入房各为一个 `transactionSync` 同步事务闭包：schema 初始化、
@@ -126,8 +129,9 @@
   重解释旧房间的名单、展示或可选资格。数据来源与更新办法见
   [代理人数据接入](specs/agent-data.md)。
 - 载入状态一律经 `roomStateSchema` / `agentCatalogSchema` 校验，不建立
-  第二套 BP 规则；BP 命令语义（PR5）继续走 `shared/transitions.ts`
-  纯函数，持久层只按变化更新对应行。
+  第二套 BP 规则；BP 命令语义走 `shared/transitions.ts` 纯函数，持久层
+  只按变化更新对应行（`persistRoomStateChange`：room_meta 标量、变化的
+  队名/席位/成员在线行、有效序列按前缀追加或删除，空操作零写入）。
 - 读取路径不初始化存储：房间读取、目录读取与入房失败先经只读的
   `hasRoomSchema` 检查实例是否已有业务表结构；从未建房的实例保持
   完全空存储（不创建任何业务表），一切读取按不存在处理。随机或错误
@@ -135,31 +139,86 @@
   回收的持久数据。表结构已存在时（建房与既有房间）仍经
   `ensureRoomSchema` 幂等校验或迁移，建房与写入的事务保障不变。
 - `last_member_left_at` 初始化为创建时刻：从未有成员连接的空房自创建
-  起即开始 12 小时保留窗口的计时。只有实际成员 WS 连接（PR5）会将其
-  置空并在全员离开时重置；HTTP 读写、目录读取与展示连接都不影响该
-  计时；到期执行与 Alarm 在 PR9。
+  起即开始 12 小时保留窗口的计时。只有实际成员 WS 连接会将其置空
+  （首个连接取消计时）并在全员离开时重置（最后一名在线成员离开时写入
+  当前时刻）；HTTP 读写、目录读取与展示连接都不影响该计时；到期执行
+  与 Alarm 在 PR9。
 
 ## WebSocket 通道
 
-合同定义于 [shared/contracts/websocket.ts](../shared/contracts/websocket.ts)。
-成员通道 `/api/rooms/:roomId/ws`（凭据经 Cookie 验证）与展示通道
-`/api/rooms/:roomId/display/ws` 分离：
+合同定义于 [shared/contracts/websocket.ts](../shared/contracts/websocket.ts)；协议构件在
+[server/ws.ts](../server/ws.ts)，连接生命周期与编排在
+[server/room.ts](../server/room.ts)。成员通道 `/api/rooms/:roomId/ws`
+（凭据经 Cookie 验证）与展示通道 `/api/rooms/:roomId/display/ws` 分离，
+均经 WebSocket Hibernation API 接入（`acceptWebSocket` + 附件 + 标签）：
 
-- 客户端业务消息复用 `roomCommandSchema`；系统入口（`setMemberOnline`）
-  不在客户端联合中，无法注入。
+- 升级校验分工：Worker 做协议级校验（方法 GET、`Upgrade` 头、同源
+  Origin——与 HTTP 写请求同一策略，未带 Origin 的非浏览器请求放行）；
+  房间 DO 校验路径形态（roomId 与实例名一致）、房间存在性与生命周期、
+  成员通道的身份。房间级失败（`ROOM_NOT_FOUND` / `ROOM_ARCHIVED` /
+  `AUTH_FAILED`）接受连接后以通知说明并关闭（1008）：浏览器拿不到握手
+  状态码，通知比 HTTP 错误体更可用，且不产生任何持久写入。
+- 未知 roomId 的实例保持完全空存储：升级前经只读 `hasRoomSchema` 探测。
+- 客户端业务消息复用 `roomCommandSchema`：系统入口（`setMemberOnline`）
+  不在客户端联合中，无法注入；命令操作者一律来自连接附件中的可信身份
+  （升级时验证的成员 ID），角色/席位/轮次/状态/版本与名单每次从当前
+  持久状态重新判断，不从附件缓存权限。
 - 展示通道始终没有写入口：即使携带房主凭据连接展示通道，也只接收
-  展示视图，客户端消息一律不被接受。
-- 服务端按连接身份推送 `memberView` / `hostView` / `displayView`、
-  `commandResult` 与连接通知（`INVALID_MESSAGE`、`AUTH_FAILED`、
-  `ROOM_ARCHIVED`、`ROOM_NOT_FOUND`）。
-- 命令结果关联 `operationId` 与命令生效后的 `bp.version` / `revision`，
-  不把包含全部成员的内部状态直接下发；结果之后服务端推送最新视图。
-- 结果未知（超时或断线）时，客户端重连并取得最新完整视图后再决定；
-  重发必须复用同一 `operationId`。
-- `operationId` 持久化去重回执由后续 PR 实现。约定按
-  room + member + operationId 辨认操作：重复的合法请求只返回同一处理
-  结果而不再推进；同一 ID 配不同载荷不得当成新操作。去重是有限回执，
-  不是完整操作历史。
+  展示视图，客户端消息一律不被接受；展示连接不计任何成员在线、不
+  影响保留计时，也永远不成为成员。
+- 消息边界：二进制消息（1003）与超过 8 KiB 的文本消息（1009）在解析
+  前拒绝并关闭连接；非法 JSON 与不符合命令契约的小消息只回
+  `INVALID_MESSAGE` 通知，连接保持。
+- 命令处理（`processMemberCommand`）在一个 `transactionSync` 闭包内原子
+  完成：读取当前状态 → 回执去重 → 规则版本门 → `applyRoomCommand` →
+  按变化差异持久化 → 写回执；写成功后才发送 `commandResult` 并广播。
+  SQL 或状态装配故障时整体回滚（状态与回执一致、无成功广播），按
+  `INTERNAL` 稳定错误码回执，客户端可凭同一 operationId 重试。单个
+  连接的发送失败不影响已提交命令的对外结果，也不阻塞其他连接。
+- 规则版本门：房间的持久 ruleVersion 不等于当前引擎的
+  `BP_RULE_VERSION` 时拒绝一切命令（`RULE_VERSION_UNSUPPORTED`），
+  不能拿当前语义解释未知版本的已保存状态；视图仍按事实投影恢复。
+- 服务端按连接身份推送 `memberView` / `hostView` / `displayView`：
+  状态变化（命令、成员上下线、HTTP 新成员加入）时向全部连接广播各自
+  形态的最新视图；命令结果之后操作者连接总会再收到最新视图。命令
+  结果关联 `operationId` 与命令生效后的 `bp.version` / `revision`。
+- operationId 持久化去重回执（`command_receipts` 表）：按
+  room + member + operationId 辨认操作，回执与状态更新同事务写入。
+  同一规范化载荷（Zod 解析后重建、键序无关）重发返回原结果且不再
+  执行；同一 ID 配不同载荷以 `OPERATION_ID_CONFLICT` 拒绝。回执是
+  有限窗口：每房间保留最近 2048 条（按写入顺序淘汰最旧，插入时
+  裁剪）；窗口内同一身份多页面、连接重建与 DO 重建后的重发都命中
+  原回执。窗口外被淘汰后的重发按新命令处理，由可持久验证的前置
+  条件兜底：推进 BP 流程或席位权限的命令都会递增 bp.version，旧
+  重发以 `STALE_BP_VERSION` 过期或因步位推进被拒
+  （`NOT_CURRENT_PLAYER`）；`setTeamName` 是唯一产生可见变化但不递增
+  bp.version 的命令，额外携带 `expectedRevision`（必须与当前公开
+  revision 严格一致），任何后续可见变化（含后续改名）都使旧载荷以
+  `STALE_REVISION` 过期，防止淘汰后的旧重试覆盖后来确认的名称。
+  收到过期拒绝的客户端应重新同步视图并以新 operationId 重发。
+- 成员在线判定以实际连接为唯一权威：连接注册表（`getWebSockets` +
+  附件）推导实际在线成员集合，存储中的 online 标志只是它的持久投影。
+  成员连接、断开、每条业务命令与 HTTP 入房都会先做在线协调
+  （reconcilePresence，同一事务）：把存储标志对齐到注册表——断开者
+  置离线（进行中房主或在席选手立即暂停）、仍有连接者保持在线并取消
+  空房计时、全员离线且计时未记录时补写离开时间；无分叉时零写入
+  （重算幂等，不会重复离线/暂停）。新连接的接纳顺序保证已观测的掉线
+  不被吞掉：先在「新连接未计入注册表」时协调既有离线差异（含待补的
+  掉线暂停），再注册连接并做常规协调；协调写入失败（短暂存储故障）
+  时拒绝正常接入，防止快速重连让最终快照一致而跳过暂停。
+  命令事务内的协调写入失败时：命令整体回滚并以 `INTERNAL` 拒绝推进
+  （不基于无法确认的在线状态判权）；断开路径启动有界
+  重试链（250ms 起约 6 分钟内按退避重试，覆盖短暂故障后无任何新
+  事件的场景），链结束不再占用 timer，不影响休眠。错误
+  （`webSocketError` 仅处理非断线错误，主动 close 后清理交给
+  `webSocketClose`）与关闭回调不会双重扣减。
+- 休眠语义：本兼容日期（2026-09-01）下 `webSocketClose` 触发前
+  runtime 已完成 close 握手，关闭的连接不再出现在 `getWebSockets`；
+  实例被驱逐（休眠）不触发任何回调，连接与附件由运行时保留，消息
+  到达时以附件身份唤醒——不依赖实例内存的成员计数或权限，也没有
+  常驻 timer 阻止休眠。
+- 结果未知（超时或断线）时，客户端重连并取得最新完整视图，再决定
+  是否重发；重发必须复用同一 operationId 与同一命令载荷。
 
 ## 状态、版本与命令
 
@@ -171,13 +230,19 @@
   常量（单一来源）；已建房间的 `AgentCatalog.agentIds` 与归档展示
   lookup 从其持久目录快照派生（见[房间持久化与固定目录](#房间持久化与固定目录)）。
   数据来源与更新办法见[代理人数据接入](specs/agent-data.md)。已保存的
-  规则版本只是固定标识，不表示实现了历史规则引擎：命令执行入口（PR5）
-  按房间的持久 ruleVersion 校验当前实现是否支持，不支持则拒绝。
+  规则版本只是固定标识，不表示实现了历史规则引擎：命令执行入口按
+  房间的持久 ruleVersion 校验当前实现是否支持，不支持则拒绝
+  （`RULE_VERSION_UNSUPPORTED`，见[WebSocket 通道](#websocket-通道)）。
 - `bp.version` 与公开 `revision` 职责分开：前者只随预选、提交、控制
   命令与席位权限变化递增（重开不重置），用于命令过期判断；后者随
-  任何可见状态变化递增，用于视图同步。
+  任何可见状态变化递增，用于视图同步。`setTeamName` 产生可见变化但
+  不递增 bp.version，因此以 `expectedRevision`（与当前公开 revision
+  严格一致）为可持久验证的过期前置条件（`STALE_REVISION`），防止
+  回执窗口淘汰后的旧重试覆盖后来确认的值（见
+  [WebSocket 通道](#websocket-通道)）。
 - 命令由 `applyRoomCommand` 纯函数执行：检查顺序固定（身份 → live →
-  在线 → 权限 → 前提 → 版本门 → 生效），失败零写入，空操作返回原引用；
+  在线 → 权限 → 前提 → 版本门（bp.version，setTeamName 另有
+  revision 前置条件） → 生效），失败零写入，空操作返回原引用；
   `setMemberOnline` 为服务端专用系统入口。
 - 业务规则（暂停、撤回、换人、掉线）见[单局常规 BP](specs/single-game-bp.md)
   与[房间角色](specs/room-roles.md)。
@@ -214,16 +279,21 @@
   下次全员离开重新计算；展示连接永不影响计时；到期检查在 join、read、
   write 与 Alarm 中共用同一规则，不允许靠延迟 Alarm 延长可写期限；
   快照 90 天期限自转为只读起算，查看不延长。
-- 持久化现状（PR4）：`lastMemberLeftAt` 已落在 `room_meta` 并在建房时
-  初始化为创建时刻（见[房间持久化与固定目录](#房间持久化与固定目录)）；
-  计时的取消/重置随 PR5 的成员 WS 接入，到期执行与 Alarm 在 PR9。
+- 持久化现状（PR5）：`lastMemberLeftAt` 已在 `room_meta` 落地：建房时
+  初始化为创建时刻，实际成员 WS 连接取消本次计时，最后一名在线成员
+  离开时重新写入（见[房间持久化与固定目录](#房间持久化与固定目录)）；
+  到期执行、Alarm 与归档快照生成在 PR9。
 
 ## 后续运行时接入位置
 
-PR4 已落地持久房间、HTTP 建房/入房/读取/目录入口与匿名身份 Cookie
-（见[身份与凭据边界](#身份与凭据边界)与[房间持久化与固定目录](#房间持久化与固定目录)）。
+PR4 已落地持久房间、HTTP 建房/入房/读取/目录入口与匿名身份 Cookie；
+PR5 已落地成员/展示 WS 通道、命令执行管线、多页面在线计数、空房计时
+元数据与 operationId 去重回执（见[身份与凭据边界](#身份与凭据边界)、
+[房间持久化与固定目录](#房间持久化与固定目录)与[WebSocket 通道](#websocket-通道)）。
 
 | PR | 接入点 |
 |---|---|
-| PR5（成员 WS 与同步） | 成员 WS 命令经 `applyRoomCommand` / `setMemberOnline` 执行并按身份投影广播（名单校验用 `loadRoomCatalog` 派生，执行前按房间持久 ruleVersion 校验当前实现支持性）、多页面在线计数与空房计时的取消/重置、`operationId` 持久化去重回执。 |
+| PR6（房间界面与常规连接） | 房间主界面、角色权限 UI、两个选用布局与常规 WS 客户端连接管理；命令与视图协议已就位。 |
+| PR7（恢复交互收口） | 断线重连、替换选手与结果未知的同载荷重发等综合场景的浏览器交互与端到端收口验证。 |
+| PR8（展示页） | 展示页 UI；展示通道传输已就位（只读、无身份、不计在线）。 |
 | PR9（归档与清理） | Alarm 与读写路径共用到期检查（读 `room_meta.last_member_left_at`）；到期经 `projectArchiveSnapshot` 生成快照或清理空房间；`GET /api/rooms/:roomId` 的 archived 分支替换为只读快照响应。 |

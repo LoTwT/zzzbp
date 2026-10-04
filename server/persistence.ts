@@ -1,4 +1,5 @@
 import { agentCatalogSchema, type AgentCatalogData } from "../shared/agents/schema";
+import { roomOperationErrorCodeSchema, type RoomOperationErrorCode } from "../shared/commands";
 import type { RoomLifecycle, RoomState } from "../shared/room";
 import { roomStateSchema } from "../shared/room";
 
@@ -11,8 +12,9 @@ import { roomStateSchema } from "../shared/room";
  *   不重写目录快照或其他成员；目录快照仅在建房时写入一次；
  * - 载入房间状态一律经 roomStateSchema / agentCatalogSchema 校验，
  *   不建立第二套 BP 规则；
- * - 本模块只做行级读写与装配，命令语义由 shared/transitions.ts 的纯函数
- *   承担（PR5 接入），这里不实现通用数据库框架。
+ * - 命令执行（PR5）把「读取 → 纯函数转换 → 差异持久化 → 回执写入」交给
+ *   调用方的 transactionSync 闭包；本模块提供行级差异写入与回执读写，
+ *   不实现通用数据库框架。
  *
  * 并发与事务：以下函数均为同步 SQL 操作，本身不开事务。调用方
  * （server/room.ts）把每个业务单元连同写入后的状态装配包在
@@ -24,7 +26,7 @@ import { roomStateSchema } from "../shared/room";
  */
 
 /** 房间业务表结构的当前版本；升级入口见 ensureRoomSchema。 */
-const ROOM_SCHEMA_VERSION = 1;
+const ROOM_SCHEMA_VERSION = 2;
 
 /** 已初始化实例的事务标志表；它的存在等价于全部业务表已按当前结构建立。 */
 const ROOM_SCHEMA_MARKER_TABLE = "schema_meta";
@@ -63,13 +65,12 @@ export interface NewMemberRecord {
  * 幂等初始化业务表结构，并维护结构版本。
  *
  * 这是 schema 初始化/版本升级的唯一入口：首次访问建表并记录版本；
- * 版本一致时为空操作；遇到更高版本拒绝加载（防降级误读）；更低版本
- * 在此按版本逐步迁移（当前 1 是首个业务版本，不存在更旧的已发布数据，
- * 直接视为异常）。由调用方在 transactionSync 闭包内调用，建表与版本
- * 记录随所在业务单元一起提交或回滚。读取路径调用前先用 hasRoomSchema
- * 判断实例是否已有结构，避免为从未建房的 roomId 写入存储。引导期
- * /api/health 使用的 room_info 自检表（shared/api.ts 合同）由 DO 的
- * health 方法单独维护，与本模块互不干扰。
+ * 版本一致时为空操作；遇到更高版本拒绝加载（防降级误读）；更低版本在此
+ * 按版本逐步迁移（当前唯一历史版本 1 → 2，见函数体）。由调用方在
+ * transactionSync 闭包内调用，建表与版本记录随所在业务单元一起提交或
+ * 回滚。读取路径调用前先用 hasRoomSchema 判断实例是否已有结构，避免为
+ * 从未建房的 roomId 写入存储。引导期 /api/health 使用的 room_info 自检表
+ * （shared/api.ts 合同）由 DO 的 health 方法单独维护，与本模块互不干扰。
  */
 export function ensureRoomSchema(sql: RoomSql): void {
   sql.exec(`
@@ -129,6 +130,20 @@ export function ensureRoomSchema(sql: RoomSql): void {
       catalog_json TEXT NOT NULL
     )
   `);
+  sql.exec(`
+    CREATE TABLE IF NOT EXISTS command_receipts (
+      member_id TEXT NOT NULL,
+      operation_id TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      ok INTEGER NOT NULL,
+      error_code TEXT,
+      error_message TEXT,
+      bp_version INTEGER NOT NULL,
+      revision INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (member_id, operation_id)
+    )
+  `);
 
   const row = sql
     .exec<SqlRow<{ version: number }>>("SELECT version FROM schema_meta WHERE id = 1")
@@ -145,8 +160,10 @@ export function ensureRoomSchema(sql: RoomSql): void {
     );
   }
   if (version < ROOM_SCHEMA_VERSION) {
-    // 版本升级入口：未来结构变更在此按 version 逐步迁移；当前没有更旧的版本。
-    throw new Error(`暂不支持从房间存储结构版本 ${version} 升级到 ${ROOM_SCHEMA_VERSION}`);
+    // 版本升级入口：按版本逐步迁移。v1 → v2 只新增 command_receipts 表
+    // （上方 IF NOT EXISTS 已建立，无历史数据需要搬移），更新版本号即可；
+    // 迁移与所在业务单元同事务提交或回滚。未来结构变更在此追加步骤。
+    sql.exec("UPDATE schema_meta SET version = ? WHERE id = 1", ROOM_SCHEMA_VERSION);
   }
 }
 
@@ -358,4 +375,199 @@ export function loadRoomCatalog(sql: RoomSql): AgentCatalogData | null {
     .toArray()[0];
   if (row === undefined) return null;
   return agentCatalogSchema.parse(JSON.parse(row.catalog_json));
+}
+
+/**
+ * 按变化持久化一次状态转换：只写与 before 不同的行，不重写固定目录或
+ * 无关成员。空操作（转换层返回原引用）不产生任何写入。
+ *
+ * 有效序列按前缀对比：追加只 INSERT 新位置，撤回/重开只 DELETE 多余
+ * 位置，不整表重写。由调用方在 transactionSync 闭包内调用，与回执写入
+ * 同事务：任一语句失败时整体回滚，不存在「状态已变而回执缺失」或反向
+ * 的半提交。
+ */
+export function persistRoomStateChange(sql: RoomSql, before: RoomState, after: RoomState): void {
+  if (before === after) return;
+
+  sql.exec(
+    "UPDATE room_meta SET revision = ?, bp_status = ?, bp_version = ?, bp_preselect = ? WHERE id = 1",
+    after.revision,
+    after.bp.status,
+    after.bp.version,
+    after.bp.preselect,
+  );
+
+  for (const team of ["A", "B"] as const) {
+    if (before.teamNames[team] !== after.teamNames[team]) {
+      sql.exec("UPDATE team_names SET name = ? WHERE team = ?", after.teamNames[team], team);
+    }
+    if (before.seats[team] !== after.seats[team]) {
+      sql.exec("UPDATE seats SET member_id = ? WHERE team = ?", after.seats[team], team);
+    }
+  }
+
+  // 成员在线标志：只写发生变化的成员行（转换层不增删成员、不换顺序）。
+  const beforeOnline = new Map(before.members.map((member) => [member.memberId, member.online]));
+  for (const member of after.members) {
+    if (beforeOnline.get(member.memberId) !== member.online) {
+      sql.exec(
+        "UPDATE members SET online = ? WHERE member_id = ?",
+        member.online ? 1 : 0,
+        member.memberId,
+      );
+    }
+  }
+
+  const common = commonSubmissionCount(before.bp.submissions, after.bp.submissions);
+  if (after.bp.submissions.length < before.bp.submissions.length) {
+    sql.exec("DELETE FROM bp_submissions WHERE position >= ?", after.bp.submissions.length);
+  }
+  for (let position = common; position < after.bp.submissions.length; position += 1) {
+    const submission = after.bp.submissions[position];
+    if (submission === undefined) continue;
+    sql.exec(
+      "INSERT INTO bp_submissions (position, slot_id, agent_id) VALUES (?, ?, ?)",
+      position,
+      submission.slotId,
+      submission.agentId,
+    );
+  }
+}
+
+function commonSubmissionCount(
+  before: readonly { slotId: string; agentId: string }[],
+  after: readonly { slotId: string; agentId: string }[],
+): number {
+  let common = 0;
+  while (
+    common < before.length &&
+    common < after.length &&
+    before[common]?.slotId === after[common]?.slotId &&
+    before[common]?.agentId === after[common]?.agentId
+  ) {
+    common += 1;
+  }
+  return common;
+}
+
+/**
+ * 更新空房计时元数据（room_meta.last_member_left_at）。
+ *
+ * 语义见 docs/architecture.md「生命周期与归档记录」：实际成员连接把计时
+ * 取消（置 NULL），最后一名在线成员离开时写入当前时刻；展示连接与
+ * HTTP 读写不触碰该字段。到期执行与 Alarm 在 PR9。
+ */
+export function setLastMemberLeftAt(sql: RoomSql, value: string | null): void {
+  sql.exec("UPDATE room_meta SET last_member_left_at = ? WHERE id = 1", value);
+}
+
+/** 房间当前版本信息：命令结果与错误回执关联的 bp.version / revision。 */
+export interface RoomVersionInfo {
+  readonly bpVersion: number;
+  readonly revision: number;
+}
+
+/** 只读房间当前版本信息；房间尚未创建时返回 null。 */
+export function readRoomVersionInfo(sql: RoomSql): RoomVersionInfo | null {
+  const row = sql
+    .exec<SqlRow<{ revision: number; bp_version: number }>>(
+      "SELECT revision, bp_version FROM room_meta WHERE id = 1",
+    )
+    .toArray()[0];
+  if (row === undefined) return null;
+  return { bpVersion: Number(row.bp_version), revision: Number(row.revision) };
+}
+
+/** 命令去重回执的已装配记录：重发时原样返回，不再次执行。 */
+export interface CommandReceipt {
+  readonly ok: boolean;
+  readonly errorCode: RoomOperationErrorCode | null;
+  readonly errorMessage: string | null;
+  readonly bpVersion: number;
+  readonly revision: number;
+}
+
+/**
+ * 按 room + member + operationId 查找回执；无记录返回 null。
+ *
+ * 错误码在读取时重新经 schema 校验：回执由本模块写入时总是合法枚举，
+ * 读取失败（存储损坏）按 INTERNAL 降级，不把任意字符串透传给客户端。
+ */
+export function findCommandReceipt(
+  sql: RoomSql,
+  memberId: string,
+  operationId: string,
+): { payloadJson: string; receipt: CommandReceipt } | null {
+  const row = sql
+    .exec<
+      SqlRow<{
+        payload_json: string;
+        ok: number;
+        error_code: string | null;
+        error_message: string | null;
+        bp_version: number;
+        revision: number;
+      }>
+    >(
+      "SELECT payload_json, ok, error_code, error_message, bp_version, revision FROM command_receipts WHERE member_id = ? AND operation_id = ?",
+      memberId,
+      operationId,
+    )
+    .toArray()[0];
+  if (row === undefined) return null;
+  let errorCode: RoomOperationErrorCode | null = null;
+  if (row.error_code !== null) {
+    const parsed = roomOperationErrorCodeSchema.safeParse(row.error_code);
+    errorCode = parsed.success ? parsed.data : "INTERNAL";
+  }
+  return {
+    payloadJson: row.payload_json,
+    receipt: {
+      ok: Number(row.ok) === 1,
+      errorCode,
+      errorMessage: row.error_message,
+      bpVersion: Number(row.bp_version),
+      revision: Number(row.revision),
+    },
+  };
+}
+
+/**
+ * 写入一条命令回执，并把回执窗口裁剪到保留上限（按写入顺序保留最近
+ * retention 条，淘汰最旧）。
+ *
+ * 回执与状态更新由调用方放在同一 transactionSync 闭包内：故障时一起
+ * 回滚，不会留下「已成功」回执而状态未变。窗口边界语义见
+ * server/ws.ts 的 COMMAND_RECEIPT_RETENTION 注释。
+ */
+export function insertCommandReceipt(
+  sql: RoomSql,
+  input: {
+    readonly memberId: string;
+    readonly operationId: string;
+    readonly payloadJson: string;
+    readonly receipt: CommandReceipt;
+    readonly retention: number;
+  },
+): void {
+  sql.exec(
+    `INSERT INTO command_receipts
+      (member_id, operation_id, payload_json, ok, error_code, error_message, bp_version, revision, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    input.memberId,
+    input.operationId,
+    input.payloadJson,
+    input.receipt.ok ? 1 : 0,
+    input.receipt.errorCode,
+    input.receipt.errorMessage,
+    input.receipt.bpVersion,
+    input.receipt.revision,
+    new Date().toISOString(),
+  );
+  sql.exec(
+    `DELETE FROM command_receipts WHERE rowid IN (
+       SELECT rowid FROM command_receipts ORDER BY rowid DESC LIMIT -1 OFFSET ?
+     )`,
+    input.retention,
+  );
 }

@@ -85,6 +85,47 @@ describe("房主命令与操作者校验", () => {
       expectOk(run(state, HOST_ID, { type: "setTeamName", team: "A", teamName: "新左方" })),
     ).toBe(state);
   });
+
+  it("修改队伍名的过期前置条件：旧 revision 的重发一律拒绝，防止覆盖后来确认的值", () => {
+    const started = startedRoom();
+    // 第一次改名成功后 revision 已推进：携带旧 revision 的重发（即使值相同）
+    // 被拒绝，而不是当成空操作。
+    const renamed = expectOk(
+      run(started, HOST_ID, { type: "setTeamName", team: "A", teamName: "旧名" }),
+    );
+    expectError(
+      run(renamed, HOST_ID, {
+        type: "setTeamName",
+        team: "A",
+        teamName: "旧名",
+        expectedRevision: started.revision,
+      }),
+      "STALE_REVISION",
+    );
+    // 后续改名进一步推进 revision 后，更旧的重发同样拒绝，已确认的新值不被覆盖。
+    const renamedAgain = expectOk(
+      run(renamed, HOST_ID, { type: "setTeamName", team: "A", teamName: "新名" }),
+    );
+    expectError(
+      run(renamedAgain, HOST_ID, {
+        type: "setTeamName",
+        team: "A",
+        teamName: "旧名",
+        expectedRevision: started.revision,
+      }),
+      "STALE_REVISION",
+    );
+    expect(renamedAgain.teamNames.A).toBe("新名");
+    // 以当前 revision 重新发送则成功。
+    expectOk(
+      run(renamedAgain, HOST_ID, {
+        type: "setTeamName",
+        team: "A",
+        teamName: "再改名",
+        expectedRevision: renamedAgain.revision,
+      }),
+    );
+  });
 });
 
 describe("席位调整", () => {
@@ -453,6 +494,7 @@ describe("归档房间", () => {
         teamName: "新名",
         operationId: nextOperationId(),
         expectedBpVersion: 0,
+        expectedRevision: 0,
       },
       {
         type: "assignSeat",

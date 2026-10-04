@@ -1,6 +1,6 @@
 # 首版开发方案（草案）
 
-本稿整理技术选型、模块职责、实现顺序和验收重点，更新于 2026-10-04。工程引导已完成：仓库内已有应用包、Worker 与运行配置，业务功能尚未实现，规格与线框全部保留。前端沿用 Vue 3 与 TypeScript，由 `pnpm create vite` 的 `vue-ts` 模板初始化；代码质量采用 Oxlint、Oxfmt、simple-git-hooks 与 lint-staged，样式采用 Tailwind CSS 与 `@ayingott/theme`，Cloudflare 命令入口采用 `cf`，测试统一使用 Vitest 及其生态，输入校验采用 Zod。具体接入方式和兼容版本如下；依赖已安装并锁定在锁文件中，日常开发与验证命令见[开发指南](../development.md)。
+本稿整理技术选型、模块职责、实现顺序和验收重点，更新于 2026-10-04。工程引导已完成：仓库内已有应用包、Worker 与运行配置，`shared/` 与 `server/` 已落地 BP 规则、房间命令契约、HTTP 建房/入房/读取/目录入口与成员/展示 WS 实时通道（命令执行、去重回执与在线同步，见[架构与协议](../architecture.md)），浏览器界面尚未实现，规格与线框全部保留。前端沿用 Vue 3 与 TypeScript，由 `pnpm create vite` 的 `vue-ts` 模板初始化；代码质量采用 Oxlint、Oxfmt、simple-git-hooks 与 lint-staged，样式采用 Tailwind CSS 与 `@ayingott/theme`，Cloudflare 命令入口采用 `cf`，测试统一使用 Vitest 及其生态，输入校验采用 Zod。具体接入方式和兼容版本如下；依赖已安装并锁定在锁文件中，日常开发与验证命令见[开发指南](../development.md)。
 
 ## 目标与依据
 
@@ -106,7 +106,7 @@ Worker 负责路由、输入检查与房间定位。房间对象拥有最终决�
 | `tests/` | 规则与房间集成场景。 |
 | `vite.config.ts`、`cloudflare.config.ts` | 本地运行、静态路由、房间绑定与 SQLite 对象导出及变更声明。 |
 
-完整首版会涉及超过 8 个源码与配置文件。工程引导已按此结构建立最小骨架：页面为占位实现，`shared/` 已落地 BP 规则、房间命令契约、纯函数状态转换与 HTTP/WS/视图/归档记录合同（见[架构与协议](../architecture.md)），`server/` 仍为引导骨架，业务运行时随后续实现顺序接入。
+完整首版会涉及超过 8 个源码与配置文件。工程引导已按此结构建立最小骨架：页面为占位实现，`shared/` 已落地 BP 规则、房间命令契约、纯函数状态转换与 HTTP/WS/视图/归档记录合同（见[架构与协议](../architecture.md)），`server/` 已落地 HTTP 入口、房间 Durable Object 与成员/展示 WS 通道（命令执行、去重回执与在线同步随 PR5 接入），后续运行时接入位置见架构文档。
 
 ## 页面与接口边界
 
