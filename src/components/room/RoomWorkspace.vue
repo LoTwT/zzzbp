@@ -265,8 +265,6 @@ const confirmVisible = computed(
   () => view.value !== null && currentStep.value !== null && isCurrentPlayerSide.value,
 );
 
-const confirmPending = computed(() => session.isScopePending("confirmPreselect"));
-
 const confirmDisabled = computed(() => {
   if (view.value === null) return true;
   return (
@@ -278,6 +276,13 @@ const confirmDisabled = computed(() => {
 });
 
 const confirmLabel = computed(() => {
+  if (slotOperationPending.value) {
+    // 预选/确认任一在途或待核对：首发显示「提交中…」，结果未知（回执
+    // 超时或断线）显示「正在核对结果…」，禁止同操作盲目重复。
+    return session.isScopeChecking("confirmPreselect") || session.isScopeChecking("setPreselect")
+      ? "正在核对结果…"
+      : "提交中…";
+  }
   if (currentStep.value === null) return "确认提交";
   return currentStep.value.action === "ban" ? "确认禁用" : "确认选用";
 });
@@ -428,7 +433,7 @@ function closePanel(): void {
               :disabled="confirmDisabled"
               @click="sendConfirm"
             >
-              {{ confirmPending ? "提交中…" : confirmLabel }}
+              {{ confirmLabel }}
             </button>
             <button
               ref="panelEntryEl"

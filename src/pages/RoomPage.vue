@@ -22,6 +22,8 @@ const phase = ref<Phase>("loading");
 const roomName = ref<string>("");
 const memberView = ref<RoomMemberView | null>(null);
 const loadFailed = ref(false);
+/** 回到首次入房时的原因提示（如 WS AUTH_FAILED：原身份已失效）。 */
+const joinNotice = ref<string | null>(null);
 
 async function loadEntry(): Promise<void> {
   phase.value = "loading";
@@ -45,12 +47,15 @@ async function loadEntry(): Promise<void> {
 function onJoined(view: RoomMemberView): void {
   memberView.value = view;
   roomName.value = view.roomName;
+  joinNotice.value = null;
   phase.value = "room";
 }
 
 function onIdentityLost(): void {
-  // Cookie 身份被服务端拒绝：按新成员重新走首次入房。
+  // Cookie 身份被服务端拒绝：按新成员重新走首次入房；旧身份的席位与
+  // 挂起操作不恢复，昵称相同也不会认回原身份（服务端按凭据判断）。
   memberView.value = null;
+  joinNotice.value = "原身份已失效，请重新填写昵称进入房间。";
   phase.value = "join";
 }
 
@@ -96,6 +101,7 @@ onMounted(loadEntry);
       v-else-if="phase === 'join'"
       :room-id="roomId"
       :room-name="roomName"
+      :notice="joinNotice"
       @joined="onJoined"
     />
 

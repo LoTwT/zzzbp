@@ -11,7 +11,11 @@ import type { RoomOperationErrorCode } from "../../shared/commands";
 /** 客户端本地结论码：命令未送达或连接已断开。 */
 export const CONNECTION_LOST = "CONNECTION_LOST" as const;
 
-/** 客户端本地结论码：断线期间结果未知，已按最新视图核对仍未确认生效。 */
+/**
+ * 客户端本地结论码：命令结果未知（连接中断或回执超时，且按协议同
+ * operationId + 原载荷重发核对后仍无法证明成败，例如重发收到版本
+ * 过期拒绝、或身份会话已终止）。界面按最新权威状态供用户重新操作。
+ */
 export const UNKNOWN_OUTCOME = "UNKNOWN_OUTCOME" as const;
 
 /** 客户端可见错误码：服务端稳定码 + 两个本地结论码。 */
@@ -46,7 +50,7 @@ const ERROR_TEXTS: Readonly<Record<RoomClientErrorCode, string>> = {
   RULE_VERSION_UNSUPPORTED: "房间规则版本不受当前版本支持",
   INTERNAL: "服务器处理失败，请重试",
   [CONNECTION_LOST]: "连接中断，操作未完成",
-  [UNKNOWN_OUTCOME]: "连接中断，结果未知；已同步最新状态，请按当前界面操作",
+  [UNKNOWN_OUTCOME]: "操作结果未知；已同步最新状态，请按当前界面确认后继续",
 };
 
 /** 错误码 → 中文提示；未知码回退到通用文案，避免把原始 message 直接透给界面。 */
