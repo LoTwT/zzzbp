@@ -27,6 +27,7 @@ import {
   type PickLayout,
 } from "../../room/pick-layout";
 import { RoomSession } from "../../room/room-session";
+import { IDENTITY_CHANGED } from "../../room/command-errors";
 import { pendingOperationText } from "../../room/operation-feedback";
 
 // 房间工作区：顶部（两侧禁用区 + 赛事信息）与主体（两侧选用区 + 中央代理
@@ -311,12 +312,14 @@ function sendConfirm(): void {
   session.sendCommand({ type: "confirmPreselect", slotId: view.value.currentSlotId });
 }
 
-const confirmErrorText = computed(
-  () =>
-    session.scopeError("confirmPreselect")?.text ??
-    session.scopeError("setPreselect")?.text ??
-    null,
-);
+const confirmErrorText = computed(() => {
+  const error =
+    session.scopeError("confirmPreselect") ?? session.scopeError("setPreselect") ?? null;
+  // 身份变化结论由底栏的通用身份提示统一展示（同一结论不重复两行）；
+  // 其余错误（含「结果未知」）仍在操作区显示。
+  if (error !== null && error.code === IDENTITY_CHANGED) return null;
+  return error?.text ?? null;
+});
 
 // ---- 控制面板 ----
 
@@ -444,8 +447,18 @@ function closePanel(): void {
           >
             {{ slotOperationFeedbackText }}
           </p>
+          <!-- 通用身份提示：旧身份挂起命令被放弃时的结论（可能来自新身份
+               不可见的房主面板操作），任何角色可见，不随视图推进清掉。 -->
+          <p
+            v-if="session.identityNotice.value !== null"
+            class="pb-1.5 text-center text-xs text-amber-800"
+            role="status"
+          >
+            {{ session.identityNotice.value }}
+          </p>
           <!-- 操作错误提示：不再要求当前持有确认入口；旧命令收敛为
-               「结果未知」或身份变化时，即使已非当前操作方也要可见。 -->
+               「结果未知」时，即使已非当前操作方也要可见（身份变化结论
+               由上方通用提示展示，不重复）。 -->
           <p
             v-if="confirmErrorText !== null"
             class="pb-1.5 text-center text-xs text-danger-700"

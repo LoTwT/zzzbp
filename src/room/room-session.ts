@@ -42,7 +42,12 @@ import {
  *   视图携带的身份变化（如凭据被换、以新成员重新入房，不经
  *   AUTH_FAILED）时，旧身份的待核对命令按「身份已变化、原结果未知」
  *   明确放弃，绝不以新身份重发；同一 memberId 的席位/角色变化不构成
- *   身份变化。HTTP 初值与每代连接的首个视图都经此边界；
+ *   身份变化。HTTP 初值与每代连接的首个视图都经此边界；放弃同时设置
+ *   任何角色可见的通用身份提示（逐 scope 错误可能处于新身份不可见的
+ *   面板），由用户发送新命令或会话结束清除；
+ * - 「结果未知 / 身份已变化」是原操作的结论，不随操作位推进清理
+ *   （旧回合的普通失败仍按需清理）：结论必须实际可见，避免把身份
+ *   放弃或未知结果伪装成无提示的成功；
  * - 断线保留最后确认画面（view 不清除），状态进入 reconnecting/
  *   interrupted，调用方据此停动效并禁用一切服务器操作；本地搜索、
  *   筛选与布局不受连接状态影响；退避自动重连，身份按当前房主/席位
@@ -187,6 +192,12 @@ export class RoomSession {
   readonly scopeErrors = shallowRef<Readonly<Record<string, RoomClientError>>>({});
   /** 连接层全局提示（如服务端连接通知），随最新视图清除。 */
   readonly globalNotice = shallowRef<string | null>(null);
+  /**
+   * 身份变化提示：旧身份挂起命令被放弃时的通用结论（不暴露旧命令
+   * 内容），任何角色都可见；用户发送新命令或会话结束时清除，不随
+   * 视图推进清掉。
+   */
+  readonly identityNotice = shallowRef<string | null>(null);
 
   private readonly url: string;
   private readonly openSocket: RoomSocketOpener;
@@ -245,6 +256,7 @@ export class RoomSession {
     this.synced = false;
     this.status.value = "stopped";
     this.pending.value = new Map();
+    this.identityNotice.value = null;
   }
 
   /** 是否有指定区域的命令尚未得到权威结论。 */
@@ -311,6 +323,9 @@ export class RoomSession {
       return { sent: false };
     }
     const payloadJson = JSON.stringify(validated.data);
+    // 用户以当前身份发起新操作：身份变化提示完成使命（原操作已按
+    // 「结果未知」结论结算并保持可见至此）。
+    this.identityNotice.value = null;
     const entry: PendingRoomCommand = {
       operationId,
       command: validated.data,
@@ -475,13 +490,31 @@ export class RoomSession {
     this.view.value = view;
     this.appliedRevision = view.revision;
     this.globalNotice.value = null;
-    // 操作位推进后，预选/提交相关的旧失败提示不再适用。
+    // 操作位推进后，针对旧操作位的普通失败提示不再适用；但「结果未知 /
+    // 身份已变化」这类原操作结论必须实际可见，由用户开始新的相关操作
+    // 或会话结束时结算，不能被视图推进悄悄清掉（否则身份放弃会被伪装
+    // 成无提示的成功）。
     if (previous !== null && previous.currentSlotId !== view.currentSlotId) {
-      this.clearScopeError("setPreselect");
-      this.clearScopeError("clearPreselect");
-      this.clearScopeError("confirmPreselect");
+      this.clearSlotErrorUnlessConclusion("setPreselect");
+      this.clearSlotErrorUnlessConclusion("clearPreselect");
+      this.clearSlotErrorUnlessConclusion("confirmPreselect");
     }
     this.markSynced();
+  }
+
+  /**
+   * 原操作结论类本地错误码：语义是「上一个命令的最终/当前结论」，
+   * 不随操作位推进清理。
+   */
+  private isDurableConclusion(code: RoomClientErrorCode): boolean {
+    return code === IDENTITY_CHANGED || code === UNKNOWN_OUTCOME;
+  }
+
+  /** 清理旧操作位的普通失败提示；原操作结论（未知/身份变化）保留。 */
+  private clearSlotErrorUnlessConclusion(scope: string): void {
+    const error = this.scopeErrors.value[scope];
+    if (error === undefined || this.isDurableConclusion(error.code)) return;
+    this.clearScopeError(scope);
   }
 
   /**
@@ -493,6 +526,11 @@ export class RoomSession {
    * 放弃（诚实收敛，不伪成功）；同一 memberId 的席位/角色变化不构成
    * 身份变化，照常核对。每份视图（含 HTTP 初值、每代连接的首个视图）
    * 都经此边界。
+   *
+   * 放弃同时设置通用身份提示：被放弃的可能是不对新身份可见的操作
+   * （如旧身份是房主的 setTeamName/assignSeat，新身份是观众），逐
+   * scope 错误可能没有可见出口，由这条不暴露旧命令内容的提示承接；
+   * 用户发送任一新命令（以新身份继续操作）或会话结束时清除。
    */
   private abandonPendingOnIdentityChange(memberId: string): void {
     if (this.identityMemberId === null) {
@@ -506,6 +544,9 @@ export class RoomSession {
       this.resolvePending(entry.operationId, { ok: false, code: IDENTITY_CHANGED });
     }
     this.identityMemberId = memberId;
+    if (stale.length > 0) {
+      this.identityNotice.value = roomClientErrorText(IDENTITY_CHANGED);
+    }
   }
 
   /** 本连接取得首个合法权威视图：开放操作与动效，并核对遗留待定命令。 */

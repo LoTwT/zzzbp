@@ -641,6 +641,109 @@ test("身份变化时多个旧身份挂起命令一并放弃，新身份可继�
   expect(session.scopeError("pauseBp")?.code).toBe(IDENTITY_CHANGED);
 });
 
+// ---- 身份结论与结果未知结论的生命周期 ----
+
+test("身份变化与操作位推进同时出现在重连首帧时，身份结论不被清掉", () => {
+  const session = createSession(memberView());
+  const first = connectAndSync(session, memberView({ bpVersion: 7, revision: 3 }));
+  session.sendCommand({ type: "confirmPreselect", slotId: "AB1" });
+  // 断线时该命令的结果与广播均未到达本页（仍认为当前位是 AB1）。
+  first.close();
+  vi.advanceTimersByTime(600);
+  const second = handles[1]!;
+  // 重连首帧同时携带新身份与操作位推进（原命令实际已生效、房间因
+  // 掉线暂停）：身份结论必须实际可见，不能被同一份视图的旧回合错误
+  // 清理吞掉。
+  second.receive({
+    kind: "memberView",
+    view: memberView({
+      revision: 5,
+      bpVersion: 9,
+      bpStatus: "paused",
+      currentSlotId: "BB1",
+      submissions: [{ slotId: "AB1", agentId: "1011" }],
+      self: { memberId: "m2", nickname: "选手", isHost: false, seatTeam: null },
+    }),
+  });
+  expect(second.sent).toHaveLength(0);
+  expect(session.pending.value.size).toBe(0);
+  const error = session.scopeError("confirmPreselect");
+  expect(error?.code).toBe(IDENTITY_CHANGED);
+  expect(error?.text).toContain("身份已变化");
+  // 通用身份提示同步设置（新身份可能看不到逐 scope 出口）。
+  expect(session.identityNotice.value).toContain("身份已变化");
+});
+
+test("结果未知结论随后的视图推进不被吞掉，用户开始新操作时结算", () => {
+  const session = createSession();
+  const first = connectAndSync(session, memberView({ bpVersion: 7, revision: 3 }));
+  session.sendCommand({ type: "confirmPreselect", slotId: "AB1" });
+  first.close();
+  vi.advanceTimersByTime(600);
+  const second = handles[1]!;
+  second.receive({
+    kind: "memberView",
+    view: memberView({ revision: 4, bpVersion: 7, currentSlotId: "AB1" }),
+  });
+  second.receive(receipt("op-1", false, { error: { code: "INTERNAL", message: "..." } }));
+  expect(session.scopeError("confirmPreselect")?.code).toBe(UNKNOWN_OUTCOME);
+  // 之后对方完成提交、操作位推进：旧回合的普通失败会被清理，但
+  // 「结果未知」是原操作结论，必须保持可见。
+  second.receive({
+    kind: "memberView",
+    view: memberView({ revision: 5, bpVersion: 8, currentSlotId: "AP1" }),
+  });
+  expect(session.scopeError("confirmPreselect")?.code).toBe(UNKNOWN_OUTCOME);
+  // 相邻操作（预选）不结算确认命令的结论；用户重新确认时才清除。
+  session.sendCommand({ type: "setPreselect", slotId: "AP1", agentId: "1011" });
+  expect(session.scopeError("confirmPreselect")?.code).toBe(UNKNOWN_OUTCOME);
+  session.sendCommand({ type: "confirmPreselect", slotId: "AP1" });
+  expect(session.scopeError("confirmPreselect")).toBeNull();
+});
+
+test("旧房主管理命令被放弃时，新观众可见通用身份提示", () => {
+  const session = createSession();
+  const first = connectAndSync(
+    session,
+    hostView({ bpStatus: "running", currentSlotId: "AB1", bpVersion: 7, revision: 3 }),
+  );
+  session.sendCommand({ type: "setTeamName", team: "A", teamName: "新队名" });
+  first.close();
+  vi.advanceTimersByTime(600);
+  const second = handles[1]!;
+  // 新身份是普通观众：房主面板与其中的 setTeamName 错误出口均不可见，
+  // 通用身份提示是唯一可见渠道。
+  second.receive({
+    kind: "memberView",
+    view: memberView({
+      revision: 4,
+      self: { memberId: "m5", nickname: "新观众", isHost: false, seatTeam: null },
+    }),
+  });
+  expect(second.sent).toHaveLength(0);
+  expect(session.identityNotice.value).toBe("身份已变化，原操作结果未知；请按当前界面继续");
+  expect(session.scopeError("setTeamName:A")?.code).toBe(IDENTITY_CHANGED);
+  // 用户以新身份发送任一新命令后提示完成使命。
+  session.sendCommand({ type: "startBp" });
+  expect(session.identityNotice.value).toBeNull();
+});
+
+test("无挂起命令的静默身份变化不产生提示", () => {
+  const session = createSession(memberView());
+  const first = connectAndSync(session, memberView({ bpVersion: 7, revision: 3 }));
+  first.close();
+  vi.advanceTimersByTime(600);
+  handles[1]!.receive({
+    kind: "memberView",
+    view: memberView({
+      revision: 4,
+      self: { memberId: "m3", nickname: "新观众", isHost: false, seatTeam: null },
+    }),
+  });
+  expect(session.identityNotice.value).toBeNull();
+  expect(session.pending.value.size).toBe(0);
+});
+
 // ---- 终态与隔离 ----
 
 test("AUTH_FAILED 通知进入终态：不再重连、不再重发核对命令", () => {
