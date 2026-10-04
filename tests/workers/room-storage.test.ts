@@ -1,13 +1,19 @@
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { exports } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { toAgentCatalog, toAgentDisplayLookup } from "../../shared/agents/catalog";
 import { agentCatalogSchema, type AgentCatalogData } from "../../shared/agents/schema";
 import { apiErrorResponseBodySchema, createRoomResponseSchema } from "../../shared/contracts/http";
+import { ensureRoomSchema } from "../../server/persistence";
 
 // Workers 集成测试：房间 Durable Object 的 SQLite 持久化与固定目录。
 // 通过 cloudflare:test 的 runInDurableObject 直接观察实例内 SQLite 行，
 // 并用 evictDurableObject 拆除实例（保留持久存储）验证状态恢复。
+
+// console spy 在断言失败时也要恢复，避免影响后续测试。
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const BASE_URL = "http://localhost";
 
@@ -50,6 +56,21 @@ function queryRows(
       return plain;
     });
   });
+}
+
+/** 该实例 SQLite 中的业务表名；从未建房的实例应为空数组（SQLite 内部表除外）。 */
+async function businessTableNames(roomId: string): Promise<string[]> {
+  const rows = await queryRows(
+    roomId,
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+  );
+  return rows.map((row) => String(row.name)).sort();
+}
+
+/** 该实例当前的 alarm 时间戳；房间到期清理（PR9）前任何路径都不应设置。 */
+function currentAlarm(roomId: string): Promise<number | null> {
+  const stub = roomStub(roomId);
+  return runInDurableObject(stub, (_room, state) => state.storage.getAlarm());
 }
 
 /** 受控目录：模拟「建房时刻的部署目录」。生产路径中该输入来自全局目录
@@ -222,14 +243,59 @@ describe("SQLite 持久化与表结构", () => {
     expect(await queryRows(body.roomId, "SELECT COUNT(*) AS n FROM members")).toEqual([{ n: 1 }]);
   });
 
-  it("未知 roomId 的读取不创建业务房间", async () => {
-    const unknownRoomId = crypto.randomUUID();
-    const response = await exports.default.fetch(`${BASE_URL}/api/rooms/${unknownRoomId}`);
-    expect(response.status).toBe(404);
-    // 只有空表结构壳：room_meta 无行。
-    expect(await queryRows(unknownRoomId, "SELECT COUNT(*) AS n FROM room_meta")).toEqual([
-      { n: 0 },
-    ]);
+  it("未知 roomId 的房间读取、目录与入房失败都不产生持久业务表", async () => {
+    const entryRoomId = crypto.randomUUID();
+    const catalogRoomId = crypto.randomUUID();
+    const joinRoomId = crypto.randomUUID();
+
+    // 三个入口分别经真实 HTTP 驱动，均返回 404 合同错误体。
+    const entry = await exports.default.fetch(`${BASE_URL}/api/rooms/${entryRoomId}`);
+    expect(entry.status).toBe(404);
+    expect(apiErrorResponseBodySchema.parse(await entry.json()).error.code).toBe("ROOM_NOT_FOUND");
+
+    const catalog = await exports.default.fetch(`${BASE_URL}/api/rooms/${catalogRoomId}/catalog`);
+    expect(catalog.status).toBe(404);
+    expect(apiErrorResponseBodySchema.parse(await catalog.json()).error.code).toBe(
+      "ROOM_NOT_FOUND",
+    );
+
+    const join = await exports.default.fetch(
+      new Request(`${BASE_URL}/api/rooms/${joinRoomId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname: "观众" }),
+      }),
+    );
+    expect(join.status).toBe(404);
+    expect(apiErrorResponseBodySchema.parse(await join.json()).error.code).toBe("ROOM_NOT_FOUND");
+
+    // 从未建房的实例保持完全空存储：没有任何业务表（含 schema_meta），
+    // 也没有 alarm；不能像旧实现那样留下 7 张表与版本行。
+    for (const roomId of [entryRoomId, catalogRoomId, joinRoomId]) {
+      expect(await businessTableNames(roomId)).toEqual([]);
+      expect(await currentAlarm(roomId)).toBeNull();
+    }
+  });
+
+  it("未知房间的无残留经实例重建验证：重新请求仍不建表", async () => {
+    const roomId = crypto.randomUUID();
+    expect((await exports.default.fetch(`${BASE_URL}/api/rooms/${roomId}`)).status).toBe(404);
+    expect(await businessTableNames(roomId)).toEqual([]);
+
+    // 拆除实例（保留持久存储）：重建后再请求，读取与失败入房依旧不写入。
+    await evictDurableObject(roomStub(roomId));
+    expect(await businessTableNames(roomId)).toEqual([]);
+
+    expect((await exports.default.fetch(`${BASE_URL}/api/rooms/${roomId}`)).status).toBe(404);
+    const join = await exports.default.fetch(
+      new Request(`${BASE_URL}/api/rooms/${roomId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname: "观众" }),
+      }),
+    );
+    expect(join.status).toBe(404);
+    expect(await businessTableNames(roomId)).toEqual([]);
   });
 
   it("同一实例重复建房被拒绝且不产生第二份写入", async () => {
@@ -344,8 +410,11 @@ describe("SQL 故障下的事务回滚", () => {
   it("建房中途 SQL 故障整体回滚，移除故障后同一房间 ID 可重试", async () => {
     const roomId = `tx-create-${crypto.randomUUID()}`;
     const stub = roomStub(roomId);
-    // 任意读取先到达该实例：表结构已按真实访问路径初始化。
-    expect((await stub.getRoomEntry({ credentialDigest: null })).kind).toBe("not_found");
+    // 读取路径不再为未知房间建表（见上面的空存储测试）；这里显式初始化
+    // 表结构，模拟已存在结构的实例，以便在 members 上注入建房中段故障。
+    await runInDurableObject(stub, (_room, state) => {
+      ensureRoomSchema(state.storage.sql);
+    });
 
     // 注入故障：members 插入一律失败（建房输入本身全部合法）。
     await runInDurableObject(stub, (_room, state) => {
@@ -401,15 +470,22 @@ describe("SQL 故障下的事务回滚", () => {
       );
     });
 
+    // 请求携带无效但可识别的凭据与专属昵称：用于断言诊断日志不含它们。
+    const sentCredential = "f".repeat(64);
+    const sentNickname = "诊断验证观众";
     const joinRequest = () =>
       exports.default.fetch(
         new Request(`${BASE_URL}/api/rooms/${roomId}/members`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nickname: "观众" }),
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: `zzzbp_room_${roomId}=${sentCredential}`,
+          },
+          body: JSON.stringify({ nickname: sentNickname }),
         }),
       );
 
+    const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const response = await joinRequest();
     // 统一错误边界：500 共享错误体 + no-store；不泄漏内部 SQL 错误，
     // 不交付凭据。
@@ -421,6 +497,32 @@ describe("SQL 故障下的事务回滚", () => {
     expect(error.error.message).not.toContain("injected");
     expect(error.error.message).not.toContain("RAISE");
     expect(error.error.message).not.toContain("revision");
+
+    // 服务端结构化诊断：静态分类 + 请求关联，字段固定为白名单；
+    // 异常内容（message/name/stack 等）不进入日志。
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const rawLog = String(logSpy.mock.calls[0]?.[0]);
+    const diagnostic = JSON.parse(rawLog) as Record<string, unknown>;
+    expect(Object.keys(diagnostic).sort()).toEqual([
+      "errorKind",
+      "event",
+      "method",
+      "path",
+      "requestId",
+    ]);
+    expect(diagnostic).toMatchObject({
+      event: "api.internal_error",
+      method: "POST",
+      path: `/api/rooms/${roomId}/members`,
+      errorKind: "internal",
+    });
+    expect(diagnostic.requestId).toMatch(/^[0-9a-f-]{36}$/);
+    // 关联 ID 同时下发给客户端，便于把现场报告与日志对照。
+    expect(response.headers.get("X-Request-Id")).toBe(diagnostic.requestId);
+    // 日志不含错误消息、凭据、Cookie 内容或请求体内容。
+    expect(rawLog).not.toContain("injected");
+    expect(rawLog).not.toContain(sentCredential);
+    expect(rawLog).not.toContain(sentNickname);
 
     // 无半写入：成员仍只有房主，revision 不变。
     expect(await queryRows(roomId, "SELECT COUNT(*) AS n FROM members")).toEqual([{ n: 1 }]);

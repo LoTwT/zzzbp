@@ -26,6 +26,9 @@ import { roomStateSchema } from "../shared/room";
 /** 房间业务表结构的当前版本；升级入口见 ensureRoomSchema。 */
 const ROOM_SCHEMA_VERSION = 1;
 
+/** 已初始化实例的事务标志表；它的存在等价于全部业务表已按当前结构建立。 */
+const ROOM_SCHEMA_MARKER_TABLE = "schema_meta";
+
 /** DO 内置 SQLite 的类型别名（ctx.storage.sql）。 */
 export type RoomSql = DurableObjectState["storage"]["sql"];
 
@@ -63,9 +66,10 @@ export interface NewMemberRecord {
  * 版本一致时为空操作；遇到更高版本拒绝加载（防降级误读）；更低版本
  * 在此按版本逐步迁移（当前 1 是首个业务版本，不存在更旧的已发布数据，
  * 直接视为异常）。由调用方在 transactionSync 闭包内调用，建表与版本
- * 记录随所在业务单元一起提交或回滚。引导期 /api/health 使用的
- * room_info 自检表（shared/api.ts 合同）由 DO 的 health 方法单独维护，
- * 与本模块互不干扰。
+ * 记录随所在业务单元一起提交或回滚。读取路径调用前先用 hasRoomSchema
+ * 判断实例是否已有结构，避免为从未建房的 roomId 写入存储。引导期
+ * /api/health 使用的 room_info 自检表（shared/api.ts 合同）由 DO 的
+ * health 方法单独维护，与本模块互不干扰。
  */
 export function ensureRoomSchema(sql: RoomSql): void {
   sql.exec(`
@@ -144,6 +148,29 @@ export function ensureRoomSchema(sql: RoomSql): void {
     // 版本升级入口：未来结构变更在此按 version 逐步迁移；当前没有更旧的版本。
     throw new Error(`暂不支持从房间存储结构版本 ${version} 升级到 ${ROOM_SCHEMA_VERSION}`);
   }
+}
+
+/**
+ * 只读判断该实例是否已有业务表结构（`schema_meta` 表是否存在），不产生
+ * 任何写入。
+ *
+ * 读取路径（房间入口、目录、入房失败前）先经此检查：从未建房的实例
+ * 保持完全空存储，随机或错误的 roomId 不会因一次 GET/入房失败就建立
+ * 7 张业务表与版本行、留下永不回收的持久数据（依据见 docs/architecture.md
+ * 「房间持久化与固定目录」）。表结构已存在时才调用 ensureRoomSchema 做
+ * 幂等校验或迁移，建房与既有房间的事务语义不变。
+ *
+ * `schema_meta` 与业务表由 ensureRoomSchema 在同一事务内创建，事务提交
+ * 保证二者同时存在；因此该表存在即可安全认定为结构完整。
+ */
+export function hasRoomSchema(sql: RoomSql): boolean {
+  const row = sql
+    .exec<SqlRow<{ name: string }>>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+      ROOM_SCHEMA_MARKER_TABLE,
+    )
+    .toArray()[0];
+  return row !== undefined;
 }
 
 /** room_meta 行类型（SQLite 返回值）。 */

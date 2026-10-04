@@ -47,10 +47,40 @@ function jsonResponse(status: number, body: unknown, headers?: Record<string, st
   });
 }
 
+/**
+ * 统一错误边界的结构化诊断：只输出静态分类与请求关联信息。
+ *
+ * 记录字段固定为白名单：事件名、本次请求生成的 requestId、HTTP 方法、
+ * 路径（不含查询串）与静态分类 `internal`。错误自身的 message、name、
+ * cause、stack 及任何原始错误值一律不写入应用日志：统一边界无法甄别
+ * 任意异常内容，这些字段可能携带上游或请求相关的敏感输入（例如请求体
+ * 流读取失败的异常消息）；可自定义的 error.name 不是可信分类。需要更细
+ * 的稳定分类时应在抛出点定义，不由边界透传错误自带字段。请求头、Cookie、
+ * 请求体、凭据秘密或摘要同样不记录。客户端继续只收到通用 500 错误体，
+ * 响应通过 X-Request-Id 头返回同一 requestId，便于把现场报告与这条
+ * 日志对照。
+ */
+function logInternalError(request: Request, requestId: string): void {
+  console.error(
+    JSON.stringify({
+      event: "api.internal_error",
+      requestId,
+      method: request.method,
+      path: new URL(request.url).pathname,
+      errorKind: "internal",
+    }),
+  );
+}
+
 /** 非 2xx 响应的共享错误体（apiErrorResponseBodySchema）。 */
-function apiError(status: number, code: ApiErrorCode, message: string): Response {
+function apiError(
+  status: number,
+  code: ApiErrorCode,
+  message: string,
+  headers?: Record<string, string>,
+): Response {
   const body: ApiErrorResponseBody = { error: { code, message } };
-  return jsonResponse(status, body);
+  return jsonResponse(status, body, headers);
 }
 
 /**
@@ -360,10 +390,16 @@ export default {
       // 异步路由必须在边界内被 await：只包 return 不 await 捕不到异步 reject。
       return await handleApiRequest(request, ctx);
     } catch {
-      // 统一错误边界：任何未预期异常（DO RPC、SQLite、状态装配等）只返回
-      // 通用 500 共享错误体，不向客户端泄漏 SQL 错误、内部状态或凭据，
-      // 也不交付 Cookie；服务端不记录含请求内容（Cookie/输入）的日志。
-      return apiError(500, "INTERNAL", "服务器内部错误，请稍后重试");
+      // 统一错误边界：任何未预期异常（DO RPC、SQLite、状态装配、请求体
+      // 读取等）只向客户端返回通用 500 共享错误体与 X-Request-Id 关联
+      // ID，不泄漏 SQL 错误、内部状态或凭据，也不交付 Cookie；服务端只
+      // 记录静态分类与请求关联字段，不记录错误内容、请求头、Cookie 或
+      // 请求体。
+      const requestId = crypto.randomUUID();
+      logInternalError(request, requestId);
+      return apiError(500, "INTERNAL", "服务器内部错误，请稍后重试", {
+        "X-Request-Id": requestId,
+      });
     }
   },
 } satisfies ExportedHandler<Env>;
