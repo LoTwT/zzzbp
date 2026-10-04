@@ -448,14 +448,38 @@ export class Room extends DurableObject {
 
   /**
    * 接受成员连接：身份（成员 ID）持久化到附件，操作者只来自这里。
-   * 连接后立即做在线协调（见 reconcilePresenceInTransaction）：以实际
-   * 连接注册表为权威，首个连接使成员上线并取消空房计时，也修复任何
-   * 历史分叉（如短暂故障留下的陈旧在线标志）。协调写入失败时连接不能
-   * 被当成有效在线凭据：以 INTERNAL 通知明确失败并关闭，客户端在存储
-   * 恢复后重连即可恢复（重连会重新协调）。
+   *
+   * 接纳顺序是正确性的关键：先在「新连接尚未计入注册表」的状态下做一次
+   * 在线协调，把已观测到的离线差异（存储在线但已无连接，含掉线暂停与
+   * 计时补写）落库，再注册新连接并做常规协调（首个连接使成员上线并
+   * 取消空房计时，同时修复其他分叉）。若先注册再比较最终快照，故障期间
+   * 的快速重连会让快照重新一致，吞掉已观测的掉线及其待补的暂停。
+   *
+   * 两次协调任一写入失败时，连接都不能被当成有效在线凭据：以 INTERNAL
+   * 通知明确失败并关闭；存储恢复后重连即恢复（重连会重新协调并补齐暂停）。
    */
   private acceptMemberConnection(memberId: MemberId): Response {
     const [client, server] = Object.values(new WebSocketPair());
+
+    // 前置协调：新连接未注册，注册表反映既有连接的真实在线集合。
+    try {
+      const pre = this.reconcilePresence();
+      if (pre.changed && pre.state !== null && pre.meta !== null) {
+        // 广播补齐的暂停/离线（此时新连接尚未注册，不在广播之列）。
+        this.broadcastViews(pre.state, pre.meta);
+      }
+    } catch {
+      // 无法确认在线状态：拒绝正常接入，不留有效在线连接；有界重试链
+      // 保证存储恢复后状态补齐，客户端届时重连即可。
+      this.logRealtimeInternalError("connect");
+      this.schedulePresenceRetry();
+      this.ctx.acceptWebSocket(server);
+      server.serializeAttachment({ kind: "rejected" } satisfies WsAttachment);
+      this.safeSend(server, noticeMessage("INTERNAL", "成员在线状态写入失败，请稍后重连"));
+      this.safeClose(server, 1011, "presence write failed");
+      return new Response(null, { status: 101, webSocket: client });
+    }
+
     this.ctx.acceptWebSocket(server, [memberTag(memberId)]);
     server.serializeAttachment({ kind: "member", memberId } satisfies WsAttachment);
 

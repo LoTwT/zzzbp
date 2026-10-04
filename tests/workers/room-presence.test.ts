@@ -693,4 +693,121 @@ describe("在线协调与故障恢复（以实际连接为权威）", () => {
     expect(result.ok).toBe(true);
     reconnected.close();
   });
+
+  it("故障期间的掉线不能被快速重连吞掉：重连被拒，恢复后接入前先补暂停", async () => {
+    const room = await runningRoom("重连吞暂停赛");
+    expect(
+      (
+        await room.send(
+          room.aWs,
+          "setPreselect",
+          { slotId: "AB1", agentId: AGENT_IDS[0] },
+          room.playerA,
+        )
+      ).ok,
+    ).toBe(true);
+
+    // 注入故障：离线写入（NEW.online = 0）失败。
+    await execInRoom(
+      room.host.roomId,
+      "CREATE TRIGGER test_offline_fault BEFORE UPDATE OF online ON members WHEN NEW.online = 0 BEGIN SELECT RAISE(ABORT, 'test injected offline failure'); END",
+    );
+
+    // 选手 B 断开最后连接：close 协调失败（已观测离线未落库），重试链启动。
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    room.bWs.close();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const closeFailures = errorSpy.mock.calls.filter(([message]) =>
+      String(message).includes('"phase":"close"'),
+    );
+    expect(closeFailures.length).toBeGreaterThanOrEqual(1);
+    errorSpy.mockRestore();
+
+    // 幽灵在线：B 无连接但存储在线，BP 仍进行中。
+    expect(await memberOnline(room.host.roomId, room.playerB.memberId)).toBe(1);
+    expect(await queryRoomRows(room.host.roomId, "SELECT bp_status FROM room_meta")).toEqual([
+      { bp_status: "running" },
+    ]);
+
+    // 故障未恢复期间同凭据重连：接纳前无法确认离线差异，拒绝正常接入
+    // （INTERNAL 通知 + 关闭），不留 running 通道。
+    const refused = await TestWsClient.connectMember(room.host.roomId, room.playerB.secret);
+    const notice = await refused.next("notice");
+    expect(notice.code).toBe("INTERNAL");
+    expect((await refused.waitForClose("重连被拒")).code).toBe(1011);
+    expect(await queryRoomRows(room.host.roomId, "SELECT bp_status FROM room_meta")).toEqual([
+      { bp_status: "running" },
+    ]);
+
+    // 存储恢复后重连：先补齐 B 的离线与掉线暂停，再接纳上线；视图为
+    // paused 且预选保留（不自动恢复）。
+    await execInRoom(room.host.roomId, "DROP TRIGGER test_offline_fault");
+    const recovered = await TestWsClient.connectMember(room.host.roomId, room.playerB.secret);
+    const view = await recovered.next("memberView");
+    expect(view.view.self.seatTeam).toBe("B");
+    expect(view.view.self.nickname).toBe("选手乙");
+    expect(view.view.bpStatus).toBe("paused");
+    expect(view.view.preselect).toBe(AGENT_IDS[0]);
+    expect(view.view.currentSlotId).toBe("AB1");
+    // 存储对齐：B 重新在线，BP 暂停（房主与 A 也收到暂停广播）。
+    expect(await memberOnline(room.host.roomId, room.playerB.memberId)).toBe(1);
+    expect(await queryRoomRows(room.host.roomId, "SELECT bp_status FROM room_meta")).toEqual([
+      { bp_status: "paused" },
+    ]);
+    expect(
+      await room.waitForHostView((view) => view.bpStatus === "paused", "重连补暂停后的 hostView"),
+    ).not.toBeNull();
+
+    // 手动 resume 前 confirm 被拒；房主 resume 后当前位提交成功。
+    room.sendRaw(
+      room.aWs,
+      "confirm-before-resume",
+      { type: "confirmPreselect", slotId: "AB1" },
+      await room.currentBpVersion(),
+    );
+    const denied = await room.aWs.commandResult("confirm-before-resume");
+    expect(denied.ok).toBe(false);
+    expect(denied.error?.code).toBe("BP_NOT_RUNNING");
+
+    await room.send(room.hostWs, "resumeBp", {}, room.host);
+    expect(
+      (await room.send(room.aWs, "confirmPreselect", { slotId: "AB1" }, room.playerA)).ok,
+    ).toBe(true);
+    expect(
+      await queryRoomRows(room.host.roomId, "SELECT COUNT(*) AS n FROM bp_submissions"),
+    ).toEqual([{ n: 1 }]);
+    recovered.close();
+    room.hostWs.close();
+    room.aWs.close();
+  });
+
+  it("房主掉线重连沿用同一接纳语义：恢复后接入前先补暂停", async () => {
+    const room = await runningRoom("房主重连赛");
+    await execInRoom(
+      room.host.roomId,
+      "CREATE TRIGGER test_offline_fault BEFORE UPDATE OF online ON members WHEN NEW.online = 0 BEGIN SELECT RAISE(ABORT, 'test injected offline failure'); END",
+    );
+
+    // 房主断开（不占席，房主掉线同样应暂停）：协调失败留下幽灵在线。
+    room.hostWs.close();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(await memberOnline(room.host.roomId, room.host.memberId)).toBe(1);
+
+    // 故障期间重连被拒；恢复后重连拿到 paused 的房主视图，手动 resume 前不继续。
+    const refused = await TestWsClient.connectMember(room.host.roomId, room.host.secret);
+    expect((await refused.next("notice")).code).toBe("INTERNAL");
+    await refused.waitForClose("重连被拒");
+
+    await execInRoom(room.host.roomId, "DROP TRIGGER test_offline_fault");
+    const recovered = await TestWsClient.connectMember(room.host.roomId, room.host.secret);
+    const view = await recovered.next("hostView");
+    expect(view.view.bpStatus).toBe("paused");
+    await room.send(recovered, "resumeBp", {}, room.host);
+    expect(
+      await room.waitForHostView((view) => view.bpStatus === "running", "房主恢复后的 hostView"),
+    ).not.toBeNull();
+    room.aWs.close();
+    room.bWs.close();
+    recovered.close();
+  });
 });

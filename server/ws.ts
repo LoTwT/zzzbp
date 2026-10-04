@@ -24,9 +24,13 @@ export const MAX_WS_MESSAGE_BYTES = 8 * 1024;
  * 每房间保留的 operationId 去重回执条数上限（按写入顺序保留最近若干条）。
  *
  * 这是回执窗口的边界：回执只保证「重发不重复执行、返回原结果」在窗口内
- * 成立；窗口外被淘汰后，重发按新命令处理，由 expectedBpVersion 版本门与
- * 命令幂等性兜底（任何推进状态的命令都会递增 bp.version，使重发过期）。
- * 一整局 BP 约 50–200 条命令，2048 条覆盖十余局，够用且不会显著占存储。
+ * 成立；窗口外被淘汰后，重发按新命令处理，由命令自身的可持久验证前置
+ * 条件兜底——推进 BP 流程或席位权限的命令递增 bp.version 使旧载荷过期
+ * （STALE_BP_VERSION / NOT_CURRENT_PLAYER），setTeamName 以
+ * expectedRevision 严格一致为前置条件（STALE_REVISION）。完整语义的
+ * 单一事实来源见 shared/contracts/websocket.ts 与 docs/architecture.md
+ * 「WebSocket 通道」。一整局 BP 约 50–200 条命令，2048 条覆盖十余局，
+ * 够用且不会显著占存储。
  */
 export const COMMAND_RECEIPT_RETENTION = 2048;
 
