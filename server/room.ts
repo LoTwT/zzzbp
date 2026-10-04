@@ -8,6 +8,7 @@ import {
   createRoomRecord,
   ensureRoomSchema,
   findMemberIdByCredentialDigest,
+  hasRoomSchema,
   insertMember,
   loadRoomCatalog,
   loadRoomState,
@@ -31,9 +32,12 @@ import {
  * SQLite Storage API 约束），本类内的 SQL 与装配均为同步操作；DO 的
  * 单线程执行与输入门只保证语句不被其他事件交错，不提供异常回滚。
  *
- * 所有业务方法在入口处幂等初始化表结构；未创建业务房间（room_meta
- * 无行）的实例只存在空表结构壳，任何读取都返回 not_found，不会因
- * GET 或错误 roomId 隐式创建业务房间。
+ * 读取路径不初始化存储：getRoomEntry、joinRoom、getRoomCatalog 先用
+ * hasRoomSchema 只读判断该实例是否已有业务表结构，从未建房的实例
+ * 保持完全空存储，一切读取按不存在处理；随机或错误的 roomId 不会
+ * 因 GET 或失败入房留下 7 张业务表与 schema_meta 版本行。表结构已
+ * 存在时（建房与既有房间）仍经 ensureRoomSchema 幂等校验或迁移，
+ * 保证建房写入与必要迁移的事务保障不变。
  */
 
 /** `createRoom` 输入：房间与房主成员的持久化材料（秘密不跨 RPC，只传摘要）。 */
@@ -169,10 +173,12 @@ export class Room extends DurableObject {
   /**
    * 读取房间入口数据：凭据有效时返回该成员视图，否则匿名。
    * 普通读取不影响在线状态与保留计时；读路径同样在事务闭包内，
-   * 保证 schema 初始化写入的一致性与多次读取的一致快照。
+   * 保证多次读取的一致快照。从未建房的实例不做任何写入（不建表），
+   * 直接按 not_found 返回。
    */
   async getRoomEntry(input: RoomCredentialInput): Promise<RoomEntryResult> {
     return this.ctx.storage.transactionSync((): RoomEntryResult => {
+      if (!hasRoomSchema(this.sql)) return { kind: "not_found" };
       ensureRoomSchema(this.sql);
       const meta = readRoomMeta(this.sql);
       if (meta === null) return { kind: "not_found" };
@@ -195,9 +201,11 @@ export class Room extends DurableObject {
    * 否则以请求昵称创建新观众成员。新成员为离线状态（PR5 的 WS 接入才计
    * 在线）。成员写入与 revision 递增、写入后的视图装配同在一个事务闭包
    * 内：任一步骤失败整体回滚，不会留下无凭据交付的孤儿成员。
+   * 未建房的实例不做任何写入（不建表），直接按 not_found 返回。
    */
   async joinRoom(input: JoinRoomInput): Promise<JoinRoomResult> {
     return this.ctx.storage.transactionSync((): JoinRoomResult => {
+      if (!hasRoomSchema(this.sql)) return { kind: "not_found" };
       ensureRoomSchema(this.sql);
       const meta = readRoomMeta(this.sql);
       if (meta === null) return { kind: "not_found" };
@@ -226,9 +234,10 @@ export class Room extends DurableObject {
     });
   }
 
-  /** 读取该房间固定的目录快照（经 schema 校验）；未建房返回 null。 */
+  /** 读取该房间固定的目录快照（经 schema 校验）；未建房返回 null 且不写入存储。 */
   async getRoomCatalog(): Promise<AgentCatalogData | null> {
     return this.ctx.storage.transactionSync((): AgentCatalogData | null => {
+      if (!hasRoomSchema(this.sql)) return null;
       ensureRoomSchema(this.sql);
       return loadRoomCatalog(this.sql);
     });
