@@ -6,7 +6,7 @@ import {
   type RoomSocketHandle,
   type RoomView,
 } from "../../src/room/room-session";
-import { UNKNOWN_OUTCOME } from "../../src/room/command-errors";
+import { IDENTITY_CHANGED, UNKNOWN_OUTCOME } from "../../src/room/command-errors";
 
 // 常规成员 WS 会话的核心行为回归（PR7 恢复收口）：
 // - 同步门：open 不放行操作与动效，本连接首个合法视图才是「已连接」；
@@ -14,8 +14,12 @@ import { UNKNOWN_OUTCOME } from "../../src/room/command-errors";
 // - revision 单调：落后视图不覆盖新视图、也不作为同步依据；
 // - 命令补齐 operationId / 版本前置条件，序列化字节被原样保留；
 // - 结果未知核对：回执超时或断线转「核对中」，重新同步后按同一
-//   operationId 与同一载荷字节重发；重发后 STALE_* 过期拒绝按「结果
-//   未知」诚实收敛，其余错误码按对应错误结算；
+//   operationId 与同一载荷字节重发；核对重发收到的失败回执（含
+//   INTERNAL、权限/状态类拒绝与 STALE_*）都不能证明原命令失败，
+//   统一按「结果未知」诚实收敛，首发的失败回执才按对应错误结算；
+// - 身份边界：挂起命令绑定发送时的 memberId，视图携带的身份变化
+//   （同昵称不同 ID，不经 AUTH_FAILED）时旧命令被明确放弃，绝不以
+//   新身份重发；同一 memberId 的席位/角色变化照常核对；
 // - 身份失效 / 房间消失进入终态：不再重连、不再重发核对命令；
 // - 旧连接的迟到事件被隔离，stop() 清理全部计时器。
 
@@ -346,7 +350,16 @@ test("断线后命令转「核对中」，同步后按同一 operationId 与原�
   // 重发前必须先取得本连接的合法视图（open 不触发重发）。
   second.open();
   expect(second.sent).toHaveLength(0);
-  second.receive({ kind: "hostView", view: hostView({ revision: 5, bpVersion: 7 }) });
+  // 同一身份（m1）的视图：memberView 与 hostView 的 self 不同，混用会
+  // 触发身份边界（跨身份用例另测）。
+  second.receive({
+    kind: "memberView",
+    view: memberView({
+      revision: 5,
+      bpVersion: 7,
+      self: { memberId: "m1", nickname: "选手", isHost: false, seatTeam: null },
+    }),
+  });
   // 同 ID + 同载荷（含原 expectedRevision/expectedBpVersion）原样重发。
   expect(second.sent).toHaveLength(1);
   expect(second.sent[0]).toBe(first.sent[0]);
@@ -400,7 +413,7 @@ test("重发后 STALE_* 拒绝按「结果未知」诚实收敛，不伪造成�
   }
 });
 
-test("重发后的明确拒绝按对应错误结算，可供用户新操作生成新 ID", () => {
+test("核对重发后的业务拒绝不能证明原命令失败，按结果未知收敛", () => {
   const session = createSession();
   const first = connectAndSync(session, hostView({ bpStatus: "waiting", currentSlotId: null }));
   session.sendCommand({ type: "assignSeat", team: "A", targetMemberId: "m1" });
@@ -412,6 +425,9 @@ test("重发后的明确拒绝按对应错误结算，可供用户新操作生�
     view: hostView({ bpStatus: "waiting", currentSlotId: null, revision: 3 }),
   });
   expect(second.sent).toHaveLength(1);
+  // 原命令可能已生效但回执越出保留窗口后被按新命令拒绝（规则在版本门
+  // 前先判权限/状态），也可能是原失败回执的幂等重放——客户端无法区分，
+  // 不能把该拒绝当成原操作的明确失败。
   second.receive({
     kind: "commandResult",
     operationId: "op-1",
@@ -421,8 +437,35 @@ test("重发后的明确拒绝按对应错误结算，可供用户新操作生�
     revision: 4,
   });
   expect(session.isScopePending("assignSeat:A")).toBe(false);
-  expect(session.scopeError("assignSeat:A")?.code).toBe("SEAT_TARGET_OFFLINE");
-  expect(session.scopeError("assignSeat:A")?.text).toBe("该成员当前离线，不能上席");
+  const error = session.scopeError("assignSeat:A");
+  expect(error?.code).toBe(UNKNOWN_OUTCOME);
+  expect(error?.text).toContain("结果未知");
+  // 收敛后允许以新 operationId 重新发起（首发错误才显示准确原因）。
+  expect(session.sendCommand({ type: "assignSeat", team: "A", targetMemberId: "m1" }).sent).toBe(
+    true,
+  );
+  expect(JSON.parse(second.sent[1]!)).toMatchObject({ operationId: "op-2" });
+});
+
+test("核对重发遇到 INTERNAL（本次核对的事务故障）不证明原命令失败", () => {
+  const session = createSession();
+  const first = connectAndSync(session, hostView({ bpStatus: "paused", currentSlotId: "BB1" }));
+  session.sendCommand({ type: "undoBpStep" });
+  first.close();
+  vi.advanceTimersByTime(600);
+  const second = handles[1]!;
+  second.receive({
+    kind: "hostView",
+    view: hostView({ bpStatus: "paused", currentSlotId: "BB1", revision: 3 }),
+  });
+  expect(second.sent[0]).toBe(first.sent[0]);
+  // 回执查询/处理故障使本次核对整体回滚：只是核对未取得原结论，原命令
+  // 可能早已成功，不能显示为原操作失败并诱导盲目重试。
+  second.receive(receipt("op-1", false, { error: { code: "INTERNAL", message: "..." } }));
+  expect(session.isScopePending("undoBpStep")).toBe(false);
+  const error = session.scopeError("undoBpStep");
+  expect(error?.code).toBe(UNKNOWN_OUTCOME);
+  expect(error?.text).toContain("结果未知");
 });
 
 test("首发命令的 STALE_BP_VERSION 仍按普通过期错误结算（非结果未知）", () => {
@@ -497,6 +540,105 @@ test("核对重发再次断线：下次同步继续按原 ID 原载荷重发", (
   expect(third.sent[0]).toBe(first.sent[0]);
   third.receive(receipt("op-1", true));
   expect(session.isScopePending("confirmPreselect")).toBe(false);
+});
+
+// ---- 身份边界（跨身份不重发） ----
+
+test("身份变化（同昵称不同 memberId）后旧身份命令绝不以新身份重发", () => {
+  const session = createSession(memberView());
+  const first = connectAndSync(session, memberView({ bpVersion: 7, revision: 3 }));
+  session.sendCommand({ type: "confirmPreselect", slotId: "AB1" });
+  first.close();
+  expect(session.isScopeChecking("confirmPreselect")).toBe(true);
+  vi.advanceTimersByTime(600);
+  const second = handles[1]!;
+  // 浏览器凭据被更换后以新成员重新入房（同昵称）：服务端直接返回新身份
+  // 的有效视图，不经 AUTH_FAILED。
+  second.receive({
+    kind: "memberView",
+    view: memberView({
+      revision: 4,
+      self: { memberId: "m2", nickname: "选手", isHost: false, seatTeam: null },
+    }),
+  });
+  // 旧命令被明确放弃：不重发、不伪成功，按「身份已变化、结果未知」收敛。
+  expect(second.sent).toHaveLength(0);
+  expect(session.isScopePending("confirmPreselect")).toBe(false);
+  const error = session.scopeError("confirmPreselect");
+  expect(error?.code).toBe(IDENTITY_CHANGED);
+  expect(error?.text).toContain("身份已变化");
+  // 新身份流程正常：可发送新命令（新 operationId，绑定新身份）。
+  expect(session.sendCommand({ type: "startBp" }).sent).toBe(true);
+  const sent = JSON.parse(second.sent[0]!) as Record<string, unknown>;
+  expect(sent.operationId).toBe("op-2");
+  second.receive(receipt("op-2", true));
+  expect(session.isScopePending("startBp")).toBe(false);
+});
+
+test("HTTP 初值与首个 WS 视图之间的身份变化也经边界绑定", () => {
+  const session = createSession(memberView()); // HTTP 初值身份 m1
+  session.connect();
+  const handle = handles[0]!;
+  // WS 升级时凭据已被更换：首个视图即新身份 m2。
+  handle.receive({
+    kind: "memberView",
+    view: memberView({
+      revision: 3,
+      self: { memberId: "m2", nickname: "选手", isHost: false, seatTeam: null },
+    }),
+  });
+  expect(session.view.value?.self.memberId).toBe("m2");
+  // 新身份的命令正常发送；不存在旧身份挂起可重发。
+  expect(session.sendCommand({ type: "setPreselect", slotId: "AB1", agentId: "1011" }).sent).toBe(
+    true,
+  );
+  handle.receive(receipt("op-1", true));
+  expect(session.isScopePending("setPreselect")).toBe(false);
+});
+
+test("同一 memberId 的席位变化不构成身份变化，照常按原 ID 核对", () => {
+  const session = createSession(memberView());
+  const first = connectAndSync(session, memberView({ bpVersion: 7, revision: 3 }));
+  session.sendCommand({ type: "confirmPreselect", slotId: "AB1" });
+  first.close();
+  vi.advanceTimersByTime(600);
+  const second = handles[1]!;
+  // 同一成员 m1 被换下席位（seatTeam A → null）：身份未变，照常重发核对。
+  second.receive({
+    kind: "memberView",
+    view: memberView({
+      revision: 4,
+      self: { memberId: "m1", nickname: "选手", isHost: false, seatTeam: null },
+    }),
+  });
+  expect(second.sent).toHaveLength(1);
+  expect(second.sent[0]).toBe(first.sent[0]);
+  expect(session.scopeError("confirmPreselect")).toBeNull();
+});
+
+test("身份变化时多个旧身份挂起命令一并放弃，新身份可继续操作", () => {
+  const session = createSession();
+  const first = connectAndSync(
+    session,
+    hostView({ bpStatus: "running", currentSlotId: "AB1", bpVersion: 7, revision: 3 }),
+  );
+  session.sendCommand({ type: "setTeamName", team: "A", teamName: "新队名" });
+  session.sendCommand({ type: "pauseBp" });
+  first.close();
+  vi.advanceTimersByTime(600);
+  const second = handles[1]!;
+  second.receive({
+    kind: "memberView",
+    view: memberView({
+      revision: 4,
+      self: { memberId: "m9", nickname: "新观众", isHost: false, seatTeam: null },
+    }),
+  });
+  expect(second.sent).toHaveLength(0);
+  expect(session.isScopePending("setTeamName:A")).toBe(false);
+  expect(session.isScopePending("pauseBp")).toBe(false);
+  expect(session.scopeError("setTeamName:A")?.code).toBe(IDENTITY_CHANGED);
+  expect(session.scopeError("pauseBp")?.code).toBe(IDENTITY_CHANGED);
 });
 
 // ---- 终态与隔离 ----

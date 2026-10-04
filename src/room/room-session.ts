@@ -7,6 +7,7 @@ import {
 } from "../../shared/contracts/websocket";
 import {
   CONNECTION_LOST,
+  IDENTITY_CHANGED,
   UNKNOWN_OUTCOME,
   roomClientErrorText,
   type RoomClientErrorCode,
@@ -28,12 +29,20 @@ import {
  *   （setTeamName 另带 expectedRevision），序列化为确切字节后发送；
  *   同 scope 挂起期间拒绝新命令（防盲目重复由会话层兜底）；
  * - 结果未知（回执超时或连接中断）的命令转入「核对中」：保留原
- *   operationId 与原载荷字节，重新同步后按协议重发核对——服务端持久化
- *   去重回执对同载荷幂等返回原结果。重发后收到 STALE_BP_VERSION /
- *   STALE_REVISION 表示原命令可能已生效但回执已越出保留窗口、或已被
- *   其他可见变化越过，两种可能无法区分，按「结果未知」诚实反馈，不
- *   伪造成功或失败；其余错误码是服务端对当前权威状态的明确拒绝，按
- *   对应错误结算，用户以最新状态生成新 operationId 重试；
+ *   operationId 与原载荷字节，重新同步后按协议重发，由服务端持久化
+ *   去重回执对同载荷幂等返回原结果。核对重发收到的失败回执不能证明
+ *   原命令失败（可能是本次核对执行的新拒绝——原命令可能已生效且其
+ *   回执已越出保留窗口，也可能是核对处理的技术故障，客户端无法与
+ *   原回执的幂等重放区分），统一按「结果未知」诚实反馈，不伪造成功
+ *   或失败；用户以最新状态重新操作，若同样的条件仍在，新命令的首发
+ *   错误会给出准确原因。首发的失败回执仍是原操作的明确结论，按对应
+ *   错误结算。回执超时会主动断开当前连接（半开连接检测），恢复后
+ *   统一走核对路径；
+ * - 挂起命令绑定发送时的成员 ID（权威视图 self.memberId，非秘密）：
+ *   视图携带的身份变化（如凭据被换、以新成员重新入房，不经
+ *   AUTH_FAILED）时，旧身份的待核对命令按「身份已变化、原结果未知」
+ *   明确放弃，绝不以新身份重发；同一 memberId 的席位/角色变化不构成
+ *   身份变化。HTTP 初值与每代连接的首个视图都经此边界；
  * - 断线保留最后确认画面（view 不清除），状态进入 reconnecting/
  *   interrupted，调用方据此停动效并禁用一切服务器操作；本地搜索、
  *   筛选与布局不受连接状态影响；退避自动重连，身份按当前房主/席位
@@ -98,7 +107,8 @@ export type PendingCommandPhase = "inflight" | "checking";
  *
  * `payloadJson` 是发送的确切字节：核对重发复用同一 operationId 与同一
  * 载荷（含发送时的 expectedBpVersion/expectedRevision），不为网络重试
- * 生成新 ID 或修改载荷。
+ * 生成新 ID 或修改载荷。`memberId` 是发送时的成员身份（非秘密 ID，
+ * 来自权威视图 self）：会话身份变化后旧命令绝不以新身份重发。
  */
 export interface PendingRoomCommand {
   readonly operationId: string;
@@ -106,9 +116,11 @@ export interface PendingRoomCommand {
   /** 已发送的序列化字节；核对重发原样复用。 */
   readonly payloadJson: string;
   readonly scope: string;
+  /** 发送时的成员 ID；身份变化（视图 self.memberId 不同）后不再重发。 */
+  readonly memberId: string;
   /** inflight：本次连接首发、等待回执；checking：结果未知、待同步后重发核对。 */
   readonly phase: PendingCommandPhase;
-  /** 是否已按核对路径重发过：其后的 STALE_* 拒绝按结果未知收敛。 */
+  /** 是否已按核对路径重发过：其后的失败回执不能证明原命令失败。 */
   readonly wasResent: boolean;
 }
 
@@ -186,6 +198,12 @@ export class RoomSession {
   private handle: RoomSocketHandle | null = null;
   /** 当前连接是否已取得合法权威视图：操作与动效的放行条件。 */
   private synced = false;
+  /**
+   * 当前会话绑定的成员身份（权威视图 self.memberId，非秘密 ID）。
+   * 挂起命令按发送时的身份绑定；身份变化（如凭据被换、以新成员重新
+   * 入房，不经 AUTH_FAILED）时旧命令被明确放弃，绝不以新身份重发。
+   */
+  private identityMemberId: string | null = null;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -199,6 +217,8 @@ export class RoomSession {
     if (options.initialView !== undefined) {
       this.view.value = options.initialView;
       this.appliedRevision = options.initialView.revision;
+      // HTTP 初值即身份边界：后续挂起命令绑定该成员 ID。
+      this.identityMemberId = options.initialView.self.memberId;
     }
   }
 
@@ -296,6 +316,7 @@ export class RoomSession {
       command: validated.data,
       payloadJson,
       scope,
+      memberId: view.self.memberId,
       phase: "inflight",
       wasResent: false,
     };
@@ -448,6 +469,8 @@ export class RoomSession {
     // revision 单调门：落后视图（含等价旧重放）不覆盖已应用的更新视图，
     // 也不能作为本连接的同步依据。
     if (view.revision < this.appliedRevision) return;
+    // 身份边界先于核对重发：旧身份的挂起命令在进入新身份流程前被放弃。
+    this.abandonPendingOnIdentityChange(view.self.memberId);
     const previous = this.view.value;
     this.view.value = view;
     this.appliedRevision = view.revision;
@@ -459,6 +482,30 @@ export class RoomSession {
       this.clearScopeError("confirmPreselect");
     }
     this.markSynced();
+  }
+
+  /**
+   * 身份边界：挂起命令绑定发送时的成员 ID。
+   *
+   * 视图携带的身份变化（浏览器凭据被更换后以新成员重新入房等，此时
+   * 服务端直接返回新身份的有效视图，不经 AUTH_FAILED）时，旧身份的
+   * 待核对命令绝不能以新身份重发——按「身份已变化、原结果未知」明确
+   * 放弃（诚实收敛，不伪成功）；同一 memberId 的席位/角色变化不构成
+   * 身份变化，照常核对。每份视图（含 HTTP 初值、每代连接的首个视图）
+   * 都经此边界。
+   */
+  private abandonPendingOnIdentityChange(memberId: string): void {
+    if (this.identityMemberId === null) {
+      // 尚无绑定（无 HTTP 初值的会话）：首份视图绑定身份，无挂起可放弃。
+      this.identityMemberId = memberId;
+      return;
+    }
+    if (this.identityMemberId === memberId) return;
+    const stale = [...this.pending.value.values()].filter((entry) => entry.memberId !== memberId);
+    for (const entry of stale) {
+      this.resolvePending(entry.operationId, { ok: false, code: IDENTITY_CHANGED });
+    }
+    this.identityMemberId = memberId;
   }
 
   /** 本连接取得首个合法权威视图：开放操作与动效，并核对遗留待定命令。 */
@@ -481,15 +528,20 @@ export class RoomSession {
     }
     // schema 已保证失败结果携带稳定错误码。
     const code = result.error?.code ?? "INTERNAL";
-    // 核对重发后的版本/revision 过期拒绝：原命令可能已生效（回执已越出
-    // 每房间保留窗口）也可能已被其他可见变化越过，两种可能无法区分，
-    // 按「结果未知」诚实收敛，不伪造成功或失败。
-    if (entry.wasResent && (code === "STALE_BP_VERSION" || code === "STALE_REVISION")) {
+    if (entry.wasResent) {
+      // 核对重发收到的失败回执不能证明原命令失败：它可能是本次核对
+      // 执行的新拒绝——原命令可能早已生效且其回执已越出每房间的保留
+      // 窗口（规则在版本门前先判权限与状态，如 NOT_CURRENT_PLAYER、
+      // BP_NOT_RUNNING、SEAT_TARGET_OFFLINE），也可能是核对处理本身的
+      // 技术故障（INTERNAL：本次事务回滚，原命令成败未知）——还可能
+      // 是原失败回执的幂等重放（客户端无法区分重放与新执行）。统一按
+      // 「结果未知」诚实收敛，不伪造成功或失败；用户以最新状态重新
+      // 操作，若同样的条件仍在，新命令的首发错误会给出准确原因。
       this.resolvePending(result.operationId, { ok: false, code: UNKNOWN_OUTCOME });
       return;
     }
-    // 其余错误码是服务端对当前权威状态的明确拒绝：按对应错误结算，
-    // 用户以最新状态生成新 operationId 重试。
+    // 首发的失败回执是原操作的明确结论：按对应错误结算，用户以最新
+    // 状态生成新 operationId 重试。
     this.resolvePending(result.operationId, { ok: false, code });
   }
 
@@ -599,16 +651,20 @@ export class RoomSession {
   }
 
   /**
-   * 重新同步后核对遗留命令：同 operationId + 原载荷字节重发。服务端
-   * 持久化去重回执对同载荷幂等返回原结果；回执窗口外的重发按新命令
-   * 执行，由 expectedBpVersion/expectedRevision 前置条件兜底，其中的
-   * STALE_* 拒绝在 applyCommandResult 中按「结果未知」收敛。
+   * 重新同步后核对遗留命令：同 operationId + 原载荷字节重发，且只重发
+   * 绑定当前成员身份的命令（身份变化已在 applyView 中放弃旧命令，此处
+   * 再按身份过滤兜底）。服务端持久化去重回执对同载荷幂等返回原结果；
+   * 回执窗口外的重发按新命令执行，其中任何失败回执都不能证明原命令
+   * 失败，在 applyCommandResult 中统一按「结果未知」收敛。
    */
   private resendChecking(): void {
     if (!this.started || this.status.value !== "connected" || this.handle === null) return;
+    const identity = this.view.value?.self.memberId ?? null;
     const entries = [...this.pending.value.values()];
     for (const entry of entries) {
       if (entry.phase !== "checking") continue;
+      // 旧身份的待核对命令绝不以新身份重发。
+      if (identity !== null && entry.memberId !== identity) continue;
       // 先标记 wasResent 再发送：随后到达的回执按核对路径结算。
       this.updateEntry(entry.operationId, { wasResent: true });
       this.armResultTimer(entry.operationId);

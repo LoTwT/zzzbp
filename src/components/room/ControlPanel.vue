@@ -9,6 +9,7 @@ import type { RoomSession } from "../../room/room-session";
 import { isHostManagementView, type RoomView } from "../../room/room-session";
 import type { RoomCatalogModel } from "../../room/room-catalog";
 import { TeamNameDraft } from "../../room/team-name-draft";
+import { pendingOperationText } from "../../room/operation-feedback";
 import {
   memberRoleText,
   otherMemberRows,
@@ -199,6 +200,39 @@ const seatChangeForbiddenHint = computed(() => {
   }
 });
 
+/**
+ * 席位指派的隐藏挂起反馈：目标行成为「当前选手」或不在列表中时，
+ * 行内按钮不再展示提交中/核对中标签，改由列表固定区提示（行内按钮
+ * 仍展示标签时无需重复）。
+ */
+const seatAssignFeedbackText = computed(() => {
+  const scope = `assignSeat:${seatTeam.value}`;
+  const memberId = pendingSeatMemberId[seatTeam.value];
+  if (memberId === null || !props.session.isScopePending(scope)) return null;
+  const row = seatRows.value.find((entry) => entry.member.memberId === memberId);
+  if (row !== undefined && !row.isCurrent) return null;
+  return pendingOperationText(true, props.session.isScopeChecking(scope));
+});
+
+/**
+ * 比赛控制的隐藏挂起反馈：开始/暂停/继续按钮按状态互斥渲染，命令
+ * 生效后按钮切换（如开始成功后显示「暂停 BP」），原命令的提交中/
+ * 核对中状态不再由按钮展示，改由本提示承接。
+ */
+const controlFeedbackText = computed(() => {
+  const statusButtons: ReadonlyArray<readonly [RoomView["bpStatus"], string]> = [
+    ["waiting", "startBp"],
+    ["running", "pauseBp"],
+    ["paused", "resumeBp"],
+  ];
+  for (const [status, scope] of statusButtons) {
+    if (props.view.bpStatus !== status && props.session.isScopePending(scope)) {
+      return pendingOperationText(true, props.session.isScopeChecking(scope));
+    }
+  }
+  return null;
+});
+
 // 「设为选手」按钮级 pending：命令结算（或核对收敛）后清空。
 for (const team of ["A", "B"] as const) {
   watch(
@@ -384,6 +418,10 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           role="alert"
         >
           {{ scopeErrorText("startBp") ?? scopeErrorText("pauseBp") ?? scopeErrorText("resumeBp") }}
+        </p>
+        <!-- 按钮因状态切换消失时，原命令的挂起/核对状态由此提示承接。 -->
+        <p v-if="controlFeedbackText !== null" class="text-xs text-amber-800" role="status">
+          {{ controlFeedbackText }}
         </p>
 
         <div class="flex flex-col gap-1">
@@ -639,6 +677,10 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           role="alert"
         >
           {{ scopeErrorText(`assignSeat:${seatTeam}`) }}
+        </p>
+        <!-- 目标行成为「当前选手」或不在列表中时，挂起状态由此提示承接。 -->
+        <p v-if="seatAssignFeedbackText !== null" class="mt-2 text-xs text-amber-800" role="status">
+          {{ seatAssignFeedbackText }}
         </p>
         <div
           :class="SEAT_GRID_CLASS"

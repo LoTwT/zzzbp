@@ -27,6 +27,7 @@ import {
   type PickLayout,
 } from "../../room/pick-layout";
 import { RoomSession } from "../../room/room-session";
+import { pendingOperationText } from "../../room/operation-feedback";
 
 // 房间工作区：顶部（两侧禁用区 + 赛事信息）与主体（两侧选用区 + 中央代理
 // 人池）两层结构（docs/specs/room-layout.md「整体结构」，线框
@@ -287,6 +288,23 @@ const confirmLabel = computed(() => {
   return currentStep.value.action === "ban" ? "确认禁用" : "确认选用";
 });
 
+/**
+ * 挂起操作反馈：与确认按钮可见性解耦。
+ *
+ * 操作位轮到对方、BP 完成或本成员被换下后，确认按钮按角色规则消失，
+ * 但已发出的命令仍可能处于提交中或「结果未知、正在核对」阶段——
+ * 此时在底栏显示紧凑的持久提示；确认按钮仍可见时由按钮标签展示
+ * 同一状态，不重复提示。
+ */
+const slotOperationFeedbackText = computed(() => {
+  if (!slotOperationPending.value || confirmVisible.value) return null;
+  const checking =
+    session.isScopeChecking("confirmPreselect") ||
+    session.isScopeChecking("setPreselect") ||
+    session.isScopeChecking("clearPreselect");
+  return pendingOperationText(true, checking);
+});
+
 function sendConfirm(): void {
   if (view.value === null || view.value.currentSlotId === null) return;
   if (confirmDisabled.value) return;
@@ -418,8 +436,18 @@ function closePanel(): void {
           控制面板入口固定右下，二者始终可见可达。
         -->
         <div class="shrink-0 border-t border-(--border-default) px-3 py-2.5">
+          <!-- 挂起操作提示：与确认按钮可见性解耦（轮到对方/完成/被换下仍可见）。 -->
           <p
-            v-if="confirmVisible && confirmErrorText !== null"
+            v-if="slotOperationFeedbackText !== null"
+            class="pb-1.5 text-center text-xs text-amber-800"
+            role="status"
+          >
+            {{ slotOperationFeedbackText }}
+          </p>
+          <!-- 操作错误提示：不再要求当前持有确认入口；旧命令收敛为
+               「结果未知」或身份变化时，即使已非当前操作方也要可见。 -->
+          <p
+            v-if="confirmErrorText !== null"
             class="pb-1.5 text-center text-xs text-danger-700"
             role="alert"
           >
