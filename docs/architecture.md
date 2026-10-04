@@ -12,9 +12,9 @@
 | `shared/bp/` | BP 规则：26 步权威顺序、互斥池、BP 进度状态。 | 不依赖浏览器或 Workers 运行时，可依赖 Zod 与共享 schema |
 | `shared/agents/` | 代理人目录：固定版本的只读数据产物（`catalog.json`）、共享 Zod schema、目录派生接口（含头像图片 URL 派生）与纯数据搜索筛选。 | 不依赖浏览器或 Workers 运行时，可依赖 Zod；运行时只读产物，不导入上游数据包 |
 | `shared/`（根） | 房间状态、命令契约与纯函数状态转换（`room.ts`、`commands.ts`、`transitions.ts`、`ids.ts`）。 | 依赖 `shared/bp/` |
-| `shared/contracts/` | 网络合同：HTTP、视图投影、WebSocket、归档记录、版本信息。 | 依赖 `shared/` 根与 `shared/bp/` |
+| `shared/contracts/` | 网络合同：HTTP、视图投影、WebSocket、归档记录、版本信息。 | 依赖 `shared/` 根、`shared/bp/` 与 `shared/agents/` 的 schema（房间目录合同复用） |
 | `shared/api.ts` | 引导期的 `/api/health` 契约，保留兼容；房间协议不在此扩展。 | — |
-| `server/` | Worker 入口与房间 Durable Object 骨架；业务运行时随后续 PR 接入。 | 依赖 `shared/` |
+| `server/` | Worker 动态入口与房间 Durable Object：HTTP 路由与输入校验（`index.ts`）、房间对象编排（`room.ts`）、身份凭据与 Cookie（`credentials.ts`）、SQLite 持久化（`persistence.ts`）；BP 命令与 WS 随 PR5 接入。 | 依赖 `shared/` |
 | `tests/rules/` | 纯规则与合同测试（Node 环境）。 | — |
 | `tests/workers/` | Worker 与房间对象集成测试（真实 workerd）。 | — |
 
@@ -23,12 +23,25 @@
 
 ## 身份与凭据边界
 
-- 成员凭据由服务端生成并验证，推荐经同域 HttpOnly Cookie 保存于浏览器；
-  客户端不可读、不可自报。
+- 成员凭据由服务端生成并验证：256 位强随机秘密只在 `Set-Cookie` 响应中
+  向浏览器交付一次，服务端只保存其 SHA-256 摘要（`members` 表，唯一
+  约束，按摘要等值查找）；原始秘密不进入 JSON 响应、共享 `RoomState`、
+  日志或公开目录。
+- 身份 Cookie 按房间命名（`zzzbp_room_{roomId}`），属性为 HttpOnly、
+  Secure、SameSite=Lax、Path=/，有效期 90 天。90 天是凭据自身的寿命，
+  与房间生命周期独立（live 房间没有固定的最大存续时长）；过期后浏览器
+  丢失该房间身份，按新观众重新入房，房间数据与保留计时不受影响。
+  一房一 Cookie：同一浏览器的多房间身份共存互不覆盖；恢复身份不轮换
+  凭据（不下发新 Set-Cookie，其他页面继续有效）；摘要只在对应房间的
+  成员表内查找，凭据无法跨房间恢复权限。
+- 带 Cookie 的写请求（POST 建房/入房）校验同源 Origin：携带第三方
+  Origin 的 POST 一律拒绝；未带 Origin 的非浏览器请求放行，跨站防护
+  由 SameSite=Lax 与本检查共同承担。
 - JSON 响应与 WebSocket 广播绝不包含凭据；有效身份重开页面即可恢复当前
   角色（房主、席位或观众由房间状态派生）。
-- 昵称仅用于展示，不用于身份查找；房间与成员 ID 由服务端生成，代理人 ID
-  来自构建时固定的数据目录；路由参数与各类 ID 均由服务端校验。
+- 昵称仅用于展示，不用于身份查找；房间与成员 ID 由服务端生成（随机
+  UUID），代理人 ID 来自构建时固定的数据目录；路由参数与各类 ID 均
+  由服务端校验。
 - 命令入口只接收服务端凭据解析出的 `RoomActor`；客户端载荷中的自报字段
   被 Zod 剥离，`targetMemberId` 只是席位的被安排对象，不是操作者身份。
 
@@ -39,12 +52,65 @@
 
 | 路径 | 行为 |
 |---|---|
-| `POST /api/rooms` | 建房（房名 + 首次昵称），创建者成为房主；响应房间 ID 与其成员视图。 |
-| `GET /api/rooms/:roomId` | 按生命周期分流：live 返回房名（携带有效身份时附成员视图以恢复角色）；archived 返回只读快照；不存在返回 404 错误体。 |
-| `POST /api/rooms/:roomId/members` | 新成员以昵称作为观众加入；携带有效身份时恢复原身份（昵称被忽略）。 |
+| `POST /api/rooms` | 建房（房名 + 首次昵称），创建者成为房主；响应房间 ID 与其成员视图，并经 Set-Cookie 下发房主身份。 |
+| `GET /api/rooms/:roomId` | 按生命周期分流：live 返回房名（携带有效身份时附成员视图以恢复角色，匿名为 null 供首次入房）；archived 返回只读快照（PR9 接入）；不存在返回 404 错误体。 |
+| `POST /api/rooms/:roomId/members` | 新成员以昵称作为观众加入并取得新身份；携带有效身份时恢复原身份（昵称被忽略、凭据不轮换、不重复建成员）。 |
+| `GET /api/rooms/:roomId/catalog` | 返回该房间建房时固定的代理人目录快照（含来源版本）；只读，无需身份，不含成员或凭据数据，不计在线、不影响保留计时。 |
 | `GET /api/health` | 引导期存储链路自检。 |
 
 归档房间的原 URL 经普通 HTTP 读取快照，无需成员加入或 WebSocket。
+
+通用约定：`/api/*` 的 JSON 响应均带 `Cache-Control: no-store`；请求体必须
+是合法 JSON 并通过对应 schema（失败返回 400 `INVALID_REQUEST`），且按
+实际字节数限制在 8 KiB 内（流式计数，缺失或不真实的 Content-Length 不
+能绕过；超限返回 413）；已知路径的非法方法返回 405；路由中的 roomId
+非法返回 400；房间不存在返回 404 `ROOM_NOT_FOUND`（错误体均为
+`apiErrorResponseBodySchema`）；未预期异常（DO RPC、存储、状态装配等）
+由统一错误边界转换为 500 `INTERNAL` 通用错误体，不泄漏内部细节；
+未知 `/api` 路径维持引导期的 404 JSON。归档房间在 PR9 前没有任何转入
+路径，读取归档分支当前是防御实现（410 `ROOM_ARCHIVED`），届时替换为
+快照响应。
+
+## 房间持久化与固定目录
+
+每个房间一个 SQLite Durable Object：`server/room.ts` 承担编排与视图
+投影，`server/persistence.ts` 承担表结构与行级读写。表结构职责：
+
+| 表 | 职责 |
+|---|---|
+| `room_meta`（单行） | 房间 ID/名称/lifecycle/创建时间、hostMemberId、revision、BP 状态/有效序列元信息（bp_status/bp_version/bp_preselect）、建房时固定的 rule_version 与 agent_data_version、last_member_left_at。 |
+| `members` | 成员昵称、凭据 SHA-256 摘要（唯一约束）、加入时间、在线标志（初始恒为 0，仅实际成员 WS 连接可改变）。 |
+| `seats` / `team_names` | A/B 席位占用与双方队名（初始空席、空队名）。 |
+| `bp_submissions` | 当前有效序列：按 position 递增，装配时与权威顺序前缀校验。 |
+| `room_catalog`（单行） | 建房时一次性保存的目录快照 JSON 文本。 |
+| `schema_meta`（单行） | 业务表结构版本；`ensureRoomSchema` 是幂等的初始化/版本升级入口（当前版本 1，尚无更旧的已发布数据需要迁移）。 |
+| `room_info`（legacy） | 引导期 `/api/health` 的存储自检记录（`shared/api.ts` 合同），由 DO 的 health 方法单独维护，与业务表互不干扰。 |
+
+- 建房与入房各为一个 `transactionSync` 同步事务闭包：schema 初始化、
+  存在性检查、全部写入与写入后的状态装配同在一个事务内，任一步骤抛
+  异常（SQL 故障、校验失败、装配失败）时平台回滚整个事务，不留半建房
+  或无凭据交付的孤儿成员。DO 的单线程执行与输入门只保证语句不被其他
+  事件交错，不提供异常回滚，两者不可混同。建房初始状态为 waiting、
+  空席、空队名、无提交无预选，revision 与 bp.version 均为 0；房主身份
+  （hostMemberId）与席位分开管理。成员加入只新增一行 `members` 并递增
+  revision，不重写目录快照或其他成员。
+- 目录与版本固定：建房时把当前部署经校验的目录快照与
+  `BP_RULE_VERSION`（`shared/bp/version.ts`，规则版本的单一常量来源）
+  写入该房间。此后该房间的规则名单（`toAgentCatalog`）、归档展示
+  lookup（`toAgentDisplayLookup`）与 `GET /api/rooms/:roomId/catalog`
+  一律从其持久快照派生；房间对象与一切房间读取只使用该持久快照
+  （全局目录仅在 Worker 建房入口作为创建输入注入一次），部署升级不
+  重解释旧房间的名单、展示或可选资格。数据来源与更新办法见
+  [代理人数据接入](specs/agent-data.md)。
+- 载入状态一律经 `roomStateSchema` / `agentCatalogSchema` 校验，不建立
+  第二套 BP 规则；BP 命令语义（PR5）继续走 `shared/transitions.ts`
+  纯函数，持久层只按变化更新对应行。
+- 任意 GET 或错误 roomId 不创建业务房间：未建房的实例只会得到空表
+  结构壳（`room_meta` 无行），一切读取按不存在处理。
+- `last_member_left_at` 初始化为创建时刻：从未有成员连接的空房自创建
+  起即开始 12 小时保留窗口的计时。只有实际成员 WS 连接（PR5）会将其
+  置空并在全员离开时重置；HTTP 读写、目录读取与展示连接都不影响该
+  计时；到期执行与 Alarm 在 PR9。
 
 ## WebSocket 通道
 
@@ -72,10 +138,14 @@
 
 - 房间状态与 BP 进度由 `roomStateSchema` / `bpProgressSchema` 定义并
   校验（含序列前缀、代理人不重复、预选不得已用等不变量）。
-- `agentDataVersion` 取自 `shared/agents` 目录（`agentDataVersion` 导出，
-  构建时由固定版本数据包生成）；规则层 `AgentCatalog.agentIds` 与归档
-  展示 lookup 均从该目录派生。数据来源与更新办法见
-  [代理人数据接入](specs/agent-data.md)。
+- `agentDataVersion` 与规则版本在每间房间建房时固定：新房间建自
+  `shared/agents` 目录（`agentDataVersion` 导出，构建时由固定版本数据
+  包生成），规则版本取自 `shared/bp/version.ts` 的 `BP_RULE_VERSION`
+  常量（单一来源）；已建房间的 `AgentCatalog.agentIds` 与归档展示
+  lookup 从其持久目录快照派生（见[房间持久化与固定目录](#房间持久化与固定目录)）。
+  数据来源与更新办法见[代理人数据接入](specs/agent-data.md)。已保存的
+  规则版本只是固定标识，不表示实现了历史规则引擎：命令执行入口（PR5）
+  按房间的持久 ruleVersion 校验当前实现是否支持，不支持则拒绝。
 - `bp.version` 与公开 `revision` 职责分开：前者只随预选、提交、控制
   命令与席位权限变化递增（重开不重置），用于命令过期判断；后者随
   任何可见状态变化递增，用于视图同步。
@@ -117,11 +187,16 @@
   下次全员离开重新计算；展示连接永不影响计时；到期检查在 join、read、
   write 与 Alarm 中共用同一规则，不允许靠延迟 Alarm 延长可写期限；
   快照 90 天期限自转为只读起算，查看不延长。
+- 持久化现状（PR4）：`lastMemberLeftAt` 已落在 `room_meta` 并在建房时
+  初始化为创建时刻（见[房间持久化与固定目录](#房间持久化与固定目录)）；
+  计时的取消/重置随 PR5 的成员 WS 接入，到期执行与 Alarm 在 PR9。
 
 ## 后续运行时接入位置
 
+PR4 已落地持久房间、HTTP 建房/入房/读取/目录入口与匿名身份 Cookie
+（见[身份与凭据边界](#身份与凭据边界)与[房间持久化与固定目录](#房间持久化与固定目录)）。
+
 | PR | 接入点 |
 |---|---|
-| PR4（持久房间与 HTTP） | 房间 Durable Object 持久化（含目录名单与 `agentDataVersion` 的固定输入，升级部署不重解释已有预选/结果）、HTTP 建房/入房路由、匿名身份凭据与 Cookie 生成。 |
-| PR5（成员 WS 与同步） | 成员 WS 命令经 `applyRoomCommand` / `setMemberOnline` 执行并按身份投影广播、多页面在线计数、`operationId` 持久化去重回执。 |
-| PR9（归档与清理） | Alarm 与读写路径共用到期检查；到期经 `projectArchiveSnapshot` 生成快照或清理空房间。 |
+| PR5（成员 WS 与同步） | 成员 WS 命令经 `applyRoomCommand` / `setMemberOnline` 执行并按身份投影广播（名单校验用 `loadRoomCatalog` 派生，执行前按房间持久 ruleVersion 校验当前实现支持性）、多页面在线计数与空房计时的取消/重置、`operationId` 持久化去重回执。 |
+| PR9（归档与清理） | Alarm 与读写路径共用到期检查（读 `room_meta.last_member_left_at`）；到期经 `projectArchiveSnapshot` 生成快照或清理空房间；`GET /api/rooms/:roomId` 的 archived 分支替换为只读快照响应。 |
