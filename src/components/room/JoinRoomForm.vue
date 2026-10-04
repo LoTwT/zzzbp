@@ -1,0 +1,99 @@
+<script setup lang="ts">
+import { computed, ref } from "vue";
+import type { RoomMemberView } from "../../../shared/contracts/views";
+import { validateNickname } from "../../lib/form-validation";
+import { joinRoom, type RoomHttpFailure } from "../../room/api";
+
+// 首次入房表单（docs/specs/room-layout.md「首页与首次入房」，线框
+// desktop-join-v1）：当前房间名只读展示，填写昵称后以观众身份进入。
+
+const props = defineProps<{
+  readonly roomId: string;
+  readonly roomName: string;
+}>();
+
+const emit = defineEmits<{
+  (event: "joined", view: RoomMemberView): void;
+}>();
+
+const nickname = ref("");
+const nicknameError = ref<string | null>(null);
+const formError = ref<string | null>(null);
+const submitting = ref(false);
+
+const canSubmit = computed(() => !submitting.value && nickname.value.trim() !== "");
+
+const FAILURE_TEXTS: Record<RoomHttpFailure, string> = {
+  "not-found": "房间不存在或已过期",
+  archived: "房间不存在或已过期",
+  invalid: "提交内容不合法，请检查后重试",
+  server: "服务器暂时不可用，请稍后重试",
+  network: "网络异常，进入失败，请重试",
+};
+
+async function submit(): Promise<void> {
+  if (submitting.value) return;
+  nicknameError.value = validateNickname(nickname.value);
+  formError.value = null;
+  if (nicknameError.value !== null) return;
+  submitting.value = true;
+  const result = await joinRoom(props.roomId, nickname.value);
+  submitting.value = false;
+  if (result.ok) {
+    emit("joined", result.value.memberView);
+    return;
+  }
+  formError.value = FAILURE_TEXTS[result.reason];
+}
+</script>
+
+<template>
+  <main class="mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center gap-10 px-6">
+    <div class="text-center">
+      <h1 class="text-3xl font-semibold tracking-tight">绝区零 BP</h1>
+      <p class="mt-2 text-base text-neutral-600">危局强袭战</p>
+    </div>
+
+    <form
+      class="w-full max-w-sm rounded-xl border border-(--border-default) bg-(--surface-panel) p-8 shadow-sm"
+      novalidate
+      @submit.prevent="submit"
+    >
+      <h2 class="text-center text-xl font-semibold">进入房间</h2>
+
+      <p class="mt-4 text-center text-lg font-medium break-all text-neutral-900">{{ roomName }}</p>
+      <p class="mt-1 text-center text-xs text-neutral-500">进入后为观众，选手由房主安排。</p>
+
+      <div class="mt-6 flex flex-col gap-5">
+        <div class="flex flex-col gap-1.5">
+          <label class="text-sm font-medium text-neutral-800" for="join-nickname">你的昵称</label>
+          <input
+            id="join-nickname"
+            v-model="nickname"
+            class="w-full rounded-lg border border-(--border-default) bg-(--surface-elevated) px-3 py-2 text-sm focus-ring"
+            :aria-invalid="nicknameError !== null"
+            :aria-describedby="nicknameError !== null ? 'join-nickname-error' : undefined"
+            type="text"
+            name="nickname"
+            autocomplete="off"
+          />
+          <p v-if="nicknameError !== null" id="join-nickname-error" class="text-xs text-danger-700">
+            {{ nicknameError }}
+          </p>
+        </div>
+
+        <button
+          type="submit"
+          class="w-full rounded-lg bg-lavender-600 px-4 py-2.5 text-sm font-semibold text-white focus-ring hover:bg-lavender-700 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="!canSubmit"
+        >
+          {{ submitting ? "进入中…" : "进入房间" }}
+        </button>
+
+        <p v-if="formError !== null" class="text-sm text-danger-700" role="alert">
+          {{ formError }}
+        </p>
+      </div>
+    </form>
+  </main>
+</template>

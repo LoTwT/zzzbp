@@ -68,10 +68,13 @@ Worker 的运行时与绑定类型由 `cf workers types`（或 Cloudflare Vite �
 
 ## 测试组织
 
-`vitest.config.ts` 定义两个独立项目：
+`vitest.config.ts` 定义三个独立项目：
 
 - `tests/rules/`：纯 TypeScript 规则与契约测试，Node 环境，不依赖 Worker 运行时；
   BP 规则测试在对应 PR 中加入。
+- `tests/web/`：浏览器端纯逻辑回归，Node 环境：表单字段校验（中文文案与
+  trim/码点边界）、选用区布局推导、房主面板派生与 WS 会话状态机（注入假
+  传输驱动，不依赖真实浏览器）。
 - `tests/workers/`：Worker 与房间对象集成测试，运行在真实 workerd（miniflare）；
   通过 `@cloudflare/vitest-plugin` 的 `experimental.newConfig` 直接加载
   `cloudflare.config.ts`，与部署配置共用同一份入口、兼容性设置与 SQLite 房间对象
@@ -83,6 +86,13 @@ Worker 的运行时与绑定类型由 `cf workers types`（或 Cloudflare Vite �
 
 浏览器交互测试 provider（`@vitest/browser-playwright`）在需要真实浏览器验证交互时
 引入，与 Vitest 保持同一版本；本阶段不编写空泛的 UI 测试。
+
+真实浏览器验收（PR6 起）：多身份上下文、Cookie 隔离、断线暂停/恢复与两视口
+布局检查使用本地 Playwright 脚本驱动 `pnpm dev` 的真实 workerd 服务执行，脚本与
+截图保存在 `/tmp` 等审查证据位置，不进入仓库与常规门禁；`tests/web` 覆盖其中可
+维护的纯逻辑回归。PR10 规划全链路端到端验证时，再决定是否引入
+`@vitest/browser-playwright`（同 Vitest 4.1.11 版本）并将浏览器准备纳入 CI——若
+作为分离命令加入，需同步说明其执行方式与 CI 的浏览器安装步骤。
 
 Workers 集成测试中的 WebSocket 客户端模式：本套件选择对 Worker 发起带
 `Upgrade: websocket` 头的 fetch，从 101 响应的 `webSocket` 字段取得客户端

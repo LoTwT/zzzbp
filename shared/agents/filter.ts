@@ -33,11 +33,11 @@ export const EMPTY_AGENT_POOL_QUERY: AgentPoolQuery = {
   specialtyIds: [],
 };
 
-/** 按查询条件筛选代理人条目，保持输入顺序。 */
-export function filterAgentEntries(
-  agents: readonly AgentEntry[],
+/** 按查询条件筛选代理人条目，保持输入顺序。支持 AgentEntry 的结构超集（展示模型）。 */
+export function filterAgentEntries<T extends AgentEntry>(
+  agents: readonly T[],
   query: AgentPoolQuery,
-): readonly AgentEntry[] {
+): readonly T[] {
   const name = query.name.trim();
   const elementIds = query.elementIds.length > 0 ? new Set(query.elementIds) : null;
   const specialtyIds = query.specialtyIds.length > 0 ? new Set(query.specialtyIds) : null;

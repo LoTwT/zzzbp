@@ -1,2 +1,31 @@
 @import "tailwindcss";
 @import "@ayingott/theme";
+
+/*
+ * 当前操作槽位的呼吸动效：高亮描边 + 轻微扩散（进行中且连接正常时启用）。
+ * 已暂停或断线时组件改用静态高亮描边，不挂载本动画；系统减少动效偏好下
+ * 直接关闭动画，仅保留描边。
+ */
+@keyframes slot-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--color-lavender-500),
+      0 0 0 6px rgb(127 112 191 / 0.28);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px var(--color-lavender-500),
+      0 0 0 12px rgb(127 112 191 / 0.1);
+  }
+}
+
+.slot-breathe {
+  animation: slot-breathe 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slot-breathe {
+    animation: none;
+  }
+}
