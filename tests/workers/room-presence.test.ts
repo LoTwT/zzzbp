@@ -1,11 +1,13 @@
 import { evictDurableObject } from "cloudflare:test";
 import { exports } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { agentCatalogData } from "../../shared/agents/catalog";
 import { BP_STEPS } from "../../shared/bp/steps";
 import {
   currentAlarm,
   createRoomViaHttp,
+  currentRevisionOf,
+  execInRoom,
   joinMemberViaHttp,
   queryRoomRows,
   TestWsClient,
@@ -74,7 +76,14 @@ async function runningRoom(roomName = "在线赛") {
     member: TestMember,
   ) => {
     const operationId = `presence-${crypto.randomUUID()}`;
-    client.send({ type, ...extra, operationId, expectedBpVersion: await currentBpVersion() });
+    client.send({
+      type,
+      ...extra,
+      operationId,
+      expectedBpVersion: await currentBpVersion(),
+      // setTeamName 需要 revision 前置条件，缺省取当前值。
+      ...(type === "setTeamName" ? { expectedRevision: await currentRevisionOf(host.roomId) } : {}),
+    });
     const result = await client.commandResult(operationId);
     expect(result.ok, `${member.nickname} ${type} 应成功：${result.error?.code ?? ""}`).toBe(true);
     return result;
@@ -498,6 +507,7 @@ describe("DO 实例重建与休眠恢复", () => {
       teamName: "唤醒后队名",
       operationId: "wake-command",
       expectedBpVersion: 0,
+      expectedRevision: await currentRevisionOf(host.roomId),
     });
     const woken = await client.commandResult("wake-command");
     expect(woken.ok).toBe(true);
@@ -515,5 +525,172 @@ describe("DO 实例重建与休眠恢复", () => {
     client.close();
     expect(await waitMemberOnline(host.roomId, host.memberId, 0)).toBe(true);
     expect(await lastMemberLeftAt(host.roomId)).not.toBeNull();
+  });
+});
+
+describe("在线协调与故障恢复（以实际连接为权威）", () => {
+  it("断线写入失败留下幽灵在线：命令拒绝推进，存储恢复后协调补齐暂停", async () => {
+    const room = await runningRoom("幽灵在线赛");
+    expect(
+      (
+        await room.send(
+          room.aWs,
+          "setPreselect",
+          { slotId: "AB1", agentId: AGENT_IDS[0] },
+          room.playerA,
+        )
+      ).ok,
+    ).toBe(true);
+
+    // 注入故障：成员在线标志更新失败（断线协调会失败并留下幽灵在线）。
+    await execInRoom(
+      room.host.roomId,
+      "CREATE TRIGGER test_presence_fault BEFORE UPDATE OF online ON members BEGIN SELECT RAISE(ABORT, 'test injected presence failure'); END",
+    );
+
+    // 选手 B 断开：close 协调失败（事件不丢弃，有界重试链启动并持续失败）。
+    room.bWs.close();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    // 幽灵在线：注册表里 B 已无连接，但存储仍在线，BP 仍视为进行中。
+    expect(await memberOnline(room.host.roomId, room.playerB.memberId)).toBe(1);
+    expect(await queryRoomRows(room.host.roomId, "SELECT bp_status FROM room_meta")).toEqual([
+      { bp_status: "running" },
+    ]);
+
+    // 故障未恢复期间，下一业务命令无法确认在线状态：整体回滚，拒绝推进。
+    room.sendRaw(
+      room.aWs,
+      "ghost-confirm",
+      { type: "confirmPreselect", slotId: "AB1" },
+      await room.currentBpVersion(),
+    );
+    const refused = await room.aWs.commandResult("ghost-confirm");
+    expect(refused.ok).toBe(false);
+    expect(refused.error?.code).toBe("INTERNAL");
+    expect(
+      await queryRoomRows(room.host.roomId, "SELECT COUNT(*) AS n FROM bp_submissions"),
+    ).toEqual([{ n: 0 }]);
+
+    // 存储恢复（移除故障）后再发命令：执行前的在线协调把 B 修正为离线
+    // （进行中在席选手掉线立即暂停），确认命令在修正后的暂停状态上被
+    // 规则拒绝（有界重试链若先到也是同一结果）。
+    await execInRoom(room.host.roomId, "DROP TRIGGER test_presence_fault");
+    room.sendRaw(
+      room.aWs,
+      "ghost-confirm-retry",
+      { type: "confirmPreselect", slotId: "AB1" },
+      await room.currentBpVersion(),
+    );
+    const result = await room.aWs.commandResult("ghost-confirm-retry");
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("BP_NOT_RUNNING");
+
+    // 存储与实际连接对齐：B 离线、BP 暂停、序列未推进。
+    expect(await memberOnline(room.host.roomId, room.playerB.memberId)).toBe(0);
+    expect(await queryRoomRows(room.host.roomId, "SELECT bp_status FROM room_meta")).toEqual([
+      { bp_status: "paused" },
+    ]);
+    expect(
+      await queryRoomRows(room.host.roomId, "SELECT COUNT(*) AS n FROM bp_submissions"),
+    ).toEqual([{ n: 0 }]);
+
+    // 正常恢复仍手动继续：房主 resume 后当前位提交成功。
+    await room.send(room.hostWs, "resumeBp", {}, room.host);
+    expect(
+      (await room.send(room.aWs, "confirmPreselect", { slotId: "AB1" }, room.playerA)).ok,
+    ).toBe(true);
+    expect(
+      await queryRoomRows(room.host.roomId, "SELECT COUNT(*) AS n FROM bp_submissions"),
+    ).toEqual([{ n: 1 }]);
+    room.hostWs.close();
+    room.aWs.close();
+  });
+
+  it("全员离开恰遇短暂故障：有界重试在存储恢复后补齐离线、暂停与全员离开时间", async () => {
+    const room = await runningRoom("离线故障赛");
+    const roomId = room.host.roomId;
+
+    // 注入故障：任何成员在线标志更新失败（断线与上线转移都会失败）。
+    await execInRoom(
+      roomId,
+      "CREATE TRIGGER test_presence_fault BEFORE UPDATE OF online ON members BEGIN SELECT RAISE(ABORT, 'test injected presence failure'); END",
+    );
+
+    // 全员断开：close 协调失败，事件不被丢弃（有界重试链启动）。
+    // 用结构化日志 spy 证实 close 回调确实运行且失败（白名单字段，无错误正文）。
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    room.aWs.close();
+    room.bWs.close();
+    room.hostWs.close();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const closeFailures = errorSpy.mock.calls.filter(([message]) =>
+      String(message).includes('"phase":"close"'),
+    );
+    expect(closeFailures.length).toBeGreaterThanOrEqual(1);
+    errorSpy.mockRestore();
+
+    // 故障期间：存储停留在幽灵在线，BP 仍视为进行中，且保留计时未开始。
+    expect(await memberOnline(roomId, room.host.memberId)).toBe(1);
+    expect(await queryRoomRows(roomId, "SELECT bp_status FROM room_meta")).toEqual([
+      { bp_status: "running" },
+    ]);
+    expect(await lastMemberLeftAt(roomId)).toBeNull();
+
+    // 存储恢复（移除故障）：重试链在下一次退避点补齐全部状态。
+    await execInRoom(roomId, "DROP TRIGGER test_presence_fault");
+    expect(
+      await waitForRoomQuery(
+        roomId,
+        `SELECT online FROM members WHERE member_id = '${room.host.memberId}'`,
+        "online",
+        0,
+        8000,
+      ),
+    ).toBe(true);
+    expect(await memberOnline(roomId, room.playerA.memberId)).toBe(0);
+    expect(await memberOnline(roomId, room.playerB.memberId)).toBe(0);
+    // 掉线暂停补齐，全员离开时间写入（此前因故障从未记录）。
+    expect(await queryRoomRows(roomId, "SELECT bp_status FROM room_meta")).toEqual([
+      { bp_status: "paused" },
+    ]);
+    expect(await lastMemberLeftAt(roomId)).not.toBeNull();
+  });
+
+  it("首次上线写入失败：连接以 INTERNAL 通知明确关闭，恢复后重连正常上线", async () => {
+    const host = await createRoomViaHttp("上线故障赛", "主持人");
+    const roomId = host.roomId;
+    await execInRoom(
+      roomId,
+      "CREATE TRIGGER test_connect_fault BEFORE UPDATE OF online ON members WHEN NEW.online = 1 BEGIN SELECT RAISE(ABORT, 'test injected connect failure'); END",
+    );
+
+    const client = await TestWsClient.connectMember(roomId, host.secret);
+    const notice = await client.next("notice");
+    expect(notice.code).toBe("INTERNAL");
+    expect((await client.waitForClose("上线失败关闭")).code).toBe(1011);
+
+    // 失败的连接不留下任何有效在线状态：存储仍离线，保留计时未取消。
+    expect(await memberOnline(roomId, host.memberId)).toBe(0);
+    expect(await lastMemberLeftAt(roomId)).not.toBeNull();
+
+    // 存储恢复后同一身份重连：上线成功、可正常执行命令（不再 ACTOR_OFFLINE）。
+    await execInRoom(roomId, "DROP TRIGGER test_connect_fault");
+    const reconnected = await TestWsClient.connectMember(roomId, host.secret);
+    await reconnected.next("hostView");
+    expect(await memberOnline(roomId, host.memberId)).toBe(1);
+    expect(await lastMemberLeftAt(roomId)).toBeNull();
+
+    reconnected.send({
+      type: "setTeamName",
+      team: "A",
+      teamName: "恢复后队名",
+      operationId: "recovered-team-name",
+      expectedBpVersion: 0,
+      expectedRevision: await currentRevisionOf(roomId),
+    });
+    const result = await reconnected.commandResult("recovered-team-name");
+    expect(result.ok).toBe(true);
+    reconnected.close();
   });
 });

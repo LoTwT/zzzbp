@@ -3,7 +3,12 @@ import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { apiErrorResponseBodySchema } from "../../shared/contracts/http";
 import { BP_RULE_VERSION } from "../../shared/bp/version";
-import { createRoomViaHttp, joinMemberViaHttp, TestWsClient } from "./ws-helpers";
+import {
+  createRoomViaHttp,
+  currentRevisionOf,
+  joinMemberViaHttp,
+  TestWsClient,
+} from "./ws-helpers";
 
 // Workers 集成测试：WebSocket 通道边界——升级校验、身份与房间级拒绝、
 // 展示只读、消息边界与各通道的视图投影隔离。命令执行、在线计数与
@@ -86,7 +91,12 @@ describe("WS 房间级拒绝（接受连接后通知并关闭，不写存储）"
     const noCookie = await TestWsClient.connectMember(room.roomId, null);
     expect((await noCookie.next("notice")).code).toBe("AUTH_FAILED");
 
-    const tampered = await TestWsClient.connectMember(room.roomId, `${room.secret.slice(0, -1)}0`);
+    // 确定性篡改：翻转末位十六进制字符，保证与原秘密不同（原末位可能是 0）。
+    const tamperedSecret = room.secret.endsWith("0")
+      ? `${room.secret.slice(0, -1)}1`
+      : `${room.secret.slice(0, -1)}0`;
+    expect(tamperedSecret).not.toBe(room.secret);
+    const tampered = await TestWsClient.connectMember(room.roomId, tamperedSecret);
     expect((await tampered.next("notice")).code).toBe("AUTH_FAILED");
 
     // 房间 A 的秘密装进房间 B 的 Cookie：摘要查不到成员，按无效处理。
@@ -112,6 +122,7 @@ describe("展示通道：只读、无身份、不计在线", () => {
       teamName: "越权尝试",
       operationId: "display-op",
       expectedBpVersion: 0,
+      expectedRevision: 0,
     });
     const notice = await display.next("notice");
     expect(notice.code).toBe("INVALID_MESSAGE");
@@ -189,6 +200,7 @@ describe("成员消息边界", () => {
       teamName: "合法命令",
       operationId: "valid-op",
       expectedBpVersion: 0,
+      expectedRevision: await currentRevisionOf(room.roomId),
       memberId: "forged-member",
       isHost: true,
     });
@@ -247,6 +259,7 @@ describe("各通道的视图投影与隐私边界", () => {
       teamName: "甲队",
       operationId: "broadcast-op",
       expectedBpVersion: 0,
+      expectedRevision: await currentRevisionOf(host.roomId),
     });
     expect((await hostClient.commandResult("broadcast-op")).ok).toBe(true);
     // 各连接在期间可能已收到多次广播（其他成员上线），按内容定位本次变更。

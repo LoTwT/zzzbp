@@ -19,21 +19,30 @@ import { displayViewSchema, hostManagementViewSchema, roomMemberViewSchema } fro
  *   回执与状态更新同事务写入房间 SQLite。同一规范化载荷（Zod 解析后
  *   重建、键序无关）重发返回原结果且不再执行；同一 ID 配不同载荷以
  *   OPERATION_ID_CONFLICT 拒绝。回执是有限窗口：每房间仅保留最近的
- *   2048 条（按写入顺序淘汰最旧），被淘汰后的重发按新命令处理，由
- *   expectedBpVersion 版本门与命令幂等性保证不会重复推进；保留边界
+ *   2048 条（按写入顺序淘汰最旧）。窗口外被淘汰后的重发按新命令处理：
+ *   推进 BP 流程或席位权限的命令由 expectedBpVersion 版本门与轮次/
+ *   权限检查拒绝；不推进 bp.version 的可见写入（setTeamName）以
+ *   expectedRevision 严格一致为前置条件（STALE_REVISION），任何后续
+ *   可见变化都会使旧载荷过期，防止旧重试覆盖后来确认的值。客户端在
+ *   收到过期拒绝后应重新同步视图并以新 operationId 重发；保留边界
  *   的正文见 docs/architecture.md「WebSocket 通道」。
+ * - 服务端在线状态以实际连接为权威：成员连接、断开与每条业务命令都会
+ *   先把存储的在线状态与连接注册表对齐（短暂存储故障后由有界重试链
+ *   补偿），无法确认时命令拒绝推进并以 INTERNAL 结果回执；升级时在线
+ *   状态写入失败则以 INTERNAL 通知关闭连接，客户端可在存储恢复后重连。
  */
 
 /** 客户端可发送的消息：仅业务命令，系统入口不可注入。 */
 export const webSocketClientMessageSchema = roomCommandSchema;
 export type WebSocketClientMessage = z.infer<typeof webSocketClientMessageSchema>;
 
-/** 连接通知码：无效结构、认证失效与房间状态变化。 */
+/** 连接通知码：无效结构、认证失效、房间状态变化与内部故障。 */
 export const webSocketNoticeCodeSchema = z.enum([
   "INVALID_MESSAGE",
   "AUTH_FAILED",
   "ROOM_ARCHIVED",
   "ROOM_NOT_FOUND",
+  "INTERNAL",
 ]);
 export type WebSocketNoticeCode = z.infer<typeof webSocketNoticeCodeSchema>;
 

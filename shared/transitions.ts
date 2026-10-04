@@ -90,6 +90,25 @@ function requireFreshVersion(state: RoomState, command: RoomCommand): RoomOperat
 }
 
 /**
+ * 公开 revision 前置条件：用于「产生可见变化但不推进 bp.version」的命令
+ * （当前仅 setTeamName）。这类命令的回执被淘汰后，旧重发若只比较载荷值，
+ * 可能把后来已确认的值改回旧值；要求命令所依据的 revision 与当前严格
+ * 一致，使任何后续可见变化（含后续改名）都让旧载荷过期。
+ */
+function requireFreshRevision(
+  state: RoomState,
+  command: SetTeamNameCommand,
+): RoomOperationResult | null {
+  if (command.expectedRevision !== state.revision) {
+    return err(
+      "STALE_REVISION",
+      `命令基于公开 revision ${command.expectedRevision}，当前 revision 为 ${state.revision}`,
+    );
+  }
+  return null;
+}
+
+/**
  * 应用影响 BP 流程或席位权限的变更：bp.version 与公开 revision 同时递增。
  * `bpPatch` 不得携带 version，版本一律由本函数推进。
  */
@@ -164,7 +183,7 @@ export function applyRoomCommand(
   }
 }
 
-/** 修改队伍名：仅影响公开视图，不使 BP 命令过期。 */
+/** 修改队伍名：仅影响公开视图，不使 BP 命令过期；以公开 revision 为过期前置条件。 */
 function applySetTeamName(
   state: RoomState,
   actor: RoomActor,
@@ -174,6 +193,8 @@ function applySetTeamName(
   if (denied) return denied;
   const deniedVersion = requireFreshVersion(state, command);
   if (deniedVersion) return deniedVersion;
+  const deniedRevision = requireFreshRevision(state, command);
+  if (deniedRevision) return deniedRevision;
 
   if (state.teamNames[command.team] === command.teamName) {
     // 与当前存储值一致：无可见变化，不推进任何版本。

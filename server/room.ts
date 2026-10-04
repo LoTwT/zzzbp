@@ -78,9 +78,11 @@ import {
  *
  * WebSocket（Hibernation API）：成员通道与展示通道都经本类 fetch 升级，
  * 连接身份（成员 ID 或 display）随附件持久化，休眠唤醒后不依赖实例内存；
- * 在线判定每次经 ctx.getWebSockets 的标签计数重算，不维护常驻计数器或
- * 定时器。命令操作者只来自连接附件中的可信身份，角色/席位/轮次/版本与
- * 名单每次从当前持久状态重新判断（见 processMemberCommand）。
+ * 在线状态以连接注册表为唯一权威，成员连接、断开、每条业务命令与 HTTP
+ * 入房都会先把存储投影与注册表对齐（在线协调），短暂存储故障由有界
+ * 重试链补偿，不维护常驻计数器、权限缓存或轮询定时器。命令操作者只来
+ * 自连接附件中的可信身份，角色/席位/轮次/版本与名单每次从当前持久状态
+ * 重新判断（见 processMemberCommand）。
  */
 
 /** `createRoom` 输入：房间与房主成员的持久化材料（秘密不跨 RPC，只传摘要）。 */
@@ -165,7 +167,18 @@ interface PresenceOutcome {
   readonly meta: RoomMeta | null;
 }
 
+/**
+ * 在线协调失败后的有界重试退避序列（毫秒）。
+ *
+ * 覆盖短暂存储故障（约 6 分钟内的恢复都能补齐暂停/离线/全员离开时间），
+ * 链结束（成功或用尽）后不再持有 timer，不阻止休眠；这不是常驻轮询。
+ */
+const PRESENCE_RETRY_DELAYS_MS = [250, 1000, 4000, 16000, 60000, 300000] as const;
+
 export class Room extends DurableObject {
+  /** 是否已有在途的在线协调重试链（单实例内去重；实例重建后自然复位）。 */
+  private presenceRetryScheduled = false;
+
   private get sql(): RoomSql {
     return this.ctx.storage.sql;
   }
@@ -271,43 +284,54 @@ export class Room extends DurableObject {
    * 连接会计在线）。成员写入与 revision 递增、写入后的视图装配同在一个
    * 事务闭包内：任一步骤失败整体回滚，不会留下无凭据交付的孤儿成员。
    * 未建房的实例不做任何写入（不建表），直接按 not_found 返回。
-   * 新成员写入成功后向已连接的成员/展示连接广播最新视图（房主的成员
-   * 列表因此实时更新）。
+   * 新成员写入成功、或在线协调修复了历史分叉时，向已连接的成员/展示
+   * 连接广播最新视图（房主的成员列表因此实时更新）。
    */
   async joinRoom(input: JoinRoomInput): Promise<JoinRoomResult> {
-    const result = this.ctx.storage.transactionSync((): JoinRoomResult => {
-      if (!hasRoomSchema(this.sql)) return { kind: "not_found" };
-      ensureRoomSchema(this.sql);
-      const meta = readRoomMeta(this.sql);
-      if (meta === null) return { kind: "not_found" };
-      if (meta.lifecycle !== "live") return { kind: "archived" };
+    const outcome = this.ctx.storage.transactionSync(
+      (): {
+        result: JoinRoomResult;
+        reconciled: boolean;
+      } => {
+        if (!hasRoomSchema(this.sql)) return { result: { kind: "not_found" }, reconciled: false };
+        ensureRoomSchema(this.sql);
+        const meta = readRoomMeta(this.sql);
+        if (meta === null) return { result: { kind: "not_found" }, reconciled: false };
+        if (meta.lifecycle !== "live") return { result: { kind: "archived" }, reconciled: false };
 
-      const existingMemberId = this.resolveCredential(input.credentialDigest);
-      if (existingMemberId !== null) {
-        const memberView = this.projectMemberView(existingMemberId);
-        if (memberView === null) {
-          throw new Error("成员凭据指向的成员不在房间内，存储状态异常");
+        // 入房是写路径：顺带做一次在线协调（以实际连接为权威，修复任何
+        // 历史分叉），与成员写入同事务提交或回滚。
+        const presence = this.reconcilePresenceInTransaction();
+
+        const existingMemberId = this.resolveCredential(input.credentialDigest);
+        if (existingMemberId !== null) {
+          const memberView = this.projectMemberView(existingMemberId);
+          if (memberView === null) {
+            throw new Error("成员凭据指向的成员不在房间内，存储状态异常");
+          }
+          return { result: { kind: "restored", memberView }, reconciled: presence.changed };
         }
-        return { kind: "restored", memberView };
-      }
 
-      insertMember(this.sql, {
-        memberId: input.newMemberId,
-        nickname: input.nickname,
-        credentialDigest: input.newCredentialDigest,
-        joinedAt: new Date().toISOString(),
-      });
-      const memberView = this.projectMemberView(input.newMemberId);
-      if (memberView === null) {
-        throw new Error("新成员写入后视图装配失败，存储状态异常");
-      }
-      return { kind: "created", memberView };
-    });
+        insertMember(this.sql, {
+          memberId: input.newMemberId,
+          nickname: input.nickname,
+          credentialDigest: input.newCredentialDigest,
+          joinedAt: new Date().toISOString(),
+        });
+        const memberView = this.projectMemberView(input.newMemberId);
+        if (memberView === null) {
+          throw new Error("新成员写入后视图装配失败，存储状态异常");
+        }
+        return { result: { kind: "created", memberView }, reconciled: presence.changed };
+      },
+    );
 
-    if (result.kind === "created") {
+    // 新成员加入或在线协调修复了分叉时，向已连接的成员/展示连接广播
+    // 最新视图（房主的成员列表因此实时更新）；单纯恢复身份不产生广播。
+    if (outcome.result.kind === "created" || outcome.reconciled) {
       this.broadcastCurrentViews();
     }
-    return result;
+    return outcome.result;
   }
 
   /** 读取该房间固定的目录快照（经 schema 校验）；未建房返回 null 且不写入存储。 */
@@ -424,63 +448,138 @@ export class Room extends DurableObject {
 
   /**
    * 接受成员连接：身份（成员 ID）持久化到附件，操作者只来自这里。
-   * 首个连接使成员上线（setMemberOnline(true)）并取消空房计时；其余
-   * 页面连接不改状态。上线转移与视图下发在提交后同步完成，避免与
-   * 其他事件交错。
+   * 连接后立即做在线协调（见 reconcilePresenceInTransaction）：以实际
+   * 连接注册表为权威，首个连接使成员上线并取消空房计时，也修复任何
+   * 历史分叉（如短暂故障留下的陈旧在线标志）。协调写入失败时连接不能
+   * 被当成有效在线凭据：以 INTERNAL 通知明确失败并关闭，客户端在存储
+   * 恢复后重连即可恢复（重连会重新协调）。
    */
   private acceptMemberConnection(memberId: MemberId): Response {
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server, [memberTag(memberId)]);
     server.serializeAttachment({ kind: "member", memberId } satisfies WsAttachment);
 
-    // 在线判定：标签计数来自运行时连接注册表，休眠/重建后仍准确。
-    const otherConnections = this.ctx
-      .getWebSockets(memberTag(memberId))
-      .filter((socket) => socket !== server).length;
-
-    if (otherConnections > 0) {
-      this.sendCurrentViewTo(server);
-      return new Response(null, { status: 101, webSocket: client });
-    }
-
-    let broadcasted = false;
     try {
-      const outcome = this.transitionMemberOnline(memberId);
+      const outcome = this.reconcilePresence();
       if (outcome.changed && outcome.state !== null && outcome.meta !== null) {
+        // 广播覆盖含新连接在内的全部连接；新连接的初始视图即最新视图。
         this.broadcastViews(outcome.state, outcome.meta);
-        broadcasted = true;
+      } else {
+        this.sendCurrentViewTo(server);
       }
     } catch {
       this.logRealtimeInternalError("connect");
-    }
-    if (!broadcasted) {
-      this.sendCurrentViewTo(server);
+      this.safeSend(server, noticeMessage("INTERNAL", "成员在线状态写入失败，请稍后重连"));
+      this.safeClose(server, 1011, "presence write failed");
     }
     return new Response(null, { status: 101, webSocket: client });
   }
 
   /**
-   * 成员上线转移：状态差异写入与空房计时取消（last_member_left_at
-   * 置 NULL）同事务；已是上线的重复输入是空操作，不产生写入。
+   * 由连接注册表推导实际在线的成员集合。
+   *
+   * 注册表由运行时维护，休眠/实例重建后依然准确；这是在线状态的唯一
+   * 权威来源，存储中的 online 标志只是它的持久投影。
    */
-  private transitionMemberOnline(memberId: MemberId): PresenceOutcome {
-    return this.ctx.storage.transactionSync((): PresenceOutcome => {
-      if (!hasRoomSchema(this.sql)) return { changed: false, state: null, meta: null };
-      ensureRoomSchema(this.sql);
-      const meta = readRoomMeta(this.sql);
-      if (meta === null) return { changed: false, state: null, meta: null };
-      const state = loadRoomState(this.sql);
-      if (state === null) throw new Error("成员上线前状态装配失败");
-
-      const result = setMemberOnline(state, memberId, true);
-      if (!result.ok || result.state === state) {
-        // 空操作或防御性失败（升级时刚验证过成员身份）：不改状态。
-        return { changed: false, state, meta };
+  private connectedMemberIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const socket of this.ctx.getWebSockets()) {
+      const attachment = readAttachment(socket);
+      if (attachment?.kind === "member") {
+        ids.add(attachment.memberId);
       }
-      persistRoomStateChange(this.sql, state, result.state);
-      setLastMemberLeftAt(this.sql, null);
-      return { changed: true, state: result.state, meta };
-    });
+    }
+    return ids;
+  }
+
+  /**
+   * 在线协调的事务体：把存储的 online 标志对齐到实际连接，并同步计时
+   * 与暂停语义。可独立提交，也可嵌入其他业务事务（命令处理、HTTP 入房）
+   * 内联执行——嵌入时与所在业务单元同事务提交或回滚。
+   *
+   * 规则：
+   * - 存储在线但已无连接：视为离线（进行中房主/在席选手触发掉线暂停）；
+   * - 存储离线但仍有连接（如上线写入曾失败后由其他事件补偿）：视为在线
+   *   并取消空房计时；
+   * - 全员离线且计时未记录时补写 last_member_left_at（覆盖全员离开瞬间
+   *   恰遇短暂故障的场景）；
+   * - 无分叉时不产生任何写入（重算幂等，不会重复离线/暂停）。
+   */
+  private reconcilePresenceInTransaction(): PresenceOutcome {
+    if (!hasRoomSchema(this.sql)) return { changed: false, state: null, meta: null };
+    ensureRoomSchema(this.sql);
+    const meta = readRoomMeta(this.sql);
+    if (meta === null) return { changed: false, state: null, meta: null };
+    const state = loadRoomState(this.sql);
+    if (state === null) throw new Error("在线协调前状态装配失败");
+    if (meta.lifecycle !== "live") return { changed: false, state, meta };
+
+    const connected = this.connectedMemberIds();
+    let current = state;
+    for (const member of state.members) {
+      const actuallyOnline = connected.has(member.memberId);
+      if (member.online === actuallyOnline) continue;
+      const result = setMemberOnline(current, member.memberId, actuallyOnline);
+      if (!result.ok) {
+        // 防御：成员来自当前状态，MEMBER_NOT_FOUND/ROOM_ARCHIVED 不可达。
+        continue;
+      }
+      current = result.state;
+    }
+    if (current === state) {
+      return { changed: false, state, meta };
+    }
+    persistRoomStateChange(this.sql, state, current);
+
+    let leftAt: string | null = meta.lastMemberLeftAt;
+    if (current.members.some((member) => member.online)) {
+      if (leftAt !== null) {
+        setLastMemberLeftAt(this.sql, null);
+        leftAt = null;
+      }
+    } else if (leftAt === null) {
+      const now = new Date().toISOString();
+      setLastMemberLeftAt(this.sql, now);
+      leftAt = now;
+    }
+    return { changed: true, state: current, meta: { ...meta, lastMemberLeftAt: leftAt } };
+  }
+
+  /** 独立提交一次在线协调。 */
+  private reconcilePresence(): PresenceOutcome {
+    return this.ctx.storage.transactionSync((): PresenceOutcome =>
+      this.reconcilePresenceInTransaction(),
+    );
+  }
+
+  /**
+   * 在线协调失败后的有界重试链：按固定退避序列重试，覆盖短暂存储故障，
+   * 链结束（成功或用尽）后不再占用任何 timer，休眠行为不受影响。
+   * 重试成功会把暂停/离线/全员离开时间一次性补齐；重试链随实例驱逐
+   * 丢失时，下一次连接/断开/命令/入房事件的协调仍是最终防线。
+   */
+  private schedulePresenceRetry(): void {
+    if (this.presenceRetryScheduled) return;
+    this.presenceRetryScheduled = true;
+    const delays = [...PRESENCE_RETRY_DELAYS_MS];
+    const attempt = (): void => {
+      try {
+        const outcome = this.reconcilePresence();
+        this.presenceRetryScheduled = false;
+        if (outcome.changed && outcome.state !== null && outcome.meta !== null) {
+          this.broadcastViews(outcome.state, outcome.meta);
+        }
+      } catch {
+        const delay = delays.shift();
+        if (delay === undefined) {
+          this.presenceRetryScheduled = false;
+          this.logRealtimeInternalError("presence-retry");
+          return;
+        }
+        setTimeout(attempt, delay);
+      }
+    };
+    setTimeout(attempt, delays.shift() ?? 250);
   }
 
   // ---- WebSocket：连接事件（Hibernation 回调） ----
@@ -548,58 +647,49 @@ export class Room extends DurableObject {
   }
 
   /**
-   * 连接结束后的在线重算：按成员标签统计剩余连接（显式排除本 socket，
-   * 兼容错误路径下尚未移出注册表的情形），最后一个连接离开才使成员
-   * 下线。重算式清理天然幂等，错误与关闭回调不会双重扣减。
+   * 连接结束后的在线处理：完全依赖运行时的断开语义——本兼容日期下
+   * webSocketClose 触发前 runtime 已完成 close 握手，关闭的连接不再
+   * 出现在 getWebSockets；休眠（实例驱逐但连接保留）不会触发本回调，
+   * 因此不会把休眠当成掉线。
+   *
+   * 处理方式是整房在线协调（见 reconcilePresenceInTransaction）：以实际
+   * 连接为权威，最后一个连接离开才使成员下线（含掉线暂停与计时补写），
+   * 同时修复任何历史分叉。协调写入失败（如短暂 SQL 故障）不丢弃事件：
+   * 启动有界重试链补偿，且任何后续业务命令在执行前都会再次协调，
+   * 无法确认时拒绝推进。
    */
   private handleConnectionEnded(ws: WebSocket): void {
     const attachment = readAttachment(ws);
     if (attachment?.kind !== "member") return;
 
-    const remaining = this.ctx
-      .getWebSockets(memberTag(attachment.memberId))
-      .filter((socket) => socket !== ws).length;
-    if (remaining > 0) return;
-
     try {
-      const outcome = this.ctx.storage.transactionSync((): PresenceOutcome => {
-        if (!hasRoomSchema(this.sql)) return { changed: false, state: null, meta: null };
-        ensureRoomSchema(this.sql);
-        const meta = readRoomMeta(this.sql);
-        if (meta === null) return { changed: false, state: null, meta: null };
-        const state = loadRoomState(this.sql);
-        if (state === null) throw new Error("成员离线前状态装配失败");
-
-        const result = setMemberOnline(state, attachment.memberId, false);
-        if (!result.ok || result.state === state) {
-          return { changed: false, state, meta };
-        }
-        persistRoomStateChange(this.sql, state, result.state);
-        // 最后一名在线成员离开：记录空房计时起点（下次成员连接时取消）。
-        if (!result.state.members.some((member) => member.online)) {
-          setLastMemberLeftAt(this.sql, new Date().toISOString());
-        }
-        return { changed: true, state: result.state, meta };
-      });
+      const outcome = this.reconcilePresence();
       if (outcome.changed && outcome.state !== null && outcome.meta !== null) {
         this.broadcastViews(outcome.state, outcome.meta);
       }
     } catch {
       this.logRealtimeInternalError("close");
+      this.schedulePresenceRetry();
     }
   }
 
   // ---- 命令处理管线 ----
 
   /**
-   * 统一命令处理：读取当前状态 → 回执去重 → 规则版本门 → applyRoomCommand
-   * → 按变化持久化 → 写回执，整体在一个 transactionSync 闭包内原子提交；
-   * 写成功后才发送 commandResult 与广播（失败不广播、不回执）。
+   * 统一命令处理：读取当前状态 → 回执去重 → 规则版本门 → 在线协调 →
+   * applyRoomCommand → 按变化持久化 → 写回执，整体在一个 transactionSync
+   * 闭包内原子提交；写成功后才发送 commandResult 与广播（失败不广播、
+   * 不回执）。
    *
    * - 操作者来自连接附件；角色/席位/轮次/状态/版本每次从当前持久状态
    *   重新判断，名单来自该房间的持久目录快照（不读全局当前目录）。
    * - 房间持久 ruleVersion 不受当前引擎支持时拒绝执行（不能拿当前语义
    *   解释未知版本的已保存状态）。
+   * - 执行前先做在线协调：以实际连接为权威修复存储中的陈旧在线标志
+   *   （如断线写入曾失败留下的幽灵在线），协调与命令同事务；协调写入
+   *   失败（存储故障未恢复）时整个事务回滚，命令以 INTERNAL 拒绝，
+   *   不基于无法确认的在线状态判权或推进。回执去重命中时不执行命令，
+   *   不触发协调写入。
    * - 同一 operationId 且同一规范化载荷：返回原回执结果，不再执行；
    *   同 ID 不同载荷以 OPERATION_ID_CONFLICT 拒绝。回执与状态更新同
    *   事务，SQL 故障时一起回滚，重试不受已回滚回执影响。
@@ -634,7 +724,9 @@ export class Room extends DurableObject {
           return { kind: "replayed", receipt: existing.receipt };
         }
 
-        const state = loadRoomState(this.sql);
+        // 在线协调：以实际连接为权威，修复后命令基于确认过的在线状态执行。
+        const presence = this.reconcilePresenceInTransaction();
+        const state = presence.state;
         if (state === null) throw new Error("命令处理前状态装配失败");
         const catalogData = loadRoomCatalog(this.sql);
         if (catalogData === null) throw new Error("房间目录快照缺失");
@@ -657,11 +749,11 @@ export class Room extends DurableObject {
         });
         return {
           kind: "executed",
-          changed: after !== state,
+          changed: after !== state || presence.changed,
           ok: applied.ok,
           error: applied.ok ? null : applied.error,
           after,
-          meta,
+          meta: presence.meta ?? meta,
         };
       });
     } catch {

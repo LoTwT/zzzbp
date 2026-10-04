@@ -26,13 +26,22 @@ const commandBaseSchema = {
   expectedBpVersion: z.number().int().nonnegative(),
 };
 
-/** 修改队伍名：仅房主，任何 BP 状态下均可执行。 */
+/** 修改队伍名：仅房主，任何 BP 状态下均可执行。
+ *
+ * 队伍名是唯一「产生可见变化但不推进 bp.version」的命令：回执窗口淘汰后
+ * 的旧重发若仅靠值比较，可能把后来已确认的名称改回旧值。因此本命令额外
+ * 携带 `expectedRevision`（命令发出时所依据的公开 revision），必须与当前
+ * revision 严格一致；任何后续可见变化（含后续改名）都会使旧载荷过期
+ * （STALE_REVISION），客户端需重新同步后以新 operationId 再发。
+ */
 export const setTeamNameCommandSchema = z.object({
   ...commandBaseSchema,
   type: z.literal("setTeamName"),
   team: bpTeamSchema,
   /** 填写/修改输入，trim 后 1 到 32 码点，不允许为空。 */
   teamName: teamNameInputSchema,
+  /** 命令发出时所依据的公开 revision（视图同步用），必须与当前一致。 */
+  expectedRevision: z.number().int().nonnegative(),
 });
 export type SetTeamNameCommand = z.infer<typeof setTeamNameCommandSchema>;
 
@@ -132,6 +141,8 @@ export type RoomCommand = z.infer<typeof roomCommandSchema>;
  * - ROOM_ARCHIVED：归档房间拒绝一切写操作；
  * - NOT_HOST / NOT_CURRENT_PLAYER：权限不足；
  * - STALE_BP_VERSION：命令所依据的 BP 版本已过期；
+ * - STALE_REVISION：命令所依据的公开 revision 已过期（用于不推进
+ *   bp.version 的可见写入，如 setTeamName 的 expectedRevision 前置条件）；
  * - BP_NOT_WAITING / BP_NOT_RUNNING / BP_NOT_PAUSED：BP 状态不满足命令前提；
  * - START_CONDITIONS_UNMET：开局条件未满足；
  * - SEAT_CHANGE_FORBIDDEN / SEAT_TARGET_*：席位调整相关；
@@ -152,6 +163,7 @@ export const roomOperationErrorCodeSchema = z.enum([
   "NOT_HOST",
   "NOT_CURRENT_PLAYER",
   "STALE_BP_VERSION",
+  "STALE_REVISION",
   "BP_NOT_WAITING",
   "BP_NOT_RUNNING",
   "BP_NOT_PAUSED",

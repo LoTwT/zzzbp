@@ -84,12 +84,12 @@ Worker 的运行时与绑定类型由 `cf workers types`（或 Cloudflare Vite �
 浏览器交互测试 provider（`@vitest/browser-playwright`）在需要真实浏览器验证交互时
 引入，与 Vitest 保持同一版本；本阶段不编写空泛的 UI 测试。
 
-Workers 集成测试中的 WebSocket 客户端模式：运行时没有浏览器式
-`new WebSocket(url)`，标准做法是对 Worker 发起带 `Upgrade: websocket` 头的
-fetch，从 101 响应的 `webSocket` 字段取得客户端 socket 并 `accept()`；
-服务端在升级处理期间发送的初始视图会被缓冲，accept 后照常送达。注意
-该 fetch 会把带 Upgrade 头的子请求规范化为 GET 握手，因此「非 GET 方法
-拒绝 WS 升级」这类防御分支无法经此通道驱动。休眠语义用
+Workers 集成测试中的 WebSocket 客户端模式：本套件选择对 Worker 发起带
+`Upgrade: websocket` 头的 fetch，从 101 响应的 `webSocket` 字段取得客户端
+socket 并 `accept()`（与 Worker 代理 DO 的官方模式一致）；当前生成的运行时
+类型也声明了 `new WebSocket(url)` 构造器，但本套件未走该路径，未验证其
+行为差异。实测边界：该 fetch 会把带 Upgrade 头的子请求规范化为 GET 握手，
+因此「非 GET 方法拒绝 WS 升级」这类防御分支无法经此通道驱动。休眠语义用
 `evictDurableObject` 验证：实例拆除后 hibernatable 连接与附件由运行时
 保留，原连接上的消息以附件身份唤醒新实例（tests/workers/ 中的探针
 结论已固化为 room-presence.test.ts 的回归测试）。

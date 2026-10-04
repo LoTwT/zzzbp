@@ -11,7 +11,7 @@ const base = { operationId: nextOperationId(), expectedBpVersion: 3 };
 describe("房间命令 schema", () => {
   it("解析全部十类命令", () => {
     const samples = [
-      { type: "setTeamName", team: "A", teamName: "左方" },
+      { type: "setTeamName", team: "A", teamName: "左方", expectedRevision: 5 },
       { type: "assignSeat", team: "B", targetMemberId: "member-1" },
       { type: "startBp" },
       { type: "pauseBp" },
@@ -70,8 +70,13 @@ describe("房间命令 schema", () => {
     }
     // 队伍名输入：非空、最长 32 码点、自动 trim
     expect(
-      roomCommandSchema.safeParse({ ...base, type: "setTeamName", team: "A", teamName: "   " })
-        .success,
+      roomCommandSchema.safeParse({
+        ...base,
+        type: "setTeamName",
+        team: "A",
+        teamName: "   ",
+        expectedRevision: 5,
+      }).success,
     ).toBe(false);
     expect(
       roomCommandSchema.safeParse({
@@ -79,11 +84,34 @@ describe("房间命令 schema", () => {
         type: "setTeamName",
         team: "A",
         teamName: "x".repeat(33),
+        expectedRevision: 5,
       }).success,
     ).toBe(false);
     expect(
-      roomCommandSchema.parse({ ...base, type: "setTeamName", team: "A", teamName: " 左方 " }),
+      roomCommandSchema.parse({
+        ...base,
+        type: "setTeamName",
+        team: "A",
+        teamName: " 左方 ",
+        expectedRevision: 5,
+      }),
     ).toMatchObject({ teamName: "左方" });
+    // expectedRevision：setTeamName 必填且为非负整数（其余命令不接受该字段）
+    expect(
+      roomCommandSchema.safeParse({ ...base, type: "setTeamName", team: "A", teamName: "左方" })
+        .success,
+    ).toBe(false);
+    for (const expectedRevision of [-1, 1.5, "5"]) {
+      expect(
+        roomCommandSchema.safeParse({
+          ...base,
+          type: "setTeamName",
+          team: "A",
+          teamName: "左方",
+          expectedRevision,
+        }).success,
+      ).toBe(false);
+    }
     // 阵营与操作位枚举
     expect(
       roomCommandSchema.safeParse({

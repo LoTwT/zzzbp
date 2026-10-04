@@ -8,12 +8,15 @@ import type { DisplayServerMessage } from "../../shared/contracts/websocket";
 
 /**
  * Workers 集成测试的共享辅助：真实 HTTP 建房/入房、WebSocket 客户端
- * 驱动（fetch 升级 → response.webSocket）与实例内 SQL 观察。
+ * 驱动与实例内 SQL 观察。
  *
- * WebSocket 客户端模式：Workers 运行时没有浏览器式 new WebSocket(url)，
- * 标准做法是对 Worker 发起带 Upgrade 头的 fetch，从 101 响应的
- * webSocket 字段取得客户端 socket 并 accept()；服务端在升级处理期间
- * 发送的初始视图会被缓冲，accept 后照常送达（已由探针验证）。
+ * WebSocket 客户端模式：本套件选择「对 Worker 发起带 Upgrade 头的 fetch，
+ * 从 101 响应的 webSocket 字段取得客户端 socket 并 accept()」的驱动方式
+ * （与 Worker 代理 DO 的官方模式一致）；当前生成的运行时类型也声明了
+ * `new WebSocket(url)` 构造器，但本套件未走该路径，未验证其行为差异。
+ * 实测边界：本环境的 fetch 会把带 Upgrade 头的子请求规范化为 GET 握手，
+ * 因此「非 GET 方法拒绝 WS 升级」的防御分支无法经该通道驱动。服务端在
+ * 升级处理期间发送的初始视图会被缓冲，accept 后照常送达（已由探针验证）。
  */
 
 const BASE_URL = "http://localhost";
@@ -280,4 +283,10 @@ export async function waitForRoomQuery(
 export function currentAlarm(roomId: string): Promise<number | null> {
   const stub = exports.Room.get(exports.Room.idFromName(roomId));
   return runInDurableObject(stub, (_room, state) => state.storage.getAlarm());
+}
+
+/** 读取房间当前公开 revision（setTeamName 的命令前置条件）。 */
+export async function currentRevisionOf(roomId: string): Promise<number> {
+  const rows = await queryRoomRows(roomId, "SELECT revision FROM room_meta");
+  return Number(rows[0]?.revision ?? 0);
 }

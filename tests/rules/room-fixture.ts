@@ -77,24 +77,36 @@ export function run(
   actorMemberId: string,
   command: RoomCommandInput,
 ): RoomOperationResult {
-  return applyRoomCommand(
-    state,
-    { memberId: actorMemberId },
-    {
-      ...command,
-      operationId: command.operationId ?? nextOperationId(),
-      expectedBpVersion: command.expectedBpVersion ?? state.bp.version,
-    },
-    fixtureCatalog,
-  );
+  const operationId = command.operationId ?? nextOperationId();
+  const expectedBpVersion = command.expectedBpVersion ?? state.bp.version;
+  // setTeamName 的 expectedRevision 缺省取当前公开 revision（过期场景由
+  // 测试显式传入旧值触发）。
+  const filled: RoomCommand =
+    command.type === "setTeamName"
+      ? {
+          ...command,
+          operationId,
+          expectedBpVersion,
+          expectedRevision: command.expectedRevision ?? state.revision,
+        }
+      : { ...command, operationId, expectedBpVersion };
+  return applyRoomCommand(state, { memberId: actorMemberId }, filled, fixtureCatalog);
 }
 
-/** 便捷输入类型：省略 operationId，expectedBpVersion 缺省取当前版本。 */
+/**
+ * 便捷输入类型：省略 operationId 与各版本前置条件，缺省取当前状态值。
+ */
 export type RoomCommandInput = WithDefaults<RoomCommand>;
 type WithDefaults<T> = T extends unknown
-  ? Omit<T, "operationId" | "expectedBpVersion"> & {
+  ? Omit<
+      T,
+      | "operationId"
+      | "expectedBpVersion"
+      | (T extends { type: "setTeamName" } ? "expectedRevision" : never)
+    > & {
       operationId?: string;
       expectedBpVersion?: number;
+      expectedRevision?: number;
     }
   : never;
 

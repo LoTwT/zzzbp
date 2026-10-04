@@ -6,6 +6,7 @@ import { BP_STEPS } from "../../shared/bp/steps";
 import {
   controlledCredential,
   createRoomViaHttp,
+  currentRevisionOf,
   execInRoom,
   joinMemberViaHttp,
   queryRoomRows,
@@ -63,10 +64,22 @@ async function startBpRoom(roomName = "命令管线赛"): Promise<StartedRoom> {
   };
 
   expect(
-    (await roomCommand(room, room.hostWs, "setTeamName", { team: "A", teamName: "左方" })).ok,
+    (
+      await roomCommand(room, room.hostWs, "setTeamName", {
+        team: "A",
+        teamName: "左方",
+        expectedRevision: await currentRevisionOf(host.roomId),
+      })
+    ).ok,
   ).toBe(true);
   expect(
-    (await roomCommand(room, room.hostWs, "setTeamName", { team: "B", teamName: "右方" })).ok,
+    (
+      await roomCommand(room, room.hostWs, "setTeamName", {
+        team: "B",
+        teamName: "右方",
+        expectedRevision: await currentRevisionOf(host.roomId),
+      })
+    ).ok,
   ).toBe(true);
   expect(
     (
@@ -432,6 +445,7 @@ describe("权限与前提失败", () => {
       teamName: "尝试修改",
       operationId: "op-rule-version",
       expectedBpVersion: 0,
+      expectedRevision: 0,
     });
     const result = await client.commandResult("op-rule-version");
     expect(result.ok).toBe(false);
@@ -447,14 +461,38 @@ describe("权限与前提失败", () => {
   });
 });
 
+/**
+ * 直接注入 count 条填充回执，用于把既有真实回执挤出保留窗口
+ * （写入顺序淘汰最旧；下一条真实命令写入后裁剪到上限）。
+ */
+async function injectFillerReceipts(roomId: string, count: number): Promise<void> {
+  let remaining = count;
+  let batch = 0;
+  while (remaining > 0) {
+    const rowsInBatch = Math.min(512, remaining);
+    const values = Array.from(
+      { length: rowsInBatch },
+      (_, index) =>
+        `('filler', 'filler-b${batch}-${index}', '{}', 1, NULL, NULL, 0, 0, '2026-01-01T00:00:00.000Z')`,
+    );
+    await execInRoom(
+      roomId,
+      `INSERT INTO command_receipts (member_id, operation_id, payload_json, ok, error_code, error_message, bp_version, revision, created_at) VALUES ${values.join(",")}`,
+    );
+    remaining -= rowsInBatch;
+    batch += 1;
+  }
+}
+
 describe("operationId 持久化去重回执", () => {
   it("同一载荷重发返回原结果；同 ID 不同载荷被拒；键序不同不算不同载荷", async () => {
     const room = await startBpRoom("去重赛");
     const operationId = "dedup-team-name";
+    const revisionAtSend = await currentRevisionOf(room.host.roomId);
     sendWith(
       room.hostWs,
       operationId,
-      { type: "setTeamName", team: "A", teamName: "去重队" },
+      { type: "setTeamName", team: "A", teamName: "去重队", expectedRevision: revisionAtSend },
       room.bpVersion,
     );
     const first = await room.hostWs.commandResult(operationId);
@@ -465,7 +503,7 @@ describe("operationId 持久化去重回执", () => {
     sendWith(
       room.hostWs,
       operationId,
-      { type: "setTeamName", team: "A", teamName: "去重队" },
+      { type: "setTeamName", team: "A", teamName: "去重队", expectedRevision: revisionAtSend },
       room.bpVersion,
     );
     const replay = await room.hostWs.commandResult(operationId);
@@ -474,7 +512,7 @@ describe("operationId 持久化去重回执", () => {
 
     // JSON 键顺序不同：规范化后是同一载荷，仍返回原结果。
     room.hostWs.socket.send(
-      `{"expectedBpVersion":${room.bpVersion},"teamName":"去重队","team":"A","type":"setTeamName","operationId":"${operationId}"}`,
+      `{"expectedBpVersion":${room.bpVersion},"expectedRevision":${revisionAtSend},"teamName":"去重队","team":"A","type":"setTeamName","operationId":"${operationId}"}`,
     );
     const reordered = await room.hostWs.commandResult(operationId);
     expect(reordered.ok).toBe(true);
@@ -484,7 +522,7 @@ describe("operationId 持久化去重回执", () => {
     sendWith(
       room.hostWs,
       operationId,
-      { type: "setTeamName", team: "A", teamName: "另一个值" },
+      { type: "setTeamName", team: "A", teamName: "另一个值", expectedRevision: revisionAtSend },
       room.bpVersion,
     );
     const conflict = await room.hostWs.commandResult(operationId);
@@ -530,10 +568,11 @@ describe("operationId 持久化去重回执", () => {
   it("DO 实例重建后回执仍有效：重发不再次执行", async () => {
     const room = await startBpRoom("重建回执赛");
     const operationId = "rebuild-receipt";
+    const revisionAtSend = await currentRevisionOf(room.host.roomId);
     sendWith(
       room.hostWs,
       operationId,
-      { type: "setTeamName", team: "A", teamName: "重建前队名" },
+      { type: "setTeamName", team: "A", teamName: "重建前队名", expectedRevision: revisionAtSend },
       room.bpVersion,
     );
     const original = await room.hostWs.commandResult(operationId);
@@ -546,7 +585,7 @@ describe("operationId 持久化去重回执", () => {
     sendWith(
       client,
       operationId,
-      { type: "setTeamName", team: "A", teamName: "重建前队名" },
+      { type: "setTeamName", team: "A", teamName: "重建前队名", expectedRevision: revisionAtSend },
       room.bpVersion,
     );
     const replayed = await client.commandResult(operationId);
@@ -582,18 +621,7 @@ describe("operationId 持久化去重回执", () => {
     const realReceipts = Number(
       (await queryRoomRows(room.host.roomId, "SELECT COUNT(*) AS n FROM command_receipts"))[0]?.n,
     );
-    for (let batch = 0; batch < 4; batch += 1) {
-      const rowsInBatch = batch === 3 ? 2047 - 3 * 512 : 512;
-      const values = Array.from(
-        { length: rowsInBatch },
-        (_, index) =>
-          `('filler', 'filler-b${batch}-${index}', '{}', 1, NULL, NULL, 0, 0, '2026-01-01T00:00:00.000Z')`,
-      );
-      await execInRoom(
-        room.host.roomId,
-        `INSERT INTO command_receipts (member_id, operation_id, payload_json, ok, error_code, error_message, bp_version, revision, created_at) VALUES ${values.join(",")}`,
-      );
-    }
+    await injectFillerReceipts(room.host.roomId, 2047);
     const before = await queryRoomRows(
       room.host.roomId,
       "SELECT COUNT(*) AS n FROM command_receipts",
@@ -604,6 +632,7 @@ describe("operationId 持久化去重回执", () => {
     const fresh = await roomCommand(room, room.hostWs, "setTeamName", {
       team: "B",
       teamName: "触发裁剪",
+      expectedRevision: await currentRevisionOf(room.host.roomId),
     });
     expect(fresh.ok).toBe(true);
     expect(
@@ -624,6 +653,79 @@ describe("operationId 持久化去重回执", () => {
     expect(["STALE_BP_VERSION", "NOT_CURRENT_PLAYER"]).toContain(retried.error?.code);
     const count = await queryRoomRows(room.host.roomId, "SELECT COUNT(*) AS n FROM bp_submissions");
     expect(count).toEqual([{ n: 1 }]);
+  });
+
+  it("回执淘汰后的旧改名重放被 revision 前置条件拒绝：不覆盖后来确认的名称", async () => {
+    const room = await startBpRoom("改名淘汰赛");
+    // 依次把 A 从旧名称改为新名称：两次改名都成功且各自推进 revision。
+    const revisionOld = await currentRevisionOf(room.host.roomId);
+    sendWith(
+      room.hostWs,
+      "rename-old",
+      { type: "setTeamName", team: "A", teamName: "旧名称", expectedRevision: revisionOld },
+      room.bpVersion,
+    );
+    expect((await room.hostWs.commandResult("rename-old")).ok).toBe(true);
+    const revisionNew = await currentRevisionOf(room.host.roomId);
+    sendWith(
+      room.hostWs,
+      "rename-new",
+      { type: "setTeamName", team: "A", teamName: "新名称", expectedRevision: revisionNew },
+      room.bpVersion,
+    );
+    expect((await room.hostWs.commandResult("rename-new")).ok).toBe(true);
+
+    // 淘汰两条改名回执：填充 + 一条真实命令触发窗口裁剪（最旧的真实回执全部淘汰）。
+    await injectFillerReceipts(room.host.roomId, 2047);
+    const fresh = await roomCommand(room, room.hostWs, "setTeamName", {
+      team: "B",
+      teamName: "触发裁剪",
+      expectedRevision: await currentRevisionOf(room.host.roomId),
+    });
+    expect(fresh.ok).toBe(true);
+    expect(
+      await queryRoomRows(room.host.roomId, "SELECT COUNT(*) AS n FROM command_receipts"),
+    ).toEqual([{ n: 2048 }]);
+    expect(
+      await queryRoomRows(
+        room.host.roomId,
+        "SELECT COUNT(*) AS n FROM command_receipts WHERE operation_id = 'rename-old'",
+      ),
+    ).toEqual([{ n: 0 }]);
+
+    // 原样重发旧改名（同一 operationId、同一载荷，含当时的 revision）：
+    // 回执已淘汰，按新命令处理，被过期 revision 前置条件拒绝。
+    sendWith(
+      room.hostWs,
+      "rename-old",
+      { type: "setTeamName", team: "A", teamName: "旧名称", expectedRevision: revisionOld },
+      room.bpVersion,
+    );
+    const replayed = await room.hostWs.commandResult("rename-old");
+    expect(replayed.ok).toBe(false);
+    expect(replayed.error?.code).toBe("STALE_REVISION");
+    // 后来确认的新名称未被旧重试覆盖。
+    expect(
+      await queryRoomRows(room.host.roomId, "SELECT name FROM team_names WHERE team = 'A'"),
+    ).toEqual([{ name: "新名称" }]);
+
+    // 客户端按合同重新同步后以新 operationId 发送当前 revision：成功。
+    sendWith(
+      room.hostWs,
+      "rename-fresh",
+      {
+        type: "setTeamName",
+        team: "A",
+        teamName: "再新名称",
+        expectedRevision: await currentRevisionOf(room.host.roomId),
+      },
+      room.bpVersion,
+    );
+    const renamed = await room.hostWs.commandResult("rename-fresh");
+    expect(renamed.ok).toBe(true);
+    expect(
+      await queryRoomRows(room.host.roomId, "SELECT name FROM team_names WHERE team = 'A'"),
+    ).toEqual([{ name: "再新名称" }]);
   });
 });
 

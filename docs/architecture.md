@@ -188,17 +188,28 @@
   执行；同一 ID 配不同载荷以 `OPERATION_ID_CONFLICT` 拒绝。回执是
   有限窗口：每房间保留最近 2048 条（按写入顺序淘汰最旧，插入时
   裁剪）；窗口内同一身份多页面、连接重建与 DO 重建后的重发都命中
-  原回执。窗口外被淘汰后的重发按新命令处理，由 `expectedBpVersion`
-  版本门与命令幂等性兜底——任何推进状态的命令都会递增 bp.version，
-  使重发过期（`STALE_BP_VERSION`）或因步位推进被拒
-  （`NOT_CURRENT_PLAYER`），值相同的 `setTeamName` 重发是无变化空操作，
-  因此旧确认不会再次推进。
-- 成员在线判定：按成员标签（`m:{memberId}`）统计 `getWebSockets` 的
-  连接数，至少一个页面在线则在线，最后一个断开才离线；离线转移经
-  `setMemberOnline`（进行中房主或在席选手离线立即暂停，观众不影响，
-  上线不自动恢复）。重算式清理天然幂等：错误（`webSocketError` 仅
-  处理非断线错误，主动 close 后清理交给 `webSocketClose`）与关闭
-  回调不会双重扣减。
+  原回执。窗口外被淘汰后的重发按新命令处理，由可持久验证的前置
+  条件兜底：推进 BP 流程或席位权限的命令都会递增 bp.version，旧
+  重发以 `STALE_BP_VERSION` 过期或因步位推进被拒
+  （`NOT_CURRENT_PLAYER`）；`setTeamName` 是唯一产生可见变化但不递增
+  bp.version 的命令，额外携带 `expectedRevision`（必须与当前公开
+  revision 严格一致），任何后续可见变化（含后续改名）都使旧载荷以
+  `STALE_REVISION` 过期，防止淘汰后的旧重试覆盖后来确认的名称。
+  收到过期拒绝的客户端应重新同步视图并以新 operationId 重发。
+- 成员在线判定以实际连接为唯一权威：连接注册表（`getWebSockets` +
+  附件）推导实际在线成员集合，存储中的 online 标志只是它的持久投影。
+  成员连接、断开、每条业务命令与 HTTP 入房都会先做在线协调
+  （reconcilePresence，同一事务）：把存储标志对齐到注册表——断开者
+  置离线（进行中房主或在席选手立即暂停）、仍有连接者保持在线并取消
+  空房计时、全员离线且计时未记录时补写离开时间；无分叉时零写入
+  （重算幂等，不会重复离线/暂停）。协调写入失败（短暂存储故障）时：
+  命令整体回滚并以 `INTERNAL` 拒绝推进（不基于无法确认的在线状态
+  判权）；连接升级失败则以 `INTERNAL` 通知明确关闭该连接（不留被
+  当成有效在线的连接），存储恢复后重连即恢复；断开路径启动有界
+  重试链（250ms 起约 6 分钟内按退避重试，覆盖短暂故障后无任何新
+  事件的场景），链结束不再占用 timer，不影响休眠。错误
+  （`webSocketError` 仅处理非断线错误，主动 close 后清理交给
+  `webSocketClose`）与关闭回调不会双重扣减。
 - 休眠语义：本兼容日期（2026-09-01）下 `webSocketClose` 触发前
   runtime 已完成 close 握手，关闭的连接不再出现在 `getWebSockets`；
   实例被驱逐（休眠）不触发任何回调，连接与附件由运行时保留，消息
@@ -222,9 +233,14 @@
   （`RULE_VERSION_UNSUPPORTED`，见[WebSocket 通道](#websocket-通道)）。
 - `bp.version` 与公开 `revision` 职责分开：前者只随预选、提交、控制
   命令与席位权限变化递增（重开不重置），用于命令过期判断；后者随
-  任何可见状态变化递增，用于视图同步。
+  任何可见状态变化递增，用于视图同步。`setTeamName` 产生可见变化但
+  不递增 bp.version，因此以 `expectedRevision`（与当前公开 revision
+  严格一致）为可持久验证的过期前置条件（`STALE_REVISION`），防止
+  回执窗口淘汰后的旧重试覆盖后来确认的值（见
+  [WebSocket 通道](#websocket-通道)）。
 - 命令由 `applyRoomCommand` 纯函数执行：检查顺序固定（身份 → live →
-  在线 → 权限 → 前提 → 版本门 → 生效），失败零写入，空操作返回原引用；
+  在线 → 权限 → 前提 → 版本门（bp.version，setTeamName 另有
+  revision 前置条件） → 生效），失败零写入，空操作返回原引用；
   `setMemberOnline` 为服务端专用系统入口。
 - 业务规则（暂停、撤回、换人、掉线）见[单局常规 BP](specs/single-game-bp.md)
   与[房间角色](specs/room-roles.md)。
@@ -275,6 +291,7 @@ PR5 已落地成员/展示 WS 通道、命令执行管线、多页面在线计�
 
 | PR | 接入点 |
 |---|---|
-| PR7（浏览器交互） | 成员页面的 WS 客户端连接管理、断线重连与结果未知的同载荷重发、命令 UI 与视图渲染；服务端规则已就位。 |
+| PR6（房间界面与常规连接） | 房间主界面、角色权限 UI、两个选用布局与常规 WS 客户端连接管理；命令与视图协议已就位。 |
+| PR7（恢复交互收口） | 断线重连、替换选手与结果未知的同载荷重发等综合场景的浏览器交互与端到端收口验证。 |
 | PR8（展示页） | 展示页 UI；展示通道传输已就位（只读、无身份、不计在线）。 |
 | PR9（归档与清理） | Alarm 与读写路径共用到期检查（读 `room_meta.last_member_left_at`）；到期经 `projectArchiveSnapshot` 生成快照或清理空房间；`GET /api/rooms/:roomId` 的 archived 分支替换为只读快照响应。 |
