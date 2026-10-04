@@ -3,7 +3,7 @@ import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { toAgentCatalog, toAgentDisplayLookup } from "../../shared/agents/catalog";
 import { agentCatalogSchema, type AgentCatalogData } from "../../shared/agents/schema";
-import { createRoomResponseSchema } from "../../shared/contracts/http";
+import { apiErrorResponseBodySchema, createRoomResponseSchema } from "../../shared/contracts/http";
 
 // Workers 集成测试：房间 Durable Object 的 SQLite 持久化与固定目录。
 // 通过 cloudflare:test 的 runInDurableObject 直接观察实例内 SQLite 行，
@@ -337,5 +337,103 @@ describe("实例重建后的状态恢复", () => {
     if (after.kind !== "live") return;
     expect(after.lastMemberLeftAt).toBe(before.lastMemberLeftAt);
     expect(after.createdAt).toBe(before.createdAt);
+  });
+});
+
+describe("SQL 故障下的事务回滚", () => {
+  it("建房中途 SQL 故障整体回滚，移除故障后同一房间 ID 可重试", async () => {
+    const roomId = `tx-create-${crypto.randomUUID()}`;
+    const stub = roomStub(roomId);
+    // 任意读取先到达该实例：表结构已按真实访问路径初始化。
+    expect((await stub.getRoomEntry({ credentialDigest: null })).kind).toBe("not_found");
+
+    // 注入故障：members 插入一律失败（建房输入本身全部合法）。
+    await runInDurableObject(stub, (_room, state) => {
+      state.storage.sql.exec(
+        "CREATE TRIGGER test_fail_member_insert BEFORE INSERT ON members BEGIN SELECT RAISE(ABORT, 'test injected member failure'); END",
+      );
+    });
+
+    const input = {
+      roomId,
+      name: "事务验证房",
+      hostMemberId: crypto.randomUUID(),
+      nickname: "房主",
+      credentialDigest: "c".repeat(64),
+      ruleVersion: "test-rule",
+      catalogJson: JSON.stringify(controlledCatalog("9.9.7", false)),
+    };
+    // 直接调用并捕获异常（vitest 的 rejects 匹配器与 RPC thenable 的组合会
+    // 产生虚假的 unhandled rejection 噪声，见探针记录；此处手动捕获）。
+    let threw = false;
+    try {
+      await stub.createRoom(input);
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+
+    // 新事件直接查 SQLite：没有任何半建房残留。
+    expect(await queryRows(roomId, "SELECT COUNT(*) AS n FROM room_meta")).toEqual([{ n: 0 }]);
+    expect(await queryRows(roomId, "SELECT COUNT(*) AS n FROM members")).toEqual([{ n: 0 }]);
+    expect(await queryRows(roomId, "SELECT COUNT(*) AS n FROM seats")).toEqual([{ n: 0 }]);
+    expect(await queryRows(roomId, "SELECT COUNT(*) AS n FROM team_names")).toEqual([{ n: 0 }]);
+    expect(await queryRows(roomId, "SELECT COUNT(*) AS n FROM room_catalog")).toEqual([{ n: 0 }]);
+
+    // 移除故障后同一输入重试成功（不靠清理半条数据伪装成功）。
+    await runInDurableObject(stub, (_room, state) => {
+      state.storage.sql.exec("DROP TRIGGER test_fail_member_insert");
+    });
+    const retried = await stub.createRoom(input);
+    expect(retried.kind).toBe("created");
+    expect(await queryRows(roomId, "SELECT COUNT(*) AS n FROM members")).toEqual([{ n: 1 }]);
+  });
+
+  it("入房中途 SQL 故障经 HTTP 返回 500 共享错误体且整体回滚", async () => {
+    const { body } = await createRoomViaHttp("入房事务房");
+    const roomId = body.roomId;
+    const stub = roomStub(roomId);
+
+    // 注入故障：revision 更新一律失败（members 插入仍会先成功）。
+    await runInDurableObject(stub, (_room, state) => {
+      state.storage.sql.exec(
+        "CREATE TRIGGER test_fail_revision_update BEFORE UPDATE OF revision ON room_meta BEGIN SELECT RAISE(ABORT, 'test injected revision failure'); END",
+      );
+    });
+
+    const joinRequest = () =>
+      exports.default.fetch(
+        new Request(`${BASE_URL}/api/rooms/${roomId}/members`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nickname: "观众" }),
+        }),
+      );
+
+    const response = await joinRequest();
+    // 统一错误边界：500 共享错误体 + no-store；不泄漏内部 SQL 错误，
+    // 不交付凭据。
+    expect(response.status).toBe(500);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    const error = apiErrorResponseBodySchema.parse(await response.json());
+    expect(error.error.code).toBe("INTERNAL");
+    expect(error.error.message).not.toContain("injected");
+    expect(error.error.message).not.toContain("RAISE");
+    expect(error.error.message).not.toContain("revision");
+
+    // 无半写入：成员仍只有房主，revision 不变。
+    expect(await queryRows(roomId, "SELECT COUNT(*) AS n FROM members")).toEqual([{ n: 1 }]);
+    expect((await queryRows(roomId, "SELECT revision FROM room_meta"))[0]?.revision).toBe(0);
+
+    // 移除故障后重试成功并正常交付身份。
+    await runInDurableObject(stub, (_room, state) => {
+      state.storage.sql.exec("DROP TRIGGER test_fail_revision_update");
+    });
+    const retry = await joinRequest();
+    expect(retry.status).toBe(200);
+    expect(retry.headers.get("Set-Cookie")).not.toBeNull();
+    expect(await queryRows(roomId, "SELECT COUNT(*) AS n FROM members")).toEqual([{ n: 2 }]);
+    expect((await queryRows(roomId, "SELECT revision FROM room_meta"))[0]?.revision).toBe(1);
   });
 });

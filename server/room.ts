@@ -20,9 +20,16 @@ import {
  * 房间 Durable Object：每个房间一个实例，存储引擎为内置 SQLite。
  *
  * 本文件只承担编排：表结构、行级读写与状态装配在 ./persistence.ts，
- * 视图投影与命令语义复用 shared/ 的纯函数；本类（以及整个 server/）
- * 不导入全局代理人目录——房间读到的名单、展示数据与版本一律来自
- * 建房时写入该实例的持久快照。
+ * 视图投影与命令语义复用 shared/ 的纯函数。本类与一切房间读取只使用
+ * 该实例的持久目录快照；全局目录仅在 Worker 建房入口作为创建输入
+ * 注入一次（见 server/index.ts 的 handleCreateRoom）。
+ *
+ * 事务边界：每个业务方法把「schema 初始化 + 检查 + 写入 + 写入后的
+ * 状态装配」整体包在 ctx.storage.transactionSync 的同步闭包内——闭包
+ * 内任一步骤抛异常（SQL 故障、schema 校验失败、装配失败）时平台回滚
+ * 整个事务，不留半建房或无凭据的孤儿成员。闭包必须同步完成（官方
+ * SQLite Storage API 约束），本类内的 SQL 与装配均为同步操作；DO 的
+ * 单线程执行与输入门只保证语句不被其他事件交错，不提供异常回滚。
  *
  * 所有业务方法在入口处幂等初始化表结构；未创建业务房间（room_meta
  * 无行）的实例只存在空表结构壳，任何读取都返回 not_found，不会因
@@ -126,92 +133,105 @@ export class Room extends DurableObject {
   // ---- 业务房间 ----
 
   /**
-   * 创建业务房间：原子写入房间行、首位房主成员、席位、队名与目录快照。
-   * 目录快照先经 agentCatalogSchema 校验再落库，保证持久目录永远是合法
-   * 快照；重复创建（房间 ID 冲突）不产生任何写入。
+   * 创建业务房间：整个单元（schema 初始化、存在性检查、目录校验、
+   * 房间行 + 首位房主成员 + 席位 + 队名 + 目录快照写入、写入后的视图
+   * 装配）在一个同步事务闭包内，任一步骤抛异常整体回滚。目录快照先经
+   * agentCatalogSchema 校验再落库，保证持久目录永远是合法快照；重复
+   * 创建（房间 ID 冲突）不产生任何写入。
    */
   async createRoom(input: CreateRoomInput): Promise<CreateRoomResult> {
-    ensureRoomSchema(this.sql);
-    if (readRoomMeta(this.sql) !== null) {
-      return { kind: "already_exists" };
-    }
+    return this.ctx.storage.transactionSync((): CreateRoomResult => {
+      ensureRoomSchema(this.sql);
+      if (readRoomMeta(this.sql) !== null) {
+        return { kind: "already_exists" };
+      }
 
-    const catalog: AgentCatalogData = agentCatalogSchema.parse(JSON.parse(input.catalogJson));
-    createRoomRecord(this.sql, {
-      roomId: input.roomId,
-      name: input.name,
-      hostMemberId: input.hostMemberId,
-      nickname: input.nickname,
-      credentialDigest: input.credentialDigest,
-      ruleVersion: input.ruleVersion,
-      agentDataVersion: catalog.agentDataVersion,
-      catalogJson: input.catalogJson,
+      const catalog: AgentCatalogData = agentCatalogSchema.parse(JSON.parse(input.catalogJson));
+      createRoomRecord(this.sql, {
+        roomId: input.roomId,
+        name: input.name,
+        hostMemberId: input.hostMemberId,
+        nickname: input.nickname,
+        credentialDigest: input.credentialDigest,
+        ruleVersion: input.ruleVersion,
+        agentDataVersion: catalog.agentDataVersion,
+        catalogJson: input.catalogJson,
+      });
+
+      const memberView = this.projectMemberView(input.hostMemberId);
+      if (memberView === null) {
+        throw new Error("建房后房主成员视图装配失败，存储状态异常");
+      }
+      return { kind: "created", memberView };
     });
-
-    const memberView = this.projectMemberView(input.hostMemberId);
-    if (memberView === null) {
-      throw new Error("建房后房主成员视图装配失败，存储状态异常");
-    }
-    return { kind: "created", memberView };
   }
 
   /**
    * 读取房间入口数据：凭据有效时返回该成员视图，否则匿名。
-   * 普通读取不影响在线状态与保留计时。
+   * 普通读取不影响在线状态与保留计时；读路径同样在事务闭包内，
+   * 保证 schema 初始化写入的一致性与多次读取的一致快照。
    */
   async getRoomEntry(input: RoomCredentialInput): Promise<RoomEntryResult> {
-    ensureRoomSchema(this.sql);
-    const meta = readRoomMeta(this.sql);
-    if (meta === null) return { kind: "not_found" };
-    if (meta.lifecycle !== "live") return { kind: "archived" };
+    return this.ctx.storage.transactionSync((): RoomEntryResult => {
+      ensureRoomSchema(this.sql);
+      const meta = readRoomMeta(this.sql);
+      if (meta === null) return { kind: "not_found" };
+      if (meta.lifecycle !== "live") return { kind: "archived" };
 
-    const viewerMemberId = this.resolveCredential(input.credentialDigest);
-    const memberView = viewerMemberId === null ? null : this.projectMemberView(viewerMemberId);
-    return {
-      kind: "live",
-      roomName: meta.name,
-      memberView,
-      createdAt: meta.createdAt,
-      lastMemberLeftAt: meta.lastMemberLeftAt,
-    };
+      const viewerMemberId = this.resolveCredential(input.credentialDigest);
+      const memberView = viewerMemberId === null ? null : this.projectMemberView(viewerMemberId);
+      return {
+        kind: "live",
+        roomName: meta.name,
+        memberView,
+        createdAt: meta.createdAt,
+        lastMemberLeftAt: meta.lastMemberLeftAt,
+      };
+    });
   }
 
   /**
    * 入房：有效凭据恢复原成员（忽略请求昵称，不轮换凭据、不重复建成员）；
-   * 否则以请求昵称创建新观众成员。新成员为离线状态（PR5 的 WS 接入才计在线）。
+   * 否则以请求昵称创建新观众成员。新成员为离线状态（PR5 的 WS 接入才计
+   * 在线）。成员写入与 revision 递增、写入后的视图装配同在一个事务闭包
+   * 内：任一步骤失败整体回滚，不会留下无凭据交付的孤儿成员。
    */
   async joinRoom(input: JoinRoomInput): Promise<JoinRoomResult> {
-    ensureRoomSchema(this.sql);
-    const meta = readRoomMeta(this.sql);
-    if (meta === null) return { kind: "not_found" };
-    if (meta.lifecycle !== "live") return { kind: "archived" };
+    return this.ctx.storage.transactionSync((): JoinRoomResult => {
+      ensureRoomSchema(this.sql);
+      const meta = readRoomMeta(this.sql);
+      if (meta === null) return { kind: "not_found" };
+      if (meta.lifecycle !== "live") return { kind: "archived" };
 
-    const existingMemberId = this.resolveCredential(input.credentialDigest);
-    if (existingMemberId !== null) {
-      const memberView = this.projectMemberView(existingMemberId);
-      if (memberView === null) {
-        throw new Error("成员凭据指向的成员不在房间内，存储状态异常");
+      const existingMemberId = this.resolveCredential(input.credentialDigest);
+      if (existingMemberId !== null) {
+        const memberView = this.projectMemberView(existingMemberId);
+        if (memberView === null) {
+          throw new Error("成员凭据指向的成员不在房间内，存储状态异常");
+        }
+        return { kind: "restored", memberView };
       }
-      return { kind: "restored", memberView };
-    }
 
-    insertMember(this.sql, {
-      memberId: input.newMemberId,
-      nickname: input.nickname,
-      credentialDigest: input.newCredentialDigest,
-      joinedAt: new Date().toISOString(),
+      insertMember(this.sql, {
+        memberId: input.newMemberId,
+        nickname: input.nickname,
+        credentialDigest: input.newCredentialDigest,
+        joinedAt: new Date().toISOString(),
+      });
+      const memberView = this.projectMemberView(input.newMemberId);
+      if (memberView === null) {
+        throw new Error("新成员写入后视图装配失败，存储状态异常");
+      }
+      return { kind: "created", memberView };
     });
-    const memberView = this.projectMemberView(input.newMemberId);
-    if (memberView === null) {
-      throw new Error("新成员写入后视图装配失败，存储状态异常");
-    }
-    return { kind: "created", memberView };
   }
 
   /** 读取该房间固定的目录快照（经 schema 校验）；未建房返回 null。 */
   async getRoomCatalog(): Promise<AgentCatalogData | null> {
-    ensureRoomSchema(this.sql);
-    return loadRoomCatalog(this.sql);
+    return this.ctx.storage.transactionSync((): AgentCatalogData | null => {
+      ensureRoomSchema(this.sql);
+      return loadRoomCatalog(this.sql);
+    });
   }
 
   /** 解析凭据摘要为成员 ID；无效或缺失返回 null（按匿名处理）。 */

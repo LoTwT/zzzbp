@@ -14,9 +14,13 @@ import { roomStateSchema } from "../shared/room";
  * - 本模块只做行级读写与装配，命令语义由 shared/transitions.ts 的纯函数
  *   承担（PR5 接入），这里不实现通用数据库框架。
  *
- * 并发说明：以下函数均为同步 SQL 操作。DO 单线程执行且输入门保证一个
- * 方法内的连续同步语句不被其他事件交错，因此同一 DO 方法内的多次写入
- * （如建房：房间行 + 房主成员 + 席位 + 队名 + 目录）整体原子生效。
+ * 并发与事务：以下函数均为同步 SQL 操作，本身不开事务。调用方
+ * （server/room.ts）把每个业务单元连同写入后的状态装配包在
+ * ctx.storage.transactionSync 的同步闭包内：闭包内任一步骤抛异常
+ * （SQL 故障、schema 校验失败、装配失败）时平台回滚整个事务，不留
+ * 半写入。DO 的单线程执行与输入门只保证语句不被其他事件交错，不提供
+ * 异常回滚，两者不可混同（依据官方 SQLite Storage API 的
+ * transactionSync 语义）。
  */
 
 /** 房间业务表结构的当前版本；升级入口见 ensureRoomSchema。 */
@@ -58,8 +62,10 @@ export interface NewMemberRecord {
  * 这是 schema 初始化/版本升级的唯一入口：首次访问建表并记录版本；
  * 版本一致时为空操作；遇到更高版本拒绝加载（防降级误读）；更低版本
  * 在此按版本逐步迁移（当前 1 是首个业务版本，不存在更旧的已发布数据，
- * 直接视为异常）。引导期 /api/health 使用的 room_info 自检表
- * （shared/api.ts 合同）由 DO 的 health 方法单独维护，与本模块互不干扰。
+ * 直接视为异常）。由调用方在 transactionSync 闭包内调用，建表与版本
+ * 记录随所在业务单元一起提交或回滚。引导期 /api/health 使用的
+ * room_info 自检表（shared/api.ts 合同）由 DO 的 health 方法单独维护，
+ * 与本模块互不干扰。
  */
 export function ensureRoomSchema(sql: RoomSql): void {
   sql.exec(`
@@ -178,7 +184,8 @@ export function readRoomMeta(sql: RoomSql): RoomMeta | null {
 }
 
 /**
- * 建房写入：原子完成房间行与首位房主成员。
+ * 建房写入：房间行 + 首位房主成员 + 席位 + 队名 + 目录快照。
+ * 在调用方的 transactionSync 闭包内执行，任一语句失败时整体回滚。
  *
  * 初始状态：live、waiting、空席位、空队名、无提交无预选、revision 与
  * bp.version 为 0；规则与数据版本、目录快照在建房时固定；
@@ -228,6 +235,8 @@ export function createRoomRecord(
 /**
  * 写入新成员（观众身份；角色与席位始终从房间状态派生）并递增公开
  * revision。新成员在线状态为离线：只有实际 WS 连接（PR5）会将其置为在线。
+ * 在调用方的 transactionSync 闭包内执行：成员行与 revision 更新要么同时
+ * 提交，要么整体回滚。
  */
 export function insertMember(sql: RoomSql, member: NewMemberRecord): void {
   sql.exec(

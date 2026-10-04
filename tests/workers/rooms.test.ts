@@ -355,3 +355,63 @@ describe("GET /api/rooms/:roomId/catalog 固定目录", () => {
     expect(error.error.code).toBe("ROOM_NOT_FOUND");
   });
 });
+
+describe("POST 请求体大小上限", () => {
+  /** 与 server/index.ts 一致的上限（8 KiB）；测试独立断言该合同值。 */
+  const MAX_BODY_BYTES = 8 * 1024;
+
+  it("超限请求体返回 413 且不产生房间或凭据", async () => {
+    // 含合法房名/昵称与 1 MiB padding 的请求曾会被缓冲并按 201 接受。
+    const oversized = { roomName: "赛事", nickname: "房主", padding: "x".repeat(1024 * 1024) };
+    const response = await postJson("/api/rooms", oversized);
+    expect(response.status).toBe(413);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    const error = apiErrorResponseBodySchema.parse(await response.json());
+    expect(error.error.code).toBe("INVALID_REQUEST");
+  });
+
+  it("恰在上限的请求体正常处理，超出一个字节被拒绝", async () => {
+    // skeleton 与 padding 均为 ASCII：字符串长度即 UTF-8 字节数。
+    const skeleton = JSON.stringify({ roomName: "r", nickname: "n", padding: "" });
+    const atLimit = {
+      roomName: "r",
+      nickname: "n",
+      padding: "a".repeat(MAX_BODY_BYTES - skeleton.length),
+    };
+    expect(new TextEncoder().encode(JSON.stringify(atLimit)).byteLength).toBe(MAX_BODY_BYTES);
+    const accepted = await postJson("/api/rooms", atLimit);
+    expect(accepted.status).toBe(201);
+
+    const overLimit = {
+      roomName: "r",
+      nickname: "n",
+      padding: "a".repeat(MAX_BODY_BYTES - skeleton.length + 1),
+    };
+    const rejected = await postJson("/api/rooms", overLimit);
+    expect(rejected.status).toBe(413);
+    const error = apiErrorResponseBodySchema.parse(await rejected.json());
+    expect(error.error.code).toBe("INVALID_REQUEST");
+    expect(rejected.headers.get("Set-Cookie")).toBeNull();
+  });
+
+  it("缺失 Content-Length 的超限分块请求仍被流式计数拒绝", async () => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"roomName":"r","nickname":"n","padding":"'));
+        controller.enqueue(encoder.encode("b".repeat(64 * 1024)));
+        controller.enqueue(encoder.encode('"}'));
+        controller.close();
+      },
+    });
+    // 流式 body 不携带 Content-Length，只能靠实际字节计数拒绝。
+    const request = new Request(`${BASE_URL}/api/rooms`, { method: "POST", body });
+    expect(request.headers.get("Content-Length")).toBeNull();
+    const response = await exports.default.fetch(request);
+    expect(response.status).toBe(413);
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    const error = apiErrorResponseBodySchema.parse(await response.json());
+    expect(error.error.code).toBe("INVALID_REQUEST");
+  });
+});

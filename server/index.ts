@@ -31,6 +31,15 @@ const JSON_HEADERS: Record<string, string> = {
   "Cache-Control": "no-store",
 };
 
+/**
+ * JSON 请求体的字节上限：8 KiB。
+ *
+ * 当前两个表单（房名 80 码点、昵称 24 码点，UTF-8 最长约 416 字节）
+ * 远小于该值，这些入口没有接收大 body 的需求；超限请求在流式读取时
+ * 尽早拒绝，避免把任意大小的 body 完整缓冲进 128 MiB 的 isolate 内存。
+ */
+const MAX_JSON_BODY_BYTES = 8 * 1024;
+
 function jsonResponse(status: number, body: unknown, headers?: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -60,13 +69,47 @@ function isSameOrigin(request: Request): boolean {
   }
 }
 
-/** 解析 JSON 请求体；非法 JSON 返回 400 响应。 */
+/**
+ * 解析 JSON 请求体：按实际字节数流式读取，超限尽早拒绝（413）；
+ * 非法 JSON 返回 400。Content-Length 只用于快速拒绝明确超限的声明，
+ * 缺失或不真实的 header 不能绕过流式计数。
+ */
 async function readJsonBody(
   request: Request,
 ): Promise<{ ok: true; data: unknown } | { ok: false; response: Response }> {
+  const declaredLength = request.headers.get("Content-Length");
+  if (declaredLength !== null) {
+    const length = Number(declaredLength);
+    if (Number.isFinite(length) && length > MAX_JSON_BODY_BYTES) {
+      return { ok: false, response: apiError(413, "INVALID_REQUEST", "请求体过大") };
+    }
+  }
+
+  let receivedBytes = 0;
+  let text = "";
+  if (request.body !== null) {
+    const reader = request.body.getReader();
+    const decoder = new TextDecoder();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      receivedBytes += value.byteLength;
+      if (receivedBytes > MAX_JSON_BODY_BYTES) {
+        try {
+          await reader.cancel();
+        } catch {
+          // 取消剩余传输失败不影响拒绝响应。
+        }
+        return { ok: false, response: apiError(413, "INVALID_REQUEST", "请求体过大") };
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+  }
+
   let data: unknown;
   try {
-    data = await request.json();
+    data = JSON.parse(text);
   } catch {
     return { ok: false, response: apiError(400, "INVALID_REQUEST", "请求体必须是合法 JSON") };
   }
@@ -252,62 +295,75 @@ async function handleRoomCatalog(ctx: ExecutionContext, roomId: string): Promise
   return jsonResponse(200, catalog);
 }
 
+/** `/api/*` 路由分发；未预期异常由 fetch 的统一错误边界捕获。 */
+async function handleApiRequest(request: Request, ctx: ExecutionContext): Promise<Response> {
+  const { pathname } = new URL(request.url);
+
+  if (!pathname.startsWith("/api/")) {
+    // 不属于动态入口的未匹配请求：交回静态资源层处理（含 SPA 回退）。
+    return new Response(null, { status: 404 });
+  }
+
+  // 引导期存储链路自检（既有契约，见 shared/api.ts）。
+  if (pathname === "/api/health") {
+    if (request.method !== "GET") {
+      return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
+    }
+    const id = ctx.exports.Room.idFromName("bootstrap-health");
+    const room = ctx.exports.Room.get(id);
+    const info = await room.ensureCreated();
+    return jsonResponse(200, { ok: true, room: info });
+  }
+
+  if (pathname === "/api/rooms" || pathname === "/api/rooms/") {
+    if (request.method !== "POST") {
+      return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
+    }
+    return handleCreateRoom(request, ctx);
+  }
+
+  if (pathname.startsWith("/api/rooms/")) {
+    const { invalid, route } = matchRoomRoute(pathname);
+    if (invalid) {
+      return apiError(400, "INVALID_REQUEST", "非法的房间 ID");
+    }
+    if (route !== null) {
+      const { roomId, sub } = route;
+      if (sub === null) {
+        if (request.method !== "GET") {
+          return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
+        }
+        return handleRoomEntry(request, ctx, roomId);
+      }
+      if (sub === "members") {
+        if (request.method !== "POST") {
+          return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
+        }
+        return handleJoinRoom(request, ctx, roomId);
+      }
+      if (sub === "catalog") {
+        if (request.method !== "GET") {
+          return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
+        }
+        return handleRoomCatalog(ctx, roomId);
+      }
+      // 成员实时连接与展示连接（/ws、/display/ws）在 PR5 接入。
+    }
+  }
+
+  return Response.json({ error: "Not Found" }, { status: 404, headers: JSON_HEADERS });
+}
+
 export default {
   async fetch(request, _env, ctx): Promise<Response> {
-    const { pathname } = new URL(request.url);
-
-    if (!pathname.startsWith("/api/")) {
-      // 不属于动态入口的未匹配请求：交回静态资源层处理（含 SPA 回退）。
-      return new Response(null, { status: 404 });
+    try {
+      // 异步路由必须在边界内被 await：只包 return 不 await 捕不到异步 reject。
+      return await handleApiRequest(request, ctx);
+    } catch {
+      // 统一错误边界：任何未预期异常（DO RPC、SQLite、状态装配等）只返回
+      // 通用 500 共享错误体，不向客户端泄漏 SQL 错误、内部状态或凭据，
+      // 也不交付 Cookie；服务端不记录含请求内容（Cookie/输入）的日志。
+      return apiError(500, "INTERNAL", "服务器内部错误，请稍后重试");
     }
-
-    // 引导期存储链路自检（既有契约，见 shared/api.ts）。
-    if (pathname === "/api/health") {
-      if (request.method !== "GET") {
-        return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
-      }
-      const id = ctx.exports.Room.idFromName("bootstrap-health");
-      const room = ctx.exports.Room.get(id);
-      const info = await room.ensureCreated();
-      return jsonResponse(200, { ok: true, room: info });
-    }
-
-    if (pathname === "/api/rooms" || pathname === "/api/rooms/") {
-      if (request.method !== "POST") {
-        return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
-      }
-      return handleCreateRoom(request, ctx);
-    }
-
-    if (pathname.startsWith("/api/rooms/")) {
-      const { invalid, route } = matchRoomRoute(pathname);
-      if (invalid) {
-        return apiError(400, "INVALID_REQUEST", "非法的房间 ID");
-      }
-      if (route !== null) {
-        const { roomId, sub } = route;
-        if (sub === null) {
-          if (request.method !== "GET") {
-            return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
-          }
-          return handleRoomEntry(request, ctx, roomId);
-        }
-        if (sub === "members") {
-          if (request.method !== "POST") {
-            return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
-          }
-          return handleJoinRoom(request, ctx, roomId);
-        }
-        if (sub === "catalog") {
-          if (request.method !== "GET") {
-            return apiError(405, "INVALID_REQUEST", "Method Not Allowed");
-          }
-          return handleRoomCatalog(ctx, roomId);
-        }
-        // 成员实时连接与展示连接（/ws、/display/ws）在 PR5 接入。
-      }
-    }
-
-    return Response.json({ error: "Not Found" }, { status: 404, headers: JSON_HEADERS });
   },
 } satisfies ExportedHandler<Env>;

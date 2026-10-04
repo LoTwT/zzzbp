@@ -28,11 +28,12 @@
   约束，按摘要等值查找）；原始秘密不进入 JSON 响应、共享 `RoomState`、
   日志或公开目录。
 - 身份 Cookie 按房间命名（`zzzbp_room_{roomId}`），属性为 HttpOnly、
-  Secure、SameSite=Lax、Path=/，有效期 90 天（覆盖房间最长保留窗口的
-  量级，过期后按新观众重新入房）。一房一 Cookie：同一浏览器的多房间
-  身份共存互不覆盖；恢复身份不轮换凭据（不下发新 Set-Cookie，其他
-  页面继续有效）；摘要只在对应房间的成员表内查找，凭据无法跨房间
-  恢复权限。
+  Secure、SameSite=Lax、Path=/，有效期 90 天。90 天是凭据自身的寿命，
+  与房间生命周期独立（live 房间没有固定的最大存续时长）；过期后浏览器
+  丢失该房间身份，按新观众重新入房，房间数据与保留计时不受影响。
+  一房一 Cookie：同一浏览器的多房间身份共存互不覆盖；恢复身份不轮换
+  凭据（不下发新 Set-Cookie，其他页面继续有效）；摘要只在对应房间的
+  成员表内查找，凭据无法跨房间恢复权限。
 - 带 Cookie 的写请求（POST 建房/入房）校验同源 Origin：携带第三方
   Origin 的 POST 一律拒绝；未带 Origin 的非浏览器请求放行，跨站防护
   由 SameSite=Lax 与本检查共同承担。
@@ -60,11 +61,15 @@
 归档房间的原 URL 经普通 HTTP 读取快照，无需成员加入或 WebSocket。
 
 通用约定：`/api/*` 的 JSON 响应均带 `Cache-Control: no-store`；请求体必须
-是合法 JSON 并通过对应 schema（失败返回 400 `INVALID_REQUEST`）；已知
-路径的非法方法返回 405；路由中的 roomId 非法返回 400；房间不存在返回
-404 `ROOM_NOT_FOUND`（错误体均为 `apiErrorResponseBodySchema`）；未知
-`/api` 路径维持引导期的 404 JSON。归档房间在 PR9 前没有任何转入路径，
-读取归档分支当前是防御实现（410 `ROOM_ARCHIVED`），届时替换为快照响应。
+是合法 JSON 并通过对应 schema（失败返回 400 `INVALID_REQUEST`），且按
+实际字节数限制在 8 KiB 内（流式计数，缺失或不真实的 Content-Length 不
+能绕过；超限返回 413）；已知路径的非法方法返回 405；路由中的 roomId
+非法返回 400；房间不存在返回 404 `ROOM_NOT_FOUND`（错误体均为
+`apiErrorResponseBodySchema`）；未预期异常（DO RPC、存储、状态装配等）
+由统一错误边界转换为 500 `INTERNAL` 通用错误体，不泄漏内部细节；
+未知 `/api` 路径维持引导期的 404 JSON。归档房间在 PR9 前没有任何转入
+路径，读取归档分支当前是防御实现（410 `ROOM_ARCHIVED`），届时替换为
+快照响应。
 
 ## 房间持久化与固定目录
 
@@ -81,17 +86,21 @@
 | `schema_meta`（单行） | 业务表结构版本；`ensureRoomSchema` 是幂等的初始化/版本升级入口（当前版本 1，尚无更旧的已发布数据需要迁移）。 |
 | `room_info`（legacy） | 引导期 `/api/health` 的存储自检记录（`shared/api.ts` 合同），由 DO 的 health 方法单独维护，与业务表互不干扰。 |
 
-- 建房在单个 DO 方法内原子完成（连续同步 SQL 写入在输入门内不被
-  交错）：房间行 + 首位房主成员 + 席位 + 队名 + 目录快照。初始状态为
-  waiting、空席、空队名、无提交无预选，revision 与 bp.version 均为 0；
-  房主身份（hostMemberId）与席位分开管理。成员加入只新增一行
-  `members` 并递增 revision，不重写目录快照或其他成员。
+- 建房与入房各为一个 `transactionSync` 同步事务闭包：schema 初始化、
+  存在性检查、全部写入与写入后的状态装配同在一个事务内，任一步骤抛
+  异常（SQL 故障、校验失败、装配失败）时平台回滚整个事务，不留半建房
+  或无凭据交付的孤儿成员。DO 的单线程执行与输入门只保证语句不被其他
+  事件交错，不提供异常回滚，两者不可混同。建房初始状态为 waiting、
+  空席、空队名、无提交无预选，revision 与 bp.version 均为 0；房主身份
+  （hostMemberId）与席位分开管理。成员加入只新增一行 `members` 并递增
+  revision，不重写目录快照或其他成员。
 - 目录与版本固定：建房时把当前部署经校验的目录快照与
   `BP_RULE_VERSION`（`shared/bp/version.ts`，规则版本的单一常量来源）
   写入该房间。此后该房间的规则名单（`toAgentCatalog`）、归档展示
   lookup（`toAgentDisplayLookup`）与 `GET /api/rooms/:roomId/catalog`
-  一律从其持久快照派生；`server/` 不导入全局目录，部署升级不重解释
-  旧房间的名单、展示或可选资格。数据来源与更新办法见
+  一律从其持久快照派生；房间对象与一切房间读取只使用该持久快照
+  （全局目录仅在 Worker 建房入口作为创建输入注入一次），部署升级不
+  重解释旧房间的名单、展示或可选资格。数据来源与更新办法见
   [代理人数据接入](specs/agent-data.md)。
 - 载入状态一律经 `roomStateSchema` / `agentCatalogSchema` 校验，不建立
   第二套 BP 规则；BP 命令语义（PR5）继续走 `shared/transitions.ts`
@@ -134,7 +143,9 @@
   包生成），规则版本取自 `shared/bp/version.ts` 的 `BP_RULE_VERSION`
   常量（单一来源）；已建房间的 `AgentCatalog.agentIds` 与归档展示
   lookup 从其持久目录快照派生（见[房间持久化与固定目录](#房间持久化与固定目录)）。
-  数据来源与更新办法见[代理人数据接入](specs/agent-data.md)。
+  数据来源与更新办法见[代理人数据接入](specs/agent-data.md)。已保存的
+  规则版本只是固定标识，不表示实现了历史规则引擎：命令执行入口（PR5）
+  按房间的持久 ruleVersion 校验当前实现是否支持，不支持则拒绝。
 - `bp.version` 与公开 `revision` 职责分开：前者只随预选、提交、控制
   命令与席位权限变化递增（重开不重置），用于命令过期判断；后者随
   任何可见状态变化递增，用于视图同步。
@@ -187,5 +198,5 @@ PR4 已落地持久房间、HTTP 建房/入房/读取/目录入口与匿名身�
 
 | PR | 接入点 |
 |---|---|
-| PR5（成员 WS 与同步） | 成员 WS 命令经 `applyRoomCommand` / `setMemberOnline` 执行并按身份投影广播（名单校验用 `loadRoomCatalog` 派生）、多页面在线计数与空房计时的取消/重置、`operationId` 持久化去重回执。 |
+| PR5（成员 WS 与同步） | 成员 WS 命令经 `applyRoomCommand` / `setMemberOnline` 执行并按身份投影广播（名单校验用 `loadRoomCatalog` 派生，执行前按房间持久 ruleVersion 校验当前实现支持性）、多页面在线计数与空房计时的取消/重置、`operationId` 持久化去重回执。 |
 | PR9（归档与清理） | Alarm 与读写路径共用到期检查（读 `room_meta.last_member_left_at`）；到期经 `projectArchiveSnapshot` 生成快照或清理空房间；`GET /api/rooms/:roomId` 的 archived 分支替换为只读快照响应。 |
