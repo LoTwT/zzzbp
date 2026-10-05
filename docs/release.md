@@ -116,13 +116,15 @@ PR1–PR9 的浏览器验收证据保存在提交时的临时目录（`/tmp/zzzb
 
 ## 本次验收使用的门禁结果
 
-- `pnpm lint`、`pnpm format:check`、`pnpm typecheck`：通过（修复提交后复跑）。
-- `pnpm test`：通过（32 个文件、362 条测试，含真实 workerd 集成）；本轮修复未改动产品代码
-  与常规测试配置，复用冻结提交 `06e2f95` 的完整结果，后续 CI 会再次执行。
-- `pnpm build`：通过（同上，复用冻结提交结果）。
-- `pnpm test:e2e`：通过。第三轮修复聚焦复跑 display-record（2/2，含名称单行新断言），并
-  另以「Times/Songti 字体回退」注入变体验证展示池自适应（9 列、无内部溢出、名称单行；
-  一次性探针不入库）；resilience、mainline 与此前整组结果继续有效，CI 对本次提交执行
-  完整套件。
-- `pnpm measure:rooms`：通过（本轮修复后运行；SQL 计量改为真实执行路径的透明包装，数字见
-  预算文档；报告打印到标准输出并持久化到 `node_modules/.tmp/measure-report.json`）。
+- `pnpm lint`、`pnpm format:check`、`pnpm typecheck`：通过（当前 `a5f5122` 修复后复跑）。
+- `pnpm test`：通过（当前 `a5f5122` 修复后复跑：32 个文件、362 条测试，含真实 workerd
+  集成）。
+- `pnpm build`：通过（同上，修复后复跑）。
+- `pnpm test:e2e`：本次修复聚焦复跑 display-record（2/2，含名称单行新断言），另以
+  「Times/Songti 字体注入」变体验证展示池自适应（9 列、无内部溢出、名称单行；本机等价
+  复现，一次性探针不入库），父以当前 head 同条件重跑完整展示用例 1/1 通过。首次真实
+  GitHub CI（run 37253719218）中 mainline、resilience、record 通过，display 暴露的跨
+  字体布局缺陷已由本提交修复；修复后的完整新 CI 待确认。
+- `pnpm measure:rooms`：通过（复用冻结提交 `17b3d3b` 的计量结果；本轮展示网格修复未改动
+  测量与服务端路径。SQL 计量为真实执行路径的透明包装，数字见预算文档；报告打印到标准
+  输出并持久化到 `node_modules/.tmp/measure-report.json`）。
