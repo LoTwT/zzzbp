@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
     "target": "es2023",
-    "lib": ["es2023"],
-    "types": ["@cloudflare/vitest-plugin/types"],
+    "lib": ["es2023", "dom"],
+    "types": ["node"],
 
     /* Bundler mode */
     "module": "esnext",
@@ -22,6 +22,10 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true
   },
-  "include": ["tests/**/*.ts", "shared/**/*.ts", ".cloudflare/types"],
-  "exclude": ["tests/e2e"]
+  "include": [
+    "tests/e2e/**/*.ts",
+    "tests/rules/spec-bp-order.ts",
+    "shared/**/*.ts",
+    "shared/agents/catalog.json"
+  ]
 }

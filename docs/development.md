@@ -24,7 +24,9 @@ pnpm 12 另有最小发布年龄（minimum release age）的供应链策略：�
 | `pnpm lint` | Oxlint 检查源码。 |
 | `pnpm format` / `pnpm format:check` | Oxfmt 格式化 / 校验，含 Tailwind 类名排序。 |
 | `pnpm typecheck` | 先 `cf workers types` 生成 Worker 类型，再 `vue-tsc -b` 检查所有类型环境。 |
-| `pnpm test` | Vitest：纯规则测试与真实 Workers 集成测试。 |
+| `pnpm test` | Vitest：纯规则测试、浏览器端纯逻辑与真实 Workers 集成测试（不含 E2E 与测量）。 |
+| `pnpm test:e2e` | Vitest + Playwright：真实浏览器验收，自动启动/回收本地 `cf dev`（见「测试组织」）。 |
+| `pnpm measure:rooms` | 本地资源基准：在真实 workerd + SQLite 上测量消息量、存储与耗时，输出 JSON（按需运行，部署前复核）。 |
 | `pnpm run generate:agent-catalog` | 从固定版本的 `@randomplay/data` 重新生成代理人目录产物；仅在数据版本更新时使用，日常构建与测试不运行（见[代理人数据接入](specs/agent-data.md)）。 |
 | `pnpm build` | 显式串联 `typecheck` 与 `cf build`，产出 `.cloudflare/output/v0/`。 |
 
@@ -50,15 +52,16 @@ curl http://localhost:5173/api/unknown    # Worker 返回 404 JSON
 
 ## 类型环境
 
-四个 TypeScript 项目分别对应不同的运行环境（见根目录 `tsconfig.*.json`，由
+六个 TypeScript 项目分别对应不同的运行环境（见根目录 `tsconfig.*.json`，由
 `tsconfig.json` 统一引用）：
 
 | 配置 | 覆盖范围 | 环境 |
 |---|---|---|
 | `tsconfig.app.json` | `src/`、`shared/` | 浏览器（DOM + Vue）。 |
 | `tsconfig.worker.json` | `server/`、`shared/`、`cloudflare.config.ts` | Workers 运行时。 |
-| `tsconfig.node.json` | `vite.config.ts`、`vitest.config.ts` | Node 构建配置。 |
-| `tsconfig.test.json` | `tests/`、`shared/` | 测试（Workers 测试类型）。 |
+| `tsconfig.node.json` | 构建与测试配置（`vite.config.ts`、`vitest*.config.ts`） | Node 构建配置。 |
+| `tsconfig.test.json` | `tests/`（不含 `tests/e2e`，含 `tests/measure`）、`shared/` | 测试（Workers 测试类型）。 |
+| `tsconfig.e2e.json` | `tests/e2e/` 及其共享依赖 | Node + DOM 类型（Playwright 驱动与页面内 `evaluate`）。 |
 
 Worker 的运行时与绑定类型由 `cf workers types`（或 Cloudflare Vite 插件在 dev/build
 时）生成到 `.cloudflare/types/index.d.ts`；该目录被 gitignore，不要手工编辑或提交。
@@ -68,7 +71,7 @@ Worker 的运行时与绑定类型由 `cf workers types`（或 Cloudflare Vite �
 
 ## 测试组织
 
-`vitest.config.ts` 定义三个独立项目：
+`vitest.config.ts` 定义三个独立项目（常规门禁，`pnpm test`）：
 
 - `tests/rules/`：纯 TypeScript 规则与契约测试，Node 环境，不依赖 Worker 运行时；
   BP 规则测试在对应 PR 中加入。
@@ -84,15 +87,36 @@ Worker 的运行时与绑定类型由 `cf workers types`（或 Cloudflare Vite �
   `runInDurableObject` 直接观察实例内表行，实例重建用 `evictDurableObject`
   拆除实例（保留持久存储）后读回验证。
 
-浏览器交互测试 provider（`@vitest/browser-playwright`）在需要真实浏览器验证交互时
-引入，与 Vitest 保持同一版本；本阶段不编写空泛的 UI 测试。
+真实浏览器验收（`pnpm test:e2e`，`tests/e2e/` + `vitest.e2e.config.ts`）：Vitest
+的独立 Node 项目用 Playwright 驱动真实 `cf dev` 服务（Vite 前端 + 本地 workerd
+Worker/SQLite），不 mock 建房/入房/命令结果。选型说明：多身份 Cookie 隔离、多页面
+协同与 `page.routeWebSocket` 断线注入需要从 Node 编排并行浏览器上下文，
+`@vitest/browser-playwright` 的测试代码运行在浏览器页面内、不适合作为编排入口，
+故直接引入 `playwright`（1.63.0）而不引入 browser mode；测试入口仍统一为 Vitest。
+服务由 `tests/e2e/global-setup.ts` 启动与回收：默认端口 4517
+（`ZZZBP_E2E_PORT` 可覆盖），端口被占用时直接失败而不动他人进程；`cf dev` 以独立
+进程组启动，退出时只向该进程组发信号并清理一次性持久化目录
+（`ZZZBP_DEV_PERSIST_STATE` 注入，vite.config.ts 读取）。需要本机或 CI 安装
+Chromium：`pnpm exec playwright install chromium`（CI 加 `--with-deps`）。
+`pnpm test` 不包含 E2E，避免同一条命令重复运行同一套测试；CI 以独立 job 执行。
 
-真实浏览器验收（PR6 起）：多身份上下文、Cookie 隔离、断线暂停/恢复与两视口
-布局检查使用本地 Playwright 脚本驱动 `pnpm dev` 的真实 workerd 服务执行，脚本与
-截图保存在 `/tmp` 等审查证据位置，不进入仓库与常规门禁；`tests/web` 覆盖其中可
-维护的纯逻辑回归。PR10 规划全链路端到端验证时，再决定是否引入
-`@vitest/browser-playwright`（同 Vitest 4.1.11 版本）并将浏览器准备纳入 CI——若
-作为分离命令加入，需同步说明其执行方式与 CI 的浏览器安装步骤。
+本地资源基准（`pnpm measure:rooms`，`tests/measure/` + `vitest.measure.config.ts`）：
+同样在真实 workerd + SQLite 运行，测量典型房间与有界示例规模的消息量、表行数、
+SQLite 分配大小与本地耗时，输出 JSON；按需运行，不进入常规门禁。结论与估算方法见
+[Cloudflare 部署与预算评估](specs/cloudflare-budget.md#容量估算方法与本地基准)。
+
+浏览器交互测试 provider（`@vitest/browser-playwright`）未被首版采纳，理由同上；
+如后续需要组件级浏览器测试再按需引入，并与 Vitest 保持同一版本。
+
+Workers 集成测试中的 WebSocket 客户端模式：本套件选择对 Worker 发起带
+`Upgrade: websocket` 头的 fetch，从 101 响应的 `webSocket` 字段取得客户端
+socket 并 `accept()`（与 Worker 代理 DO 的官方模式一致）；当前生成的运行时
+类型也声明了 `new WebSocket(url)` 构造器，但本套件未走该路径，未验证其
+行为差异。实测边界：该 fetch 会把带 Upgrade 头的子请求规范化为 GET 握手，
+因此「非 GET 方法拒绝 WS 升级」这类防御分支无法经此通道驱动。休眠语义用
+`evictDurableObject` 验证：实例拆除后 hibernatable 连接与附件由运行时
+保留，原连接上的消息以附件身份唤醒新实例（tests/workers/ 中的探针
+结论已固化为 room-presence.test.ts 的回归测试）。
 
 Workers 集成测试中的 WebSocket 客户端模式：本套件选择对 Worker 发起带
 `Upgrade: websocket` 头的 fetch，从 101 响应的 `webSocket` 字段取得客户端
@@ -118,6 +142,12 @@ socket 并 `accept()`（与 Worker 代理 DO 的官方模式一致）；当前�
 
 ## CI
 
-`.github/workflows/ci.yml` 在 push（main）与 pull_request 时执行：install
-（frozen lockfile）→ lint → format:check → typecheck → test → build。不包含任何
-部署步骤；部署凭据不进入仓库。
+`.github/workflows/ci.yml` 在 push（main）与 pull_request 时执行两个 job：
+
+- `verify`：install（frozen lockfile）→ lint → format:check → typecheck → test → build；
+- `e2e`：install → 安装 Chromium（`pnpm exec playwright install --with-deps chromium`，
+  浏览器缓存按 playwright 版本键入）→ `pnpm test:e2e`（测试自身启动/等待/回收本地
+  `cf dev`）。
+
+两个 job 都不包含部署步骤；部署凭据不进入仓库。E2E 失败时以 Playwright 的调用日志
+与测试输出定位，不配置宽松重试。

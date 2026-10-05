@@ -11,6 +11,8 @@
     "format:check": "oxfmt --check",
     "typecheck": "cf workers types && vue-tsc -b",
     "test": "vitest run",
+    "test:e2e": "vitest run -c vitest.e2e.config.ts",
+    "measure:rooms": "vitest run -c vitest.measure.config.ts",
     "generate:agent-catalog": "node scripts/generate-agent-catalog.ts",
     "prepare": "simple-git-hooks"
   },
@@ -35,6 +37,7 @@
     "lint-staged": "^17.6.0",
     "oxfmt": "^0.71.0",
     "oxlint": "^1.86.0",
+    "playwright": "1.63.0",
     "simple-git-hooks": "^2.14.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
