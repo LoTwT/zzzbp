@@ -17,17 +17,17 @@ import {
 
 /**
  * 本地资源基准（PR10）：在真实 workerd + SQLite 上测量首版典型房间与
- * 有界示例规模下的数据量、消息量、SQL 行成本与本地耗时，为
+ * 有界示例规模下的数据量、消息量与 SQL 行成本，为
  * docs/specs/cloudflare-budget.md 的容量估算提供可复现输入。
  *
  * 口径与边界：
  * - 消息为各连接累计的逻辑 JSON 字节（UTF-8）；存储同时给出内容 UTF-8
  *   字节（`LENGTH(CAST(... AS BLOB))`，不是 SQLite 的字符计数）、表行数与
  *   `databaseSize` 分配（分配 ≠ 内容字节，删除不一定立即缩小）。
- * - SQL 行成本用官方 SQL API 的 `cursor.rowsRead` / `cursor.rowsWritten`
- *   实测（语句形状取自实现，出现次数按实现事务路径；平台内部元数据、
- *   Alarm 内部读写与线上计费边界不在本地观测内）；写语义用临时表探测
- *   （单行 DML 各计 1 行，不触碰业务表）。
+ * - SQL 行成本来自真实执行路径：在测试侧透明包装房间实例的 `sql`
+ *   （原样转发每条 `exec`、保留 cursor），按阶段统计 `cursor.rowsRead` /
+ *   `cursor.rowsWritten`，不做语句复制或乘数推算；`setAlarm` 不经 SQL exec
+ *   未计入，平台内部元数据、Alarm 内部行为与线上计费边界不在本地观测内。
  * - 耗时是本地 wall-clock，包含测试客户端的 20ms 轮询间隔，**不是** DO
  *   活动时长或计费 CPU，不用于换算 GB-s。
  * - 示例规模（房间数/连接数/预选频率）是假设情景，不是用户已确定规模。
@@ -115,8 +115,8 @@ async function sqliteAlloc(roomId: string): Promise<number | null> {
   return runInDurableObject(stub, (_room, state) => state.storage.sql.databaseSize);
 }
 
-/** 读取单行文本列的 UTF-8 字节与码点数（区分字符计数与字节）。 */
-async function textColumnBytes(
+/** 读取单行文本列的内容度量：UTF-8 字节与 Unicode 码点（非 UTF-16 码元）。 */
+async function textColumnMetrics(
   roomId: string,
   table: string,
   column: string,
@@ -124,131 +124,110 @@ async function textColumnBytes(
   const rows = await queryRoomRows(roomId, `SELECT ${column} AS t FROM ${table} WHERE id = 1`);
   const value = rows[0]?.t;
   if (typeof value !== "string") return null;
-  return { codePoints: value.length, utf8Bytes: bytes(value) };
+  return { codePoints: Array.from(value).length, utf8Bytes: bytes(value) };
+}
+
+interface TracedStatement {
+  readonly sql: string;
+  readonly read: number;
+  readonly write: number;
+}
+
+/** 包装期间保留的语句与 cursor：行读计数在完整迭代后才最终化，须在命令结束后读取。 */
+interface TracedCursor {
+  readonly sql: string;
+  readonly cursor: SqlStorageCursor<Record<string, SqlStorageValue>>;
 }
 
 /**
- * 命令事务的 SQL 成本模型：语句形状取自实现（server/persistence.ts 与
- * server/room.ts 的 processMemberCommand 路径），每条语句的行成本用
- * cursor 在真实数据规模下实测；出现次数为代码推导并在此列出。
+ * 真实执行路径的 SQL 计量器：在测试侧透明包装房间实例的 `sql`，原样转发
+ * 每条 `exec` 并保留 cursor 计数；不改变 SQL、不产生任何业务写。
+ *
+ * 段边界由测试侧 `take()` 控制（取走并清空当前段）；`restore()` 在 finally
+ * 中卸载包装，避免影响后续阶段。计数覆盖经由该实例 `sql` 的全部执行路径
+ * （WS 命令、HTTP 入房与归档读取/清理）；测试自身的查询、受控时间戳注入与
+ * `setAlarm` 不经过该包装，天然排除。
  */
-async function sqlCostModel(roomId: string): Promise<Record<string, unknown>> {
-  const stub = exports.Room.get(exports.Room.idFromName(roomId));
-  return runInDurableObject(stub, (_room, state) => {
-    const sql = state.storage.sql;
-    const measure = (label: string, statement: string, ...params: unknown[]) => {
-      const cursor = sql.exec(statement, ...params);
-      void cursor.toArray();
-      return { label, rowsRead: cursor.rowsRead, rowsWritten: cursor.rowsWritten };
-    };
-    const receiptCount = Number(
-      sql.exec("SELECT COUNT(*) AS n FROM command_receipts").toArray()[0]?.n ?? 0,
-    );
-    const hit = sql
-      .exec("SELECT member_id, operation_id FROM command_receipts ORDER BY rowid DESC LIMIT 1")
-      .toArray()[0];
-    const memberId = hit?.member_id;
-    const operationId = hit?.operation_id;
+class SqlExecutionMeter {
+  private stub: ReturnType<typeof exports.Room.get> | null = null;
+  private readonly traced: TracedCursor[] = [];
+  private installed = false;
 
-    const statements = {
-      hasRoomSchema: measure(
-        "hasRoomSchema",
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
-        "schema_meta",
-      ),
-      schemaVersion: measure("schemaVersion", "SELECT version FROM schema_meta WHERE id = 1"),
-      roomMeta: measure(
-        "roomMeta",
-        "SELECT room_id, name, lifecycle, host_member_id, revision, bp_status, bp_version, bp_preselect FROM room_meta WHERE id = 1",
-      ),
-      members: measure("members", "SELECT member_id, nickname, online FROM members ORDER BY rowid"),
-      seats: measure("seats", "SELECT team, member_id FROM seats"),
-      teamNames: measure("teamNames", "SELECT team, name FROM team_names"),
-      submissions: measure(
-        "submissions",
-        "SELECT slot_id, agent_id FROM bp_submissions ORDER BY position",
-      ),
-      catalog: measure("catalog", "SELECT catalog_json FROM room_catalog WHERE id = 1"),
-      receiptHit:
-        memberId === undefined || operationId === undefined
-          ? null
-          : measure(
-              "receiptHit",
-              "SELECT payload_json, ok, error_code, error_message, bp_version, revision FROM command_receipts WHERE member_id = ? AND operation_id = ?",
-              memberId,
-              operationId,
-            ),
-      receiptMiss: measure(
-        "receiptMiss",
-        "SELECT payload_json, ok, error_code, error_message, bp_version, revision FROM command_receipts WHERE member_id = ? AND operation_id = ?",
-        "__measure_missing_member__",
-        "__measure_missing_operation__",
-      ),
-      pruneScan: measure(
-        "pruneScan",
-        "SELECT rowid FROM command_receipts ORDER BY rowid DESC LIMIT -1 OFFSET ?",
-        2048,
-      ),
-    };
-
-    // 写语义探测：临时表单行 DML 各计 1 行写入（不触碰业务表）。
-    let writeProbe: Record<string, unknown>;
-    try {
-      sql.exec("CREATE TEMP TABLE IF NOT EXISTS _measure_probe (v TEXT)");
-      const insertWrites = sql.exec("INSERT INTO _measure_probe (v) VALUES ('x')").rowsWritten;
-      const deleteWrites = sql.exec("DELETE FROM _measure_probe").rowsWritten;
-      writeProbe = { insertWrites, deleteWrites };
-    } catch (error) {
-      writeProbe = { unavailable: String(error) };
-    }
-
-    // 每条命令的固定读取构成（出现次数按实现事务路径）：
-    // hasRoomSchema ×2（结果路径 + 在线协调）、schema 版本读 ×2、
-    // room_meta ×4（结果路径 + 到期裁决 + 协调入口 + 状态装配）、
-    // 状态装配的 members/seats/team_names/submissions 各 ×1、
-    // 回执命中查询 ×1、目录快照 ×1；ensureRoomSchema 的 8 条
-    // CREATE TABLE IF NOT EXISTS 为 DDL，计 0 行读写。
-    const fixedReadsPerCommand =
-      2 * statements.hasRoomSchema.rowsRead +
-      2 * statements.schemaVersion.rowsRead +
-      4 * statements.roomMeta.rowsRead +
-      statements.members.rowsRead +
-      statements.seats.rowsRead +
-      statements.teamNames.rowsRead +
-      statements.submissions.rowsRead +
-      (statements.receiptHit?.rowsRead ?? 0) +
-      statements.catalog.rowsRead;
-
-    return {
-      说明:
-        "行成本为 DO SQL cursor.rowsRead/rowsWritten 实测（按完整迭代语义）；语句出现次数按实现事务路径推导；" +
-        "ensureRoomSchema 的 8 条 CREATE TABLE IF NOT EXISTS 为 DDL（0 行读写）；平台内部元数据与计费边界不在本地观测内。",
-      语句: statements,
-      写语义探测: writeProbe,
-      每条命令固定读取: {
-        出现次数构成: {
-          hasRoomSchema: 2,
-          schema版本读: 2,
-          roomMeta: 4,
-          状态装配: 1,
-          回执命中查询: 1,
-          目录快照: 1,
+  async install(roomId: string): Promise<void> {
+    const stub = exports.Room.get(exports.Room.idFromName(roomId));
+    const traced = this.traced;
+    await runInDurableObject(stub, (instance, state) => {
+      const target = state.storage.sql;
+      const wrapper = new Proxy(target, {
+        get(sqlTarget, key): unknown {
+          if (key === "exec") {
+            return (statement: string, ...params: unknown[]) => {
+              const cursor = sqlTarget.exec(statement, ...params);
+              // 只保留 cursor；行读计数在语句被完整消费后才最终化，
+              // 在命令结束（take）时统一读取，避免过早取样低估。
+              traced.push({ sql: statement.replace(/\s+/g, " ").trim(), cursor });
+              return cursor;
+            };
+          }
+          return Reflect.get(sqlTarget, key, sqlTarget);
         },
-        合计行读: fixedReadsPerCommand,
-      },
-      回执裁剪扫描: {
-        当前回执行数: receiptCount,
-        单次扫描行读: statements.pruneScan.rowsRead,
-        全场累计行读:
-          statements.pruneScan.rowsRead === receiptCount
-            ? (receiptCount * (receiptCount + 1)) / 2
-            : null,
-        说明:
-          "insertCommandReceipt 在插入后执行 OFFSET 2048 的窗口裁剪；未满窗口时每次扫描当前全部回执行（实测线性），" +
-          "全场累计 = 1+…+N；窗口满 2048 后每次约 2048 行。",
-      },
-    };
-  });
+      });
+      Object.defineProperty(instance, "sql", { get: () => wrapper, configurable: true });
+    });
+    this.stub = stub;
+    this.installed = true;
+  }
+
+  async restore(): Promise<void> {
+    if (!this.installed || this.stub === null) return;
+    const stub = this.stub;
+    await runInDurableObject(stub, (instance) => {
+      Reflect.deleteProperty(instance, "sql");
+    });
+    this.installed = false;
+    this.stub = null;
+  }
+
+  /**
+   * 取走当前段并清空（段内语句按执行顺序返回）。段结束时语句已被完整
+   * 消费，此处读取的 rowsRead/rowsWritten 为最终值。
+   */
+  take(): TracedStatement[] {
+    const taken = this.traced.map(({ sql, cursor }) => ({
+      sql,
+      read: cursor.rowsRead,
+      write: cursor.rowsWritten,
+    }));
+    this.traced.length = 0;
+    return taken;
+  }
+}
+
+function totals(trace: readonly TracedStatement[]): { reads: number; writes: number } {
+  let reads = 0;
+  let writes = 0;
+  for (const statement of trace) {
+    reads += statement.read;
+    writes += statement.write;
+  }
+  return { reads, writes };
+}
+
+/** 按规范化 SQL 文本聚合语句次数与行成本（按行读降序）。 */
+function aggregateStatements(
+  trace: readonly TracedStatement[],
+): Array<{ sql: string; count: number; reads: number; writes: number }> {
+  const map = new Map<string, { count: number; reads: number; writes: number }>();
+  for (const statement of trace) {
+    const entry = map.get(statement.sql) ?? { count: 0, reads: 0, writes: 0 };
+    entry.count += 1;
+    entry.reads += statement.read;
+    entry.writes += statement.write;
+    map.set(statement.sql, entry);
+  }
+  return [...map.entries()]
+    .map(([sql, entry]) => ({ sql, ...entry }))
+    .sort((a, b) => b.reads - a.reads || b.writes - a.writes || a.sql.localeCompare(b.sql));
 }
 
 interface MemberSet {
@@ -263,14 +242,17 @@ interface MemberSet {
   readonly displayWs: TestWsClient;
 }
 
-/** 建房 + 三人入房 + 四个成员连接 + 一个展示连接（每房 5 个连接）。 */
-async function connectRoom(roomName: string): Promise<{
-  room: MemberSet;
-  roomId: string;
-  joinMs: number[];
-}> {
+/**
+ * 建房 + 三人入房 + 四个成员连接 + 一个展示连接（每房 5 个连接）。
+ * 传入计量器时在建房后立即安装，用于单独统计「入房与连接」阶段。
+ */
+async function connectRoom(
+  roomName: string,
+  meter?: SqlExecutionMeter,
+): Promise<{ room: MemberSet; roomId: string; joinMs: number[] }> {
   const host = await createRoomViaHttp(roomName, "主持人");
   const roomId = host.roomId;
+  await meter?.install(roomId);
   const joinMs: number[] = [];
   const joined: TestMember[] = [];
   for (const nickname of ["选手甲", "选手乙", "观众星河"]) {
@@ -299,13 +281,21 @@ async function connectRoom(roomName: string): Promise<{
   };
 }
 
+interface CommandRecord {
+  readonly type: string;
+  readonly reads: number;
+  readonly writes: number;
+  readonly statements: TracedStatement[];
+}
+
 /**
  * 开局并推进全部 26 步。每步的公开预选频率示例为：首次预选 + 2 次更换
  * （首步 5 次）+ 换回目标 + 确认 = 5 条命令（首步 8 条）；26 步共 133 条
  * BP 命令，加开局 5 条共 138 条命令（与回执行数一致）。
+ * 每条命令的 SQL 行成本由计量器按真实执行路径逐条记录。
  */
-async function playFullGame(room: MemberSet, roomId: string) {
-  const meter = new TrafficMeter([
+async function playFullGame(room: MemberSet, roomId: string, meter: SqlExecutionMeter) {
+  const traffic = new TrafficMeter([
     room.hostWs,
     room.aWs,
     room.bWs,
@@ -313,20 +303,25 @@ async function playFullGame(room: MemberSet, roomId: string) {
     room.displayWs,
   ]);
   const steps: Array<{ slot: string; ms: number; frames: number; bytes: number }> = [];
+  const commands: CommandRecord[] = [];
 
   let bpVersion = 0;
   async function send(client: TestWsClient, type: string, extra: Record<string, unknown>) {
     const operationId = `measure-${type}-${crypto.randomUUID()}`;
-    client.send({
+    const payload = {
       type,
       ...extra,
       operationId,
       expectedBpVersion: bpVersion,
       ...(type === "setTeamName" ? { expectedRevision: await currentRevisionOf(roomId) } : {}),
-    });
+    };
+    meter.take(); // 丢弃残留，确保段内只含本次命令
+    client.send(payload);
     const result = await client.commandResult(operationId);
     if (!result.ok) throw new Error(`${type} 失败：${result.error?.code ?? "?"}`);
     bpVersion = result.bpVersion;
+    const statements = meter.take();
+    commands.push({ type, ...totals(statements), statements });
     return result;
   }
 
@@ -337,7 +332,7 @@ async function playFullGame(room: MemberSet, roomId: string) {
   await send(room.hostWs, "assignSeat", { team: "B", targetMemberId: room.playerB.memberId });
   await send(room.hostWs, "startBp", {});
   const setupMs = Math.round(now() - setupStart);
-  const setupTraffic = meter.read();
+  const setupTraffic = traffic.read();
 
   const agentIds = agentCatalogData.agents.map((agent) => agent.id);
   let preselectFrames = 0;
@@ -346,7 +341,7 @@ async function playFullGame(room: MemberSet, roomId: string) {
     const client = step.startsWith("A") ? room.aWs : room.bWs;
     const agentId = agentIds[index];
     if (agentId === undefined) throw new Error("名单不足");
-    meter.reset();
+    traffic.reset();
     const started = now();
     await send(client, "setPreselect", { slotId: step, agentId });
     // 公开预选频率示例：每步 2 次更换（首步 5 次），末次换回目标代理人。
@@ -359,20 +354,20 @@ async function playFullGame(room: MemberSet, roomId: string) {
     if (churn > 0) {
       await send(client, "setPreselect", { slotId: step, agentId });
     }
-    const preRead = meter.read();
+    const preRead = traffic.read();
     preselectFrames += preRead.frames;
     preselectBytes += preRead.bytes;
     await send(client, "confirmPreselect", { slotId: step });
-    const traffic = meter.read();
+    const stepTraffic = traffic.read();
     steps.push({
       slot: step,
       ms: Math.round(now() - started),
-      frames: traffic.frames,
-      bytes: traffic.bytes,
+      frames: stepTraffic.frames,
+      bytes: stepTraffic.bytes,
     });
   }
 
-  return { steps, setupMs, setupTraffic, preselectFrames, preselectBytes };
+  return { steps, setupMs, setupTraffic, preselectFrames, preselectBytes, commands };
 }
 
 /** 等待空房计时写入（全员离开后 last_member_left_at 非 null）。 */
@@ -395,7 +390,7 @@ async function fetchEntryKind(path: string): Promise<string> {
   return body.kind ?? "unknown";
 }
 
-/** 把空房计时改写为已过期（受控时间戳，与生命周期测试同一手法）。 */
+/** 把空房计时改写为已过期（受控时间戳，与生命周期测试同一手法；不经实例包装）。 */
 async function expireEmptyRoom(roomId: string): Promise<void> {
   await execInRoom(
     roomId,
@@ -403,65 +398,181 @@ async function expireEmptyRoom(roomId: string): Promise<void> {
   );
 }
 
+/** 命令类型聚合：次数与行成本合计、单命令平均。 */
+function byCommandType(
+  commands: readonly CommandRecord[],
+): Record<
+  string,
+  { 次数: number; 行读: number; 行写: number; 平均行读: number; 平均行写: number }
+> {
+  const map = new Map<string, { count: number; reads: number; writes: number }>();
+  for (const command of commands) {
+    const entry = map.get(command.type) ?? { count: 0, reads: 0, writes: 0 };
+    entry.count += 1;
+    entry.reads += command.reads;
+    entry.writes += command.writes;
+    map.set(command.type, entry);
+  }
+  const result: Record<
+    string,
+    { 次数: number; 行读: number; 行写: number; 平均行读: number; 平均行写: number }
+  > = {};
+  for (const [type, entry] of map) {
+    result[type] = {
+      次数: entry.count,
+      行读: entry.reads,
+      行写: entry.writes,
+      平均行读: Math.round((entry.reads / entry.count) * 10) / 10,
+      平均行写: Math.round((entry.writes / entry.count) * 10) / 10,
+    };
+  }
+  return result;
+}
+
 it("典型房间分阶段资源测量（含归档与清理）", async () => {
   const report: Record<string, unknown> = {
-    说明: "本地 workerd + SQLite 观测，非 Cloudflare 计费实测；字节为 UTF-8 内容字节，SQL 行成本为 cursor 实测，分配为 databaseSize。",
+    说明: "本地 workerd + SQLite 观测，非 Cloudflare 计费实测；字节为 UTF-8 内容字节，SQL 行成本为真实执行路径的 cursor 实测，分配为 databaseSize。",
   };
 
-  // ---- 典型房间：建房、入房、连接、开局、26 步、归档 ----
-  const created = await connectRoom("资源测量赛");
-  const { room, roomId, joinMs } = created;
-  const play = await playFullGame(room, roomId);
-  const afterBp = await tableRows(roomId);
-  const allocAfterBp = await sqliteAlloc(roomId);
-  const sqlCost = await sqlCostModel(roomId);
+  // ---- 典型房间：建房、入房、连接、开局、26 步、归档（SQL 计量全程） ----
+  const meter = new SqlExecutionMeter();
+  try {
+    const created = await connectRoom("资源测量赛", meter);
+    const { room, roomId, joinMs } = created;
+    const joinStage = meter.take();
+    const play = await playFullGame(room, roomId, meter);
 
-  const receipts = await queryRoomRows(
-    roomId,
-    `SELECT COUNT(*) AS n,
-       COALESCE(SUM(LENGTH(CAST(payload_json AS BLOB))), 0) AS payload_bytes,
-       COALESCE(SUM(LENGTH(CAST(COALESCE(error_message, '') AS BLOB))), 0) AS error_message_bytes,
-       COALESCE(SUM(LENGTH(CAST(COALESCE(error_code, '') AS BLOB))), 0) AS error_code_bytes,
-       COALESCE(SUM(LENGTH(CAST(operation_id AS BLOB))), 0) AS operation_id_bytes,
-       COALESCE(SUM(LENGTH(CAST(member_id AS BLOB))), 0) AS member_id_bytes,
-       COALESCE(SUM(LENGTH(CAST(created_at AS BLOB))), 0) AS created_at_bytes
-     FROM command_receipts`,
-  );
-  const receiptRow = receipts[0] ?? {};
-  const receiptBytes =
-    Number(receiptRow.payload_bytes ?? 0) +
-    Number(receiptRow.error_message_bytes ?? 0) +
-    Number(receiptRow.error_code_bytes ?? 0) +
-    Number(receiptRow.operation_id_bytes ?? 0) +
-    Number(receiptRow.member_id_bytes ?? 0) +
-    Number(receiptRow.created_at_bytes ?? 0);
-  const catalogBytes = await textColumnBytes(roomId, "room_catalog", "catalog_json");
+    const afterBp = await tableRows(roomId);
+    const allocAfterBp = await sqliteAlloc(roomId);
+    const receipts = await queryRoomRows(
+      roomId,
+      `SELECT COUNT(*) AS n,
+         COALESCE(SUM(LENGTH(CAST(payload_json AS BLOB))), 0) AS payload_bytes,
+         COALESCE(SUM(LENGTH(CAST(COALESCE(error_message, '') AS BLOB))), 0) AS error_message_bytes,
+         COALESCE(SUM(LENGTH(CAST(COALESCE(error_code, '') AS BLOB))), 0) AS error_code_bytes,
+         COALESCE(SUM(LENGTH(CAST(operation_id AS BLOB))), 0) AS operation_id_bytes,
+         COALESCE(SUM(LENGTH(CAST(member_id AS BLOB))), 0) AS member_id_bytes,
+         COALESCE(SUM(LENGTH(CAST(created_at AS BLOB))), 0) AS created_at_bytes
+       FROM command_receipts`,
+    );
+    const receiptRow = receipts[0] ?? {};
+    const receiptBytes =
+      Number(receiptRow.payload_bytes ?? 0) +
+      Number(receiptRow.error_message_bytes ?? 0) +
+      Number(receiptRow.error_code_bytes ?? 0) +
+      Number(receiptRow.operation_id_bytes ?? 0) +
+      Number(receiptRow.member_id_bytes ?? 0) +
+      Number(receiptRow.created_at_bytes ?? 0);
+    const catalogMetrics = await textColumnMetrics(roomId, "room_catalog", "catalog_json");
 
-  // ---- 归档：全员断开 → 到期裁决（真实读取路径） ----
-  for (const client of [room.hostWs, room.aWs, room.bWs, room.spectatorWs, room.displayWs]) {
-    client.close();
-  }
-  await waitLeftAt(roomId);
-  await expireEmptyRoom(roomId);
-  const readStart = now();
-  const archivedKind = await fetchEntryKind(`/api/rooms/${roomId}`);
-  const archiveReadMs = Math.round(now() - readStart);
-  const snapshotBytes = await textColumnBytes(roomId, "archive_snapshot", "snapshot_json");
-  const afterArchive = await tableRows(roomId);
-  const allocAfterArchive = await sqliteAlloc(roomId);
-  const alarm = await currentAlarm(roomId);
-  const snapshot = archiveSnapshotSchema.parse(
-    JSON.parse(
-      String(
-        (await queryRoomRows(roomId, "SELECT snapshot_json FROM archive_snapshot"))[0]
-          ?.snapshot_json,
+    // ---- 归档：全员断开 → 到期裁决（真实读取路径，经实例包装计量） ----
+    meter.take(); // 丢弃命令段残留，单独计量断开路径
+    for (const client of [room.hostWs, room.aWs, room.bWs, room.spectatorWs, room.displayWs]) {
+      client.close();
+    }
+    await waitLeftAt(roomId);
+    const disconnectStage = meter.take();
+    await expireEmptyRoom(roomId);
+    meter.take(); // 丢弃受控时间戳注入段，仅保留随后的读取/清理路径
+    const readStart = now();
+    const archivedKind = await fetchEntryKind(`/api/rooms/${roomId}`);
+    const archiveReadMs = Math.round(now() - readStart);
+    const archiveStage = meter.take();
+    const snapshotMetrics = await textColumnMetrics(roomId, "archive_snapshot", "snapshot_json");
+    const afterArchive = await tableRows(roomId);
+    const allocAfterArchive = await sqliteAlloc(roomId);
+    const alarm = await currentAlarm(roomId);
+    const snapshot = archiveSnapshotSchema.parse(
+      JSON.parse(
+        String(
+          (await queryRoomRows(roomId, "SELECT snapshot_json FROM archive_snapshot"))[0]
+            ?.snapshot_json,
+        ),
       ),
-    ),
-  );
-  expect(archivedKind).toBe("archived");
-  expect(snapshot.operations).toHaveLength(BP_STEP_ORDER.length);
+    );
+    expect(archivedKind).toBe("archived");
+    expect(snapshot.operations).toHaveLength(BP_STEP_ORDER.length);
 
-  // ---- 空记录房间（仅预选、无确认）：到期直接清理 ----
+    const setupCommands = play.commands.slice(0, 5);
+    const bpCommands = play.commands.slice(5);
+    const setupTrace = setupCommands.flatMap((command) => command.statements);
+    const bpTrace = bpCommands.flatMap((command) => command.statements);
+    const allTrace = play.commands.flatMap((command) => command.statements);
+    const aggregate = aggregateStatements(allTrace);
+
+    report["典型房间"] = {
+      命令数: {
+        开局: 5,
+        "BP(26步×5+首步额外3)": 133,
+        合计: 138,
+        说明: "与回执行数一致；每步含首次预选、2 次更换（首步 5 次）、换回与确认。",
+      },
+      入房毫秒: joinMs,
+      "开局阶段(5 命令)": {
+        ms: play.setupMs,
+        frames: play.setupTraffic.frames,
+        bytes: play.setupTraffic.bytes,
+        说明: "含 5 条命令回执与各连接视图广播。",
+      },
+      "26步": play.steps,
+      "预选阶段消息(含首次/更换/换回/回执/广播)": {
+        总帧: play.preselectFrames,
+        总字节: play.preselectBytes,
+        说明: "每步 2 次更换（首步 5 次）期间的全部消息；包含 commandResult 与全部连接的视图广播，不是“额外广播”净值。",
+      },
+      "26步后表行数": afterBp,
+      "26步后SQLite分配(字节)": allocAfterBp,
+      会话追加: {
+        回执行数: Number(receiptRow.n ?? 0),
+        "回执选定字段字节(payload+错误码/文本+操作ID+成员ID+时间戳)": receiptBytes,
+        目录快照UTF8字节: catalogMetrics?.utf8Bytes ?? null,
+        目录快照码点数: catalogMetrics?.codePoints ?? null,
+        说明: "字段字节不含 SQLite 行与索引分配开销，分配另见 databaseSize。",
+      },
+      "SQL实际执行计量(测试侧透明包装)": {
+        范围与口径:
+          "在测试侧透明包装房间实例 sql 并原样转发每条 exec、保留 cursor；统计真实执行路径（入房与连接、开局、BP 26 步、归档读取与清理）的 rowsRead/rowsWritten。" +
+          "包装在 finally 中卸载；测试自身的查询、受控时间戳注入与 setAlarm 不经该包装。平台内部元数据、Alarm 内部行为与线上计费边界不在本地观测内。",
+        阶段: {
+          "入房与连接(建房后 3 次入房 + 5 条 WS 接入)": {
+            statements: joinStage.length,
+            ...totals(joinStage),
+          },
+          "开局(5 命令)": { statements: setupTrace.length, ...totals(setupTrace) },
+          "BP(133 命令)": { statements: bpTrace.length, ...totals(bpTrace) },
+          "命令合计(138 条)": { statements: allTrace.length, ...totals(allTrace) },
+          "断开与空房计时(真实关闭路径)": {
+            statements: disconnectStage.length,
+            ...totals(disconnectStage),
+          },
+          "归档读取与清理(到期 GET 触发)": {
+            statements: archiveStage.length,
+            ...totals(archiveStage),
+          },
+        },
+        命令类型: byCommandType(play.commands),
+        语句聚合: aggregate,
+        样例命令: {
+          首次改名: setupCommands[0]?.statements ?? [],
+          首次预选: bpCommands[0]?.statements ?? [],
+          末次确认: bpCommands.at(-1)?.statements ?? [],
+        },
+      },
+      归档: {
+        触发读取毫秒: archiveReadMs,
+        快照UTF8字节: snapshotMetrics?.utf8Bytes ?? null,
+        快照码点数: snapshotMetrics?.codePoints ?? null,
+        快照步数: snapshot.operations.length,
+        归档后表行数: afterArchive,
+        "归档后SQLite分配(字节)": allocAfterArchive,
+        "下次Alarm(90天清理)": alarm === null ? null : new Date(alarm).toISOString(),
+      },
+    };
+  } finally {
+    await meter.restore();
+  }
+
+  // ---- 空记录房间（仅预选、无确认）：到期直接清理（不计入典型房间计量） ----
   const emptyHost = await createRoomViaHttp("空记录测量赛", "主持人");
   const emptyId = emptyHost.roomId;
   const emptyGuest = await joinMemberViaHttp(emptyId, "选手乙");
@@ -506,69 +617,9 @@ it("典型房间分阶段资源测量（含归档与清理）", async () => {
   const emptyAlloc = await sqliteAlloc(emptyId);
   expect(emptyKind).toBe("not-found");
   expect(Object.keys(emptyTables)).toHaveLength(0);
-
-  // 全场 SQL 构成推算：固定读取 × 138 条命令 + 裁剪扫描累计（实测线性）。
-  const fixedReads = Number(
-    (sqlCost["每条命令固定读取"] as { 合计行读?: number } | undefined)?.合计行读 ?? 0,
-  );
-  const pruneTotal = Number(
-    (sqlCost["回执裁剪扫描"] as { 全场累计行读?: number | null } | undefined)?.全场累计行读 ?? 0,
-  );
-
-  report["典型房间"] = {
-    命令数: {
-      开局: 5,
-      "BP(26步×5+首步额外3)": 133,
-      合计: 138,
-      说明: "与回执行数一致；每步含首次预选、2 次更换（首步 5 次）、换回与确认。",
-    },
-    入房毫秒: joinMs,
-    "开局阶段(5 命令)": {
-      ms: play.setupMs,
-      frames: play.setupTraffic.frames,
-      bytes: play.setupTraffic.bytes,
-      说明: "含 5 条命令回执与各连接视图广播。",
-    },
-    "26步": play.steps,
-    "预选阶段消息(含首次/更换/换回/回执/广播)": {
-      总帧: play.preselectFrames,
-      总字节: play.preselectBytes,
-      说明: "每步 2 次更换（首步 5 次）期间的全部消息；包含 commandResult 与全部连接的视图广播，不是“额外广播”净值。",
-    },
-    "26步后表行数": afterBp,
-    "26步后SQLite分配(字节)": allocAfterBp,
-    会话追加: {
-      回执行数: Number(receiptRow.n ?? 0),
-      "回执选定字段字节(payload+错误码/文本+操作ID+成员ID+时间戳)": receiptBytes,
-      目录快照UTF8字节: catalogBytes?.utf8Bytes ?? null,
-      目录快照码点数: catalogBytes?.codePoints ?? null,
-      说明: "字段字节不含 SQLite 行与索引分配开销，分配另见 databaseSize。",
-    },
-    SQL成本模型: sqlCost,
-    全场SQL构成推算: {
-      命令数: 138,
-      固定读取合计: fixedReads * 138,
-      回执裁剪扫描合计: pruneTotal,
-      全场行读合计: fixedReads * 138 + pruneTotal,
-      "写入(按语句计数)": {
-        说明: "单行 DML 各计 1 行写入（写语义探测）；常用命令为 room_meta 1 + 回执 1 = 2 行，确认另加提交 1 行，删除按溢出数。",
-        全场约: 138 * 2 + 26,
-      },
-      说明: "语句出现次数按实现路径推导，行成本为 cursor 实测；未含平台内部元数据。",
-    },
-    归档: {
-      触发读取毫秒: archiveReadMs,
-      快照UTF8字节: snapshotBytes?.utf8Bytes ?? null,
-      快照码点数: snapshotBytes?.codePoints ?? null,
-      快照步数: snapshot.operations.length,
-      归档后表行数: afterArchive,
-      "归档后SQLite分配(字节)": allocAfterArchive,
-      "下次Alarm(90天清理)": alarm === null ? null : new Date(alarm).toISOString(),
-    },
-    空记录房间: {
-      清理后表行数: emptyTables,
-      "清理后SQLite分配(字节)": emptyAlloc,
-    },
+  (report["典型房间"] as Record<string, unknown>)["空记录房间"] = {
+    清理后表行数: emptyTables,
+    "清理后SQLite分配(字节)": emptyAlloc,
   };
 
   emitReport(report);
@@ -579,7 +630,7 @@ it("有界示例规模：多房间同时持有与断开后的休眠条件", asyn
   // 连接；各推进 1 步后全员保持在线；测量同时持有的消息量，随后全体断开，
   // 验证空房期限 Alarm（休眠信号）与离开时间。
   const ROOMS = 6;
-  const totals = { rooms: ROOMS, members: 0, frames: 0, bytes: 0 };
+  const totalsSummary = { rooms: ROOMS, members: 0, frames: 0, bytes: 0 };
   const rooms: Array<{ roomId: string; clients: TestWsClient[] }> = [];
   const started = now();
 
@@ -620,9 +671,9 @@ it("有界示例规模：多房间同时持有与断开后的休眠条件", asyn
       await send(room.aWs, "confirmPreselect", { slotId: first });
     }
     const traffic = meter.read();
-    totals.members += 4;
-    totals.frames += traffic.frames;
-    totals.bytes += traffic.bytes;
+    totalsSummary.members += 4;
+    totalsSummary.frames += traffic.frames;
+    totalsSummary.bytes += traffic.bytes;
     rooms.push({
       roomId,
       clients: [room.hostWs, room.aWs, room.bWs, room.spectatorWs, room.displayWs],
@@ -659,11 +710,11 @@ it("有界示例规模：多房间同时持有与断开后的休眠条件", asyn
     规模: {
       房间数: ROOMS,
       每房连接: "4 名成员（房主 + 2 选手 + 1 观众）+ 1 展示",
-      成员连接数: totals.members,
+      成员连接数: totalsSummary.members,
       展示连接数: ROOMS,
-      连接总数: totals.members + ROOMS,
-      持有期间总帧: totals.frames,
-      持有期间总字节: totals.bytes,
+      连接总数: totalsSummary.members + ROOMS,
+      持有期间总帧: totalsSummary.frames,
+      持有期间总字节: totalsSummary.bytes,
       建满全部房间毫秒: concurrentMs,
     },
     断开后: {

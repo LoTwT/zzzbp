@@ -89,9 +89,10 @@ PR1–PR9 的浏览器验收证据保存在提交时的临时目录（`/tmp/zzzb
   以受控时间戳 + 真实 Alarm 触发证明；没有等待自然 12 小时，也没有在生产环境快进时间。
 - **记录页 UI**：浏览器侧以「合法固定快照响应」注入验证（与 PR9 验收同一手法）；这不代表
   浏览器端走过自然归档流程，自然归档由上述 Workers 生命周期测试证明。
-- **本地资源数字**：来自本地 workerd 观测（`pnpm measure:rooms`；SQL 行成本为官方 SQL
-  API `cursor.rowsRead`/`cursor.rowsWritten` 实测，内容为 UTF-8 字节，存储为
-  `databaseSize` 分配），不是 Cloudflare 计费实测；运行时长不做本地换算。换算规则与边界见
+- **本地资源数字**：来自本地 workerd 观测（`pnpm measure:rooms`；SQL 行成本在测试侧透明
+  包装房间实例的 `sql`、按真实执行路径读取语句消费后的 `cursor.rowsRead`/`cursor.rowsWritten`，
+  不做语句复制或乘数推算；内容为 UTF-8 字节，存储为 `databaseSize` 分配），不是 Cloudflare
+  计费实测；`setAlarm` 与平台内部读写未计入，运行时长不做本地换算。换算规则与边界见
   [预算文档](specs/cloudflare-budget.md#容量估算方法与本地基准)。
 - **展示/归档同屏与可读性**：已在 58 人名单、1440×900 与 1280×640 下验证；其他尺寸或更长
   名单需重新评估（沿用[房间布局](specs/room-layout.md#待确认的展示细节)的待确认项）。
@@ -119,6 +120,8 @@ PR1–PR9 的浏览器验收证据保存在提交时的临时目录（`/tmp/zzzb
 - `pnpm test`：通过（32 个文件、362 条测试，含真实 workerd 集成）；本轮修复未改动产品代码
   与常规测试配置，复用冻结提交 `06e2f95` 的完整结果，后续 CI 会再次执行。
 - `pnpm build`：通过（同上，复用冻结提交结果）。
-- `pnpm test:e2e`：通过（4 条真实浏览器验收，共享一次 `cf dev` 启动；本轮修复后运行）。
-- `pnpm measure:rooms`：通过（本轮修复后运行；报告打印到标准输出并持久化到
-  `node_modules/.tmp/measure-report.json`，本文件引用的本地基准数字来源）。
+- `pnpm test:e2e`：通过。第二轮修复聚焦复跑 resilience（含「重放回执延迟 500ms」故障注入
+  变体不误红）；整组 4/4 的完整结果来自上一修复提交并继续有效（本轮未改其余用例），CI 会
+  执行完整套件。
+- `pnpm measure:rooms`：通过（本轮修复后运行；SQL 计量改为真实执行路径的透明包装，数字见
+  预算文档；报告打印到标准输出并持久化到 `node_modules/.tmp/measure-report.json`）。

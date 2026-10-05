@@ -304,19 +304,50 @@ test("断线恢复：多页面掉线暂停、本地操作、换人与结果未�
     substituteWs.setMode("proxy");
     await waitForNoConnectionText(substitute.page);
     const operationId = heldResult?.operationId ?? "";
+    // 「连接提示消失」只代表首个权威视图到达，重发与服务端重放回执仍可能在途；
+    // 用有界轮询等待两个事实都实际到达后再取快照（不引入固定 sleep）。
+    await expect
+      .poll(
+        () => substituteWs.confirmSends.filter((frame) => frame.operationId === operationId).length,
+        { timeout: 20_000, interval: 100 },
+      )
+      .toBe(2);
+    await expect
+      .poll(
+        () =>
+          substituteWs.targetResults.filter((frame) => frame.operationId === operationId).length,
+        { timeout: 20_000, interval: 100 },
+      )
+      .toBe(2);
     const sends = substituteWs.confirmSends.filter((frame) => frame.operationId === operationId);
-    expect(sends).toHaveLength(2);
-    expect(sends[1]?.raw).toBe(sends[0]?.raw);
-    // 服务端对重发幂等重放原回执：bp.version 与首次提交一致，未再次推进。
     const results = substituteWs.targetResults.filter((frame) => frame.operationId === operationId);
-    expect(results).toHaveLength(2);
+    expect(sends[1]?.raw).toBe(sends[0]?.raw);
+    // 服务端对重发幂等重放原回执：成功结论、bp.version 与首次提交一致，未再次推进。
+    expect(results[1]?.ok).toBe(true);
     expect(results[1]?.bpVersion).toBe(results[0]?.bpVersion);
     expect(results[1]?.bpVersion).toBe(heldResult?.bpVersion);
     // 核对证据（人工可读）：同 operationId、同载荷字节、重发恰一次、回执幂等重放。
     console.log(
       `[e2e] 结果未知核对证据：operationId=${operationId} 载荷字节=${new TextEncoder().encode(sends[0]?.raw ?? "").length} 发送次数=${sends.length} 扣留回执bpVersion=${heldResult?.bpVersion ?? -1} 重放回执bpVersion=${results[1]?.bpVersion ?? -1}`,
     );
+    // 等待客户端核对反馈真正收敛：结算为成功结论，不得残留提交中/核对中或
+    // 「结果未知」错误（操作位仍在替补一方，反馈显示在按钮标签与固定反馈区）。
     await agentCard(substitute.page, agentFor("AP1"), "已选用").waitFor({ state: "visible" });
+    await expect
+      .poll(
+        async () => {
+          const page = substitute.page;
+          const pendingTexts = await Promise.all([
+            page.getByText("正在核对结果…", { exact: true }).count(),
+            page.getByText("正在核对上一操作结果…", { exact: true }).count(),
+            page.getByText("上一操作提交中…", { exact: true }).count(),
+            page.getByText("操作结果未知", { exact: false }).count(),
+          ]);
+          return pendingTexts.reduce((sum, count) => sum + count, 0);
+        },
+        { timeout: 20_000, interval: 100 },
+      )
+      .toBe(0);
     await agentCard(host.page, agentFor("AP1"), "已选用").waitFor({ state: "visible" });
 
     // 核对期断线同样触发掉线暂停（替补在席，规格行为）：暂停保持到房主手动恢复；
