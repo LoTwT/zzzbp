@@ -345,3 +345,77 @@ describe("DO 直连的防御性校验", () => {
     expect(notice.code).toBe("ROOM_NOT_FOUND");
   });
 });
+
+describe("关闭回应（webSocketClose 幂等、安全）", () => {
+  /**
+   * 直接以受控 socket 驱动真实的 webSocketClose 回调路径：验证应用显式
+   * 完成关闭回应（不依赖 runtime 自动代发），且只回合法状态码、保留码
+   * 与异常/重复回调都安全。用 display 附件避免触发在线状态写入。
+   */
+  function closeCallLog(roomId: string): Promise<Array<number | null>> {
+    return runInDurableObject(exports.Room.get(exports.Room.idFromName(roomId)), async (room) => {
+      const instance = room as unknown as {
+        webSocketClose(
+          ws: WebSocket,
+          code: number,
+          reason: string,
+          wasClean: boolean,
+        ): Promise<void>;
+      };
+      const calls: Array<number | null> = [];
+      const make = (readyState: number, closeImpl?: (code?: number) => void) =>
+        ({
+          readyState,
+          deserializeAttachment: () => ({ kind: "display" }),
+          close: (code?: number) => {
+            calls.push(code ?? null);
+            closeImpl?.(code);
+          },
+        }) as unknown as WebSocket;
+
+      // 可回显的合法状态码（1000 与 3000–4999）。
+      await instance.webSocketClose(make(2), 1000, "", true);
+      await instance.webSocketClose(make(2), 3000, "", true);
+      await instance.webSocketClose(make(2), 4999, "", true);
+      // 保留码与区间外状态码：不能直接传给 close()，回不带状态码的关闭帧。
+      await instance.webSocketClose(make(2), 1005, "", true);
+      await instance.webSocketClose(make(2), 1006, "", false);
+      await instance.webSocketClose(make(2), 1001, "", true);
+      await instance.webSocketClose(make(2), 2999, "", true);
+      // 已 CLOSED 不再回帧。
+      await instance.webSocketClose(make(3), 1000, "", true);
+      // 重复回调（第二次 close 抛异常）同样安全。
+      const duplicate = make(2, () => {
+        throw new Error("already closing");
+      });
+      await instance.webSocketClose(duplicate, 1000, "", true);
+      await instance.webSocketClose(duplicate, 1000, "", true);
+      return calls;
+    });
+  }
+
+  it("只回合法状态码、保留码回空帧，已关闭与重复/异常回调安全", async () => {
+    const room = await createRoomViaHttp("关闭回应赛");
+    expect(await closeCallLog(room.roomId)).toEqual([
+      1000,
+      3000,
+      4999,
+      null,
+      null,
+      null,
+      null,
+      1000,
+      1000,
+    ]);
+  });
+
+  it("客户端主动关闭的展示连接收到完成握手（wasClean）", async () => {
+    const room = await createRoomViaHttp("握手完成赛");
+    const display = await TestWsClient.connectDisplay(room.roomId);
+    await display.next("displayView");
+    display.close(1000);
+    const close = await display.waitForClose("展示连接关闭");
+    expect(close.wasClean).toBe(true);
+    expect(close.code).toBe(1000);
+  });
+});
