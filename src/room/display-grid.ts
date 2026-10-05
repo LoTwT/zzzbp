@@ -9,10 +9,16 @@
  *
  * 算法：枚举列数 1..count，按容器宽高求出该列数下的单元宽高与可容纳的
  * 头像尺寸（正方形，受行高与列宽双约束），先要求最长名称能以单行完整
- * 显示（宽度下限由数据推导），在可行解中取头像最大者；并列时取更多列
- * （高度受限时更多列不损失头像尺寸，只减少水平浪费）。无可行的单行解
- * 时退到两行名称的预算重算（名称换行显示，仍不截断）；仍无解时给出
- * 最小尺寸兜底，由容器裁剪，不产生滚动条。
+ * 显示（宽度下限 = 展示组件实测的最长名称单行像素宽度 + 安全余量），
+ * 在可行解中取头像最大者；并列时取更多列（高度受限时更多列不损失头像
+ * 尺寸，只减少水平浪费）。无可行的单行解时退到两行名称的预算重算
+ * （名称换行显示，仍不截断）；仍无解时给出最小尺寸兜底，由容器裁剪，
+ * 不产生滚动条。
+ *
+ * 单行宽度必须用实测像素值而不是字符类估算：不同平台的字体回退会让同一
+ * 名称相差零点几像素，估算一旦偏窄就会让最长名称换行，行高比预算多一行
+ * 并在 content-center 下向容器外溢出。实测在展示组件中完成（用与名称
+ * 相同的字体量取），本模块保持纯函数。
  */
 
 /** 网格间隙（横纵相同，px）。导出供渲染层与算法保持同一数值。 */
@@ -30,6 +36,9 @@ export const AVATAR_MIN_PX = 24;
 export const AVATAR_MAX_PX = 144;
 /** 浮点并列判定容差（px）。 */
 const EPSILON_PX = 0.5;
+/** 单行名称宽度安全余量（px）：吸收 1/64px 布局取整与测量噪声，远小于
+ * 任何可见的列宽差，不会因余量本身改变列数选择之外的行为。 */
+export const NAME_WIDTH_SAFETY_PX = 0.25;
 
 /** 名称行与内边距构成的单元竖向固定开销：pad + name + gap + pad。 */
 const CELL_FIXED_HEIGHT_PX = 2 * CARD_PAD_PX + NAME_LINE_PX + AVATAR_NAME_GAP_PX;
@@ -46,43 +55,13 @@ export interface DisplayGridSizing {
   readonly nameWraps: boolean;
 }
 
-/** 算法输入：容器内容尺寸、条目数与目录中最长名称的显示宽度（em 单位）。 */
+/** 算法输入：容器内容尺寸、条目数与目录中最长名称的实测单行宽度（px）。 */
 export interface DisplayGridInput {
   readonly width: number;
   readonly height: number;
   readonly count: number;
-  readonly nameUnits: number;
-}
-
-/** 单个名称的显示宽度估算（em 单位）：全角/宽字符记 1，其余记 0.6。 */
-export function nameDisplayUnits(name: string): number {
-  let units = 0;
-  for (const char of name) {
-    const cp = char.codePointAt(0) ?? 0;
-    units += isFullwidthCodePoint(cp) ? 1 : 0.6;
-  }
-  return units;
-}
-
-/**
- * 东亚宽字符（W/F）判定的工程近似：覆盖中日韩统一表意文字、注音/假名、
- * 谚文、CJK 符号（含「」『』·等）、全角形式与兼容表意文字；用于名称
- * 宽度估算，配合安全边距使用，不追求与具体字体逐字一致。
- */
-function isFullwidthCodePoint(cp: number): boolean {
-  return (
-    (cp >= 0x1100 && cp <= 0x115f) ||
-    (cp >= 0x2e80 && cp <= 0x303e) ||
-    (cp >= 0x3041 && cp <= 0x33ff) ||
-    (cp >= 0x3400 && cp <= 0x4dbf) ||
-    (cp >= 0x4e00 && cp <= 0x9fff) ||
-    (cp >= 0xa960 && cp <= 0xa97f) ||
-    (cp >= 0xac00 && cp <= 0xd7a3) ||
-    (cp >= 0xf900 && cp <= 0xfaff) ||
-    (cp >= 0xfe30 && cp <= 0xfe4f) ||
-    (cp >= 0xff00 && cp <= 0xff60) ||
-    (cp >= 0xffe0 && cp <= 0xffe6)
-  );
+  /** 目录中任一名称在名称元素实际字体下单行渲染的最大宽度（px）。 */
+  readonly nameWidthPx: number;
 }
 
 /** 指定列数下的候选排布；不可行返回 null。 */
@@ -127,15 +106,15 @@ function bestOf(candidates: ReadonlyArray<DisplayGridSizing>): DisplayGridSizing
 /**
  * 计算全量同屏排布。
  *
- * 第一优先级：最长名称单行完整显示（宽度下限 = 名称宽度 + 内边距）；
+ * 第一优先级：最长名称单行完整显示（宽度下限 = 实测名称宽度 + 安全余量 + 内边距）；
  * 第二优先级：名称允许两行（宽度下限降为头像下限，行高预算加一行）；
  * 兜底：单列、最小头像、按两行名称预留——极端小容器下由外层裁剪，
- * 不产生滚动条。nameUnits 由调用方取目录全部条目的最大值。
+ * 不产生滚动条。nameWidthPx 由调用方取目录全部条目实测宽度的最大值。
  */
 export function computeDisplayGrid(input: DisplayGridInput): DisplayGridSizing | null {
   if (input.count <= 0 || input.width <= 0 || input.height <= 0) return null;
 
-  const oneLineMinWidth = input.nameUnits * NAME_FONT_PX + 2 * CARD_PAD_PX;
+  const oneLineMinWidth = input.nameWidthPx + NAME_WIDTH_SAFETY_PX + 2 * CARD_PAD_PX;
   const oneLine: DisplayGridSizing[] = [];
   const wrapped: DisplayGridSizing[] = [];
   for (let columns = 1; columns <= input.count; columns += 1) {
@@ -144,7 +123,7 @@ export function computeDisplayGrid(input: DisplayGridInput): DisplayGridSizing |
     // 两行名称的宽度下限：至少能以两行容纳最长名称的一半，并保住最小头像。
     const wrappedMinWidth = Math.max(
       AVATAR_MIN_PX + 2 * CARD_PAD_PX,
-      input.nameUnits * NAME_FONT_PX * 0.5 + 2 * CARD_PAD_PX,
+      input.nameWidthPx * 0.5 + 2 * CARD_PAD_PX,
     );
     const wrappedCandidate = candidateOf(input, columns, 2, wrappedMinWidth);
     if (wrappedCandidate !== null) wrapped.push(wrappedCandidate);

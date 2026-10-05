@@ -107,6 +107,15 @@ async function assertDisplayPoolFits(page: Page, label: string): Promise<void> {
     const box = container.getBoundingClientRect();
     const gridBox = grid.getBoundingClientRect();
     const lastBox = last instanceof HTMLElement ? last.getBoundingClientRect() : null;
+    const multiLineNames = [...cards]
+      .map((card) => card.querySelector(":scope > span:last-child"))
+      .filter((span): span is HTMLElement => span instanceof HTMLElement)
+      .filter((span) => {
+        const range = document.createRange();
+        range.selectNodeContents(span);
+        return range.getClientRects().length > 1;
+      })
+      .map((span) => span.textContent ?? "");
     const within = (inner: DOMRect): boolean =>
       inner.top >= box.top - 1 &&
       inner.bottom <= box.bottom + 1 &&
@@ -120,12 +129,16 @@ async function assertDisplayPoolFits(page: Page, label: string): Promise<void> {
       clientH: container.clientHeight,
       gridWithin: within(gridBox),
       lastWithin: lastBox !== null && within(lastBox),
+      multiLineNames,
     };
   });
   if (geometry.scrollW > geometry.clientW + 1 || geometry.scrollH > geometry.clientH + 1) {
     throw new Error(
       `${label} 展示池内部出现滚动/裁切（${geometry.scrollW}x${geometry.scrollH} vs ${geometry.clientW}x${geometry.clientH}）`,
     );
+  }
+  if (geometry.multiLineNames.length > 0) {
+    throw new Error(`${label} 名称未保持单行（${geometry.multiLineNames.join("、")}）`);
   }
   if (!geometry.gridWithin) throw new Error(`${label} 展示网格超出裁剪容器`);
   if (!geometry.lastWithin) throw new Error(`${label} 末卡片超出裁剪容器（可能被裁切）`);
