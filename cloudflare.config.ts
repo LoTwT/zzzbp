@@ -3,9 +3,14 @@ import * as entrypoint from "./server/index.ts" with { type: "cf-worker" };
 
 // 单一部署单元：一个 Worker 同时分发静态资源并处理 /api/* 动态请求。
 // 前端静态资源来自 Vite 客户端构建产物，cf 会自动接线，无需在此声明目录。
-export default defineConfig({
+//
+// 预发布目标（操作步骤见 docs/deployment.md）：`cf deploy -m preview` 使用独立
+// Worker 名 zzzbp-preview，从而获得独立的 Durable Object 命名空间与房间存储，
+// 不触碰正式名 zzzbp 及其将来可能的线上数据；未指定或其它 mode 沿用 zzzbp。
+// cf 官方支持在配置工厂中按 ctx.mode 派生名称。
+export default defineConfig(({ mode }) => ({
   worker: {
-    name: "zzzbp",
+    name: mode === "preview" ? "zzzbp-preview" : "zzzbp",
     entrypoint,
     compatibilityDate: "2026-09-01",
     assets: {
@@ -38,4 +43,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
