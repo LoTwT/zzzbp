@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useElementSize } from "@vueuse/core";
 import type { AgentPoolStatus } from "../../../shared/bp/agents";
 import type { RoomAgentDisplay } from "../../room/room-catalog";
 import {
   computeDisplayGrid,
   GRID_GAP_PX,
-  nameDisplayUnits,
+  NAME_FONT_PX,
   type DisplayGridSizing,
 } from "../../room/display-grid";
 import DisplayAgentCard from "./DisplayAgentCard.vue";
@@ -24,22 +24,51 @@ const props = defineProps<{
 const gridEl = ref<HTMLElement | null>(null);
 const { width, height } = useElementSize(gridEl);
 
-/** 目录中最长名称的显示宽度（em 单位）：单行可读的宽度下限依据。 */
-const nameUnits = computed(() => {
-  let max = 1;
-  for (const entry of props.entries) {
-    const units = nameDisplayUnits(entry.name);
-    if (units > max) max = units;
+/**
+ * 目录最长名称的单行像素宽度：用与卡片名称同字体（取池容器的继承字体栈）
+ * 、同字号的隐藏元素逐条实测。单行布局的宽度下限必须取实测值——同一名称
+ * 在不同平台的字体回退下相差不到 1px，字符类估算（全角 1em、半角 0.6em）
+ * 偏窄时最长名称会换行，行高多出一行并在网格居中下溢出裁剪容器。
+ */
+function measureMaxNameWidth(host: HTMLElement, entries: readonly RoomAgentDisplay[]): number {
+  const probe = document.createElement("span");
+  probe.style.position = "absolute";
+  probe.style.left = "-99999px";
+  probe.style.top = "0";
+  probe.style.visibility = "hidden";
+  probe.style.whiteSpace = "nowrap";
+  probe.style.fontFamily = getComputedStyle(host).fontFamily;
+  probe.style.fontSize = `${NAME_FONT_PX}px`;
+  document.body.append(probe);
+  let max = 0;
+  for (const entry of entries) {
+    probe.textContent = entry.name;
+    const measured = probe.getBoundingClientRect().width;
+    if (measured > max) max = measured;
   }
+  probe.remove();
   return max;
-});
+}
+
+const maxNameWidthPx = ref(0);
+
+/** 重新实测名称宽度：条目变化、挂载与字体就绪后都要刷新。 */
+function remeasureMaxNameWidth(): void {
+  if (gridEl.value === null) return;
+  maxNameWidthPx.value = measureMaxNameWidth(gridEl.value, props.entries);
+}
+
+onMounted(remeasureMaxNameWidth);
+watch(() => props.entries, remeasureMaxNameWidth);
+// 系统字体不需要等待，此处只为将来引入 web 字体时不被首帧测量窗口卡住。
+void document.fonts.ready.then(remeasureMaxNameWidth);
 
 const sizing = computed<DisplayGridSizing | null>(() =>
   computeDisplayGrid({
     width: width.value,
     height: height.value,
     count: props.entries.length,
-    nameUnits: nameUnits.value,
+    nameWidthPx: maxNameWidthPx.value,
   }),
 );
 </script>

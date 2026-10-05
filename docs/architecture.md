@@ -16,7 +16,10 @@
 | `shared/api.ts` | 引导期的 `/api/health` 契约，保留兼容；房间协议不在此扩展。 | — |
 | `server/` | Worker 动态入口与房间 Durable Object：HTTP 路由与输入校验（`index.ts`）、房间对象编排与 WS 生命周期（`room.ts`）、身份凭据与 Cookie（`credentials.ts`）、SQLite 持久化与命令回执（`persistence.ts`）、WS 协议构件（`ws.ts`）。 | 依赖 `shared/` |
 | `tests/rules/` | 纯规则与合同测试（Node 环境）。 | — |
+| `tests/web/` | 浏览器端纯逻辑回归（Node 环境，注入假传输）。 | — |
 | `tests/workers/` | Worker 与房间对象集成测试（真实 workerd）：HTTP/身份/Cookie（`rooms.test.ts`）、SQLite 持久化与实例重建（`room-storage.test.ts`）、WS 通道边界（`room-websocket.test.ts`）、命令管线与去重回执（`room-commands.test.ts`）、在线计数与休眠恢复（`room-presence.test.ts`）、生命周期裁决/归档快照/Alarm 调度与 90 天清理（`room-lifecycle.test.ts`），共享辅助 `ws-helpers.ts`。 | — |
+| `tests/e2e/` | 真实浏览器验收（PR10）：Vitest Node 项目 + Playwright 驱动真实 `cf dev`；`global-setup.ts` 管理服务与临时持久化目录，覆盖主线 26 步、断线/换人/核对、展示页与记录页。 | — |
+| `tests/measure/` | 本地资源基准（PR10，按需运行）：真实 workerd + SQLite 的消息量、表行数、SQLite 分配与本地耗时测量。 | — |
 
 `shared/` 不依赖前端与服务端实现；服务端把 `shared/` 的纯函数作为唯一状态
 权威，前端只用它做类型与展示推导。
@@ -422,4 +425,4 @@ PR9 已落地归档与只读记录（`server/room.ts` 生命周期裁决、
 | PR7（恢复交互收口，已落地） | 断线重连同步门、结果未知同载荷重发核对与换人列表稳定反馈；全链路容量与端到端复核并入 PR10。 |
 | PR8（展示页，已落地） | 独立展示页 UI、只读展示客户端连接、URL 冻结布局与全量同屏代理人池；展示通道传输边界不变（只读、无身份、不计在线）。 |
 | PR9（归档与清理，已落地） | Alarm 与读写路径共用到期裁决（读 `room_meta.last_member_left_at` 与快照 `expiresAt`）；到期经 `projectArchiveSnapshot` 生成快照或原子清理空房间；`GET /api/rooms/:roomId` 的 archived 分支返回只读快照，原链接进入只读记录页。 |
-| PR10（端到端与容量复核） | 全链路容量、端到端浏览器验证平台与长期验证收口；PR7 起累积的复核事项在此统一处理。 |
+| PR10（端到端与容量复核，已落地） | 真实浏览器验收平台（`tests/e2e`：Vitest + Playwright 驱动真实 `cf dev`，服务生命周期由 globalSetup 管理）与资源基准（`tests/measure`，`pnpm measure:rooms`）；验收事实、分层证据与部署前检查见[首版发布与验收说明](release.md)，预算方法见[Cloudflare 部署与预算评估](specs/cloudflare-budget.md#容量估算方法与本地基准)。 |

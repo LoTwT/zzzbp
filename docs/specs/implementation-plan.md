@@ -1,6 +1,6 @@
 # 首版开发方案（草案）
 
-本稿整理技术选型、模块职责、实现顺序和验收重点，更新于 2026-10-05。工程引导已完成：仓库内已有应用包、Worker 与运行配置，`shared/` 与 `server/` 已落地 BP 规则、房间命令契约、HTTP 建房/入房/读取/目录入口与成员/展示 WS 实时通道（命令执行、去重回执与在线同步，见[架构与协议](../architecture.md)）；PR6 已交付常规浏览器房间界面（首页/入房/房间工作区、两选用布局与控制面板）及 WS 客户端连接管理；PR7 已交付断线重连同步门、结果未知同载荷核对与换人列表稳定反馈（见[架构与协议](../architecture.md)「后续运行时接入位置」）；PR8 已交付独立实时展示页（匿名只读展示连接、URL 冻结布局与全量同屏代理人池）；PR9 已交付归档与只读记录（生命周期裁决、Alarm 调度、快照生成/清理与原链接只读记录页，见[架构与协议](../architecture.md)「生命周期与归档记录」）。前端沿用 Vue 3 与 TypeScript，由 `pnpm create vite` 的 `vue-ts` 模板初始化；代码质量采用 Oxlint、Oxfmt、simple-git-hooks 与 lint-staged，样式采用 Tailwind CSS 与 `@ayingott/theme`，Cloudflare 命令入口采用 `cf`，测试统一使用 Vitest 及其生态，输入校验采用 Zod。具体接入方式和兼容版本如下；依赖已安装并锁定在锁文件中，日常开发与验证命令见[开发指南](../development.md)。
+本稿整理技术选型、模块职责、实现顺序和验收重点，更新于 2026-10-05。工程引导已完成：仓库内已有应用包、Worker 与运行配置，`shared/` 与 `server/` 已落地 BP 规则、房间命令契约、HTTP 建房/入房/读取/目录入口与成员/展示 WS 实时通道（命令执行、去重回执与在线同步，见[架构与协议](../architecture.md)）；PR6 已交付常规浏览器房间界面（首页/入房/房间工作区、两选用布局与控制面板）及 WS 客户端连接管理；PR7 已交付断线重连同步门、结果未知同载荷核对与换人列表稳定反馈（见[架构与协议](../architecture.md)「后续运行时接入位置」）；PR8 已交付独立实时展示页（匿名只读展示连接、URL 冻结布局与全量同屏代理人池）；PR9 已交付归档与只读记录（生命周期裁决、Alarm 调度、快照生成/清理与原链接只读记录页，见[架构与协议](../architecture.md)「生命周期与归档记录」）；PR10 已交付端到端验收平台与资源基准（真实浏览器回归 `pnpm test:e2e`、本地测量 `pnpm measure:rooms`，验收事实与部署前检查见[首版发布与验收说明](../release.md)）。前端沿用 Vue 3 与 TypeScript，由 `pnpm create vite` 的 `vue-ts` 模板初始化；代码质量采用 Oxlint、Oxfmt、simple-git-hooks 与 lint-staged，样式采用 Tailwind CSS 与 `@ayingott/theme`，Cloudflare 命令入口采用 `cf`，测试统一使用 Vitest 及其生态，输入校验采用 Zod。具体接入方式和兼容版本如下；依赖已安装并锁定在锁文件中，日常开发与验证命令见[开发指南](../development.md)。
 
 ## 目标与依据
 
@@ -50,7 +50,7 @@
 | 暂存文件检查 | `lint-staged` | 配合 simple-git-hooks，在提交前对暂存文件执行 Oxlint 与 Oxfmt。 |
 | Cloudflare 开发 | `cf`、`@cloudflare/vite-plugin@beta` | 使用 `cf` 的 Vite 接入路径运行本地 Worker、Durable Object、静态资源及部署工具。 |
 | 规则与房间测试 | `vitest`、`@cloudflare/vitest-plugin` | 当前选择满足 `^4.1.0` 的 Vitest 4.x，验证 BP 规则与 Workers 环境中的持久化、权限及同步逻辑。 |
-| 浏览器交互测试 | `@vitest/browser-playwright`，按测试需要引入 | 通过 Vitest Browser Mode 在真实浏览器中验证交互；配套版本与 Vitest 一致。 |
+| 浏览器交互测试 | `playwright`（1.63.0） | PR10 落地：Node 项目的 Vitest 用 Playwright 驱动真实 `cf dev` 做多身份端到端验收（`pnpm test:e2e`）。选型理由：多身份上下文、多页面协同与 `routeWebSocket` 断线注入需要从 Node 编排；`@vitest/browser-playwright` 的测试代码运行在页面内，不适合作为编排入口，未采用；测试入口仍统一为 Vitest。 |
 | 运行时输入校验 | `zod` | 使用 Zod 4 的共享 schema 校验 HTTP 与 WebSocket 消息结构，并推导类型；成员权限与 BP 合法性仍由服务端业务逻辑检查。 |
 
 代理人数据使用已选定的 `@randomplay/data`（LoTwT/fairy 仓库 packages/data 的发布包名），已按精确版本 0.2.1 归入开发依赖并生成只读目录，来源、生成脚本与更新办法见[代理人数据接入](agent-data.md)。开发工具归入开发依赖，应用运行所需的 Vue、路由与输入校验包归入应用依赖；数据包仅由生成脚本与测试使用，运行时只读取生成的目录产物，不进入构建产物。首次安装时核对插件的 peer dependencies，并将兼容版本写入锁文件。
@@ -168,12 +168,14 @@ Alarm 每次执行都重新检查当前生命周期和实际期限，重复执�
 | `pnpm format:check` | 使用 Oxfmt 检查格式。 |
 | `pnpm format` | 使用 Oxfmt 格式化文件。 |
 | `pnpm typecheck` | 先生成 Worker 类型，再检查前后端类型与共享协议。 |
-| `pnpm test` | 执行 BP 规则和房间集成测试。 |
+| `pnpm test` | 执行 BP 规则、浏览器端纯逻辑和 Workers 房间集成测试（不含 E2E 与测量）。 |
+| `pnpm test:e2e` | 真实浏览器验收（Vitest + Playwright 驱动真实 `cf dev`，自动管理服务生命周期）。 |
+| `pnpm measure:rooms` | 本地资源基准（真实 workerd + SQLite，按需运行）。 |
 | `pnpm build` | 显式执行类型检查与 `cf build`，验证前端及 Worker 产物。 |
 
-上述脚本已在工程引导中落地于 `package.json`，工具版本由锁文件固定。测试统一由 Vitest 执行，规则测试、Workers 集成测试与必要的浏览器交互测试使用独立配置，兼容版本与接入边界见上文。
+上述脚本已落地于 `package.json`，工具版本由锁文件固定。测试统一由 Vitest 执行，规则/纯逻辑、Workers 集成、浏览器端到端与资源测量使用独立配置与命令，兼容版本与接入边界见上文与[开发指南](../development.md)「测试组织」；CI 分 `verify` 与 `e2e` 两个 job，不重复运行同一套测试。
 
-必须覆盖的行为包括：
+必须覆盖的行为包括（实际覆盖位置见[首版发布与验收说明](../release.md)「覆盖映射」）：
 
 - 完整 26 步、连续本方选用、代理人互斥、AP9 完成，以及完成后撤回与重开。
 - 越权操作、过期命令、重复确认、写入失败，以及同一身份两个页面几乎同时提交。
@@ -199,12 +201,12 @@ Alarm 每次执行都重新检查当前生命周期和实际期限，重复执�
 |---|---|
 | 新 CLI 与测试配置适配 | 已在工程引导中完成并锁定：`cf` 1.0.0-beta.12、`@cloudflare/vite-plugin` 2.0 Beta、`@cloudflare/vitest-plugin` 1.3.6（`experimental.newConfig`）与 Vitest 4.1.11 的组合通过本地运行验证；升级任一依赖时重新验证配置与构建行为。 |
 | 本场代理人名单与数据版本 | 已接入：npm `@randomplay/data` 0.2.1（游戏数据 3.1）导入 58 人名单（含 3 名缺头像），见[代理人数据接入](agent-data.md)的导入概况与更新办法。比赛专用白名单未核定（当前为主表全量，不构成功能阻塞）；fairy main 已合入未发布的 3.2 数据（60 人），后续以 npm 新发布版本走既定更新流程。 |
-| 正式使用规模 | 用户提供预计同时开房与观众规模后，由实现方据此验证连接、预选与存储用量，作为部署前的容量依据。 |
+| 正式使用规模 | 用户提供预计同时开房与观众规模后，据此复核连接、预选与存储用量。PR10 已建立可复现的本地基准与参数化估算方法（`pnpm measure:rooms`，见[Cloudflare 部署与预算评估](cloudflare-budget.md#容量估算方法与本地基准)），部署前按该方法复核；真实账户验证项见[首版发布与验收说明](../release.md)「部署前检查清单」。 |
 
 生命周期与记录范围已经确认，统一遵循[房间保留与只读记录](room-roles.md#房间保留与只读记录)；上表事项在对应的实现与部署阶段处理。
 
 ## 发布与回退
 
-实现先在本地完成，部署作为单独的发布动作。发布前完成上述检查，核对账户套餐和运行时用量，并保存当前代码版本与数据库结构版本。
+实现先在本地完成，部署作为单独的发布动作；首版本地验收结论与部署前检查清单由[首版发布与验收说明](../release.md)维护。发布前按该清单核对账户套餐与运行时用量，并保存当前代码版本与数据库结构版本。
 
 前端展示调整可回退至兼容的上一构建。涉及房间持久数据时，迁移应保持旧数据可读；回退代码不得自动删除房间或回滚玩家已确认的结果。首次发布尚无现存应用数据，本轮方案整理也不涉及外部状态变更。

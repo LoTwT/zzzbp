@@ -39,3 +39,40 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  e2e:
+    name: Browser acceptance (Playwright)
+    runs-on: ubuntu-latest
+    # 独立于常规门禁：启动真实 cf dev（Vite + 本地 workerd）后由
+    # tests/e2e 的 globalSetup 管理服务生命周期，Playwright 驱动真实浏览器。
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run browser acceptance
+        run: pnpm test:e2e
