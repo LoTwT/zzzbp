@@ -32,8 +32,10 @@ import { E2E_BASE_URL } from "./server";
  * 展示页与只读记录页端到端验收（PR10）。
  *
  * 展示页走真实后端：匿名直开（无昵称、无入房表单）、URL 冻结布局、
- * 公开预选与禁选结果实时同步、全量代理人同屏、无搜索/确认/面板入口、
- * 不建立成员身份（网络请求核对：仅展示 WS，零 POST /api/rooms）。
+ * 公开预选与禁选结果实时同步、全量代理人同屏（卡片数量 + 裁剪容器无
+ * 内部滚动 + 网格与末卡片几何包含，两种代表布局）、无搜索/确认/面板
+ * 入口、不建立成员身份（websocket 事件观测：仅展示 WS；请求观测：
+ * 零 POST /api/rooms）。
  *
  * 记录页采用分层证据：浏览器侧注入「合法固定快照响应」验证记录界面
  * 与终态分流（与 PR9 验收同一手法）；真实的 12 小时到期裁决、Alarm
@@ -87,6 +89,48 @@ function watchNetwork(page: Page, sink: Array<{ url: string; method: string }>):
   });
 }
 
+/**
+ * 展示池几何断言：DOM 数量只能证明"渲染了 58 张卡片"，不能排除内部裁切
+ * 或内部滚动。这里基于实际几何检查：裁剪容器（overflow-hidden 的网格
+ * 边界）无滚动溢出，网格与末卡片完整落在容器矩形内（±1px 取整容差）。
+ */
+async function assertDisplayPoolFits(page: Page, label: string): Promise<void> {
+  const geometry = await page.evaluate(() => {
+    const section = document.querySelector('section[aria-label="代理人池"]');
+    const container = section?.firstElementChild;
+    const grid = section?.querySelector('ul[aria-label="代理人池"]');
+    if (!(container instanceof HTMLElement) || !(grid instanceof HTMLElement)) {
+      throw new Error("未找到展示池容器或网格");
+    }
+    const cards = grid.querySelectorAll("li");
+    const last = cards[cards.length - 1] ?? null;
+    const box = container.getBoundingClientRect();
+    const gridBox = grid.getBoundingClientRect();
+    const lastBox = last instanceof HTMLElement ? last.getBoundingClientRect() : null;
+    const within = (inner: DOMRect): boolean =>
+      inner.top >= box.top - 1 &&
+      inner.bottom <= box.bottom + 1 &&
+      inner.left >= box.left - 1 &&
+      inner.right <= box.right + 1;
+    return {
+      cards: cards.length,
+      scrollW: container.scrollWidth,
+      scrollH: container.scrollHeight,
+      clientW: container.clientWidth,
+      clientH: container.clientHeight,
+      gridWithin: within(gridBox),
+      lastWithin: lastBox !== null && within(lastBox),
+    };
+  });
+  if (geometry.scrollW > geometry.clientW + 1 || geometry.scrollH > geometry.clientH + 1) {
+    throw new Error(
+      `${label} 展示池内部出现滚动/裁切（${geometry.scrollW}x${geometry.scrollH} vs ${geometry.clientW}x${geometry.clientH}）`,
+    );
+  }
+  if (!geometry.gridWithin) throw new Error(`${label} 展示网格超出裁剪容器`);
+  if (!geometry.lastWithin) throw new Error(`${label} 末卡片超出裁剪容器（可能被裁切）`);
+}
+
 test("展示页：匿名直开、布局冻结、实时同步且不建立成员身份", async () => {
   const browser = await chromium.launch();
   try {
@@ -131,6 +175,7 @@ test("展示页：匿名直开、布局冻结、实时同步且不建立成员�
     // 全量代理人同屏：58 名全部渲染，页面无整页越界。
     await expectCount(display.page.locator("section[aria-label='代理人池'] li"), AGENTS.length);
     await assertNoOverflow(display.page, "展示页 byPick 1280x640");
+    await assertDisplayPoolFits(display.page, "展示页 byPick 1280x640");
     // 已禁用结果与队名同步（缺头像代理人正常显示名称）。
     await displayCard(display.page, plan[1] ?? "", "已禁用").waitFor({ state: "visible" });
     await display.page.getByText("乙队", { exact: true }).first().waitFor();
@@ -151,6 +196,7 @@ test("展示页：匿名直开、布局冻结、实时同步且不建立成员�
     await display.page.getByText("首版验收·展示赛").first().waitFor();
     await waitForStatus(display.page, "进行中");
     await expectCount(display.page.locator('section[aria-label="B 方选用区"] > div > div'), 9);
+    await assertDisplayPoolFits(display.page, "展示页 竖排 1280x640");
 
     // ---- 展示连接不建立成员身份：仅展示 WS、零成员 WS、零 POST、零 Cookie ----
     expect(displaySockets.some((url) => url.endsWith(`/api/rooms/${roomId}/display/ws`))).toBe(
@@ -182,6 +228,10 @@ test("记录页：完成/未完成快照、两布局、终态分流与真实 404
     await context.route(AVATAR_CDN_PATTERN, (route) => route.abort());
     const page = await context.newPage();
     const errors: string[] = [];
+    // WS 观测必须用 websocket 事件：page.on("request") 看不到 WS 握手
+    // （已由探针证实 request 事件不含 /ws 请求），旧写法即使开了连接也照样通过。
+    const recordSockets: string[] = [];
+    page.on("websocket", (socket) => recordSockets.push(socket.url()));
     page.on("pageerror", (error) => errors.push(`[record] pageerror: ${error.message}`));
     page.on("console", (message) => {
       if (message.type() !== "error") return;
@@ -229,9 +279,10 @@ test("记录页：完成/未完成快照、两布局、终态分流与真实 404
     await page.getByText("记录到期时间：", { exact: false }).waitFor();
     await closePanel(page);
 
-    // 记录页零业务 WS 与零 POST。
-    await page.waitForTimeout(500);
-    expect(requests.some((item) => item.url.endsWith("/ws") && item.method === "GET")).toBe(false);
+    // 完成快照阶段的记录页零业务 WS（websocket 事件观测）与零 POST（请求观测）。
+    // 断言点在多次页面交互之后（渲染、两布局、面板），任何 WS 握手都已被记录。
+    const socketsAfterCompleted = [...recordSockets];
+    expect(socketsAfterCompleted.filter((url) => url.endsWith("/ws"))).toHaveLength(0);
     expect(
       requests.some((item) => item.method === "POST" && item.url.includes("/api/rooms/")),
     ).toBe(false);
@@ -247,10 +298,15 @@ test("记录页：完成/未完成快照、两布局、终态分流与真实 404
         body: JSON.stringify({ kind: "archived", record: incomplete }),
       });
     });
+    const socketsBeforeIncomplete = recordSockets.length;
     await page.goto(`${E2E_BASE_URL}/rooms/${roomIdIncomplete}`);
     await page.getByText("只读记录 · 未完成", { exact: true }).waitFor();
     await page.getByText("共 10 步", { exact: true }).waitFor();
     await page.getByText("第 10 步：", { exact: false }).first().waitFor();
+    // 未完成记录阶段同样零业务 WS（仅统计本阶段新增事件）。
+    expect(
+      recordSockets.slice(socketsBeforeIncomplete).filter((url) => url.endsWith("/ws")),
+    ).toHaveLength(0);
 
     // ---- 入房进行中被归档：POST 410 + GET archived → 转记录读取 ----
     const roomIdJoining = "33333333-3333-4333-8333-333333333333";

@@ -52,7 +52,7 @@ curl http://localhost:5173/api/unknown    # Worker 返回 404 JSON
 
 ## 类型环境
 
-六个 TypeScript 项目分别对应不同的运行环境（见根目录 `tsconfig.*.json`，由
+五个 TypeScript 项目分别对应不同的运行环境（见根目录 `tsconfig.*.json`，由
 `tsconfig.json` 统一引用）：
 
 | 配置 | 覆盖范围 | 环境 |
@@ -101,22 +101,15 @@ Chromium：`pnpm exec playwright install chromium`（CI 加 `--with-deps`）。
 `pnpm test` 不包含 E2E，避免同一条命令重复运行同一套测试；CI 以独立 job 执行。
 
 本地资源基准（`pnpm measure:rooms`，`tests/measure/` + `vitest.measure.config.ts`）：
-同样在真实 workerd + SQLite 运行，测量典型房间与有界示例规模的消息量、表行数、
-SQLite 分配大小与本地耗时，输出 JSON；按需运行，不进入常规门禁。结论与估算方法见
+同样在真实 workerd + SQLite 运行，测量典型房间与有界示例规模的消息量、UTF-8
+内容字节、表行数、SQLite 分配大小、SQL 行成本（官方 SQL API 的
+`cursor.rowsRead`/`cursor.rowsWritten`）与本地耗时；报告既打印到标准输出，也由
+配置内的 reporter 持久化到 `node_modules/.tmp/measure-report.json`。按需运行，
+不进入常规门禁。结论与估算方法见
 [Cloudflare 部署与预算评估](specs/cloudflare-budget.md#容量估算方法与本地基准)。
 
 浏览器交互测试 provider（`@vitest/browser-playwright`）未被首版采纳，理由同上；
 如后续需要组件级浏览器测试再按需引入，并与 Vitest 保持同一版本。
-
-Workers 集成测试中的 WebSocket 客户端模式：本套件选择对 Worker 发起带
-`Upgrade: websocket` 头的 fetch，从 101 响应的 `webSocket` 字段取得客户端
-socket 并 `accept()`（与 Worker 代理 DO 的官方模式一致）；当前生成的运行时
-类型也声明了 `new WebSocket(url)` 构造器，但本套件未走该路径，未验证其
-行为差异。实测边界：该 fetch 会把带 Upgrade 头的子请求规范化为 GET 握手，
-因此「非 GET 方法拒绝 WS 升级」这类防御分支无法经此通道驱动。休眠语义用
-`evictDurableObject` 验证：实例拆除后 hibernatable 连接与附件由运行时
-保留，原连接上的消息以附件身份唤醒新实例（tests/workers/ 中的探针
-结论已固化为 room-presence.test.ts 的回归测试）。
 
 Workers 集成测试中的 WebSocket 客户端模式：本套件选择对 Worker 发起带
 `Upgrade: websocket` 头的 fetch，从 101 响应的 `webSocket` 字段取得客户端

@@ -9,7 +9,8 @@
 - 首版功能已在本地完成并通过验收（PR1–PR10）：建房与入房身份、房间实时协作与权限、
   完整 26 步 BP、断线/重连/换人/结果未知核对、独立展示页、12 小时归档与 90 天只读记录、
   生命周期清理。
-- **尚未部署**：没有任何 Cloudflare 账户、部署凭据或线上数据；部署是独立动作，见下方
+- **尚未部署**：本仓库未配置部署凭据，本轮验收也**未使用任何 Cloudflare 部署账户**做验证
+  （不推断用户是否已持有账户）；没有线上数据，部署是独立动作，见下方
   [部署前检查清单](#部署前检查清单)。
 - 固定数据：代理人目录为 `@randomplay/data` 0.2.1（游戏数据 3.1），58 人、其中 3 人缺头像
   （零号·安比、星徽·比利、佩洛伊斯）。缺头像留空且不影响操作；属性/特性无结构化图标时以
@@ -26,7 +27,7 @@
 | 真实多人操作一致 | 通过 | 真实浏览器 E2E 主线：UI 建房、隔离身份入房、分席开局、完整 26 步、公开预选与双页面同步 |
 | 权限正确 | 通过 | 观众/房主/选手权限断言（E2E + Workers 集成）；换人后原选手降级、房主兼任、越权命令拒绝 |
 | 断线可恢复 | 通过 | 部分页面关闭不掉线、最后一页掉线暂停、断线期间本地可用/服务端禁用、原选手重连、结果未知同 operationId 收敛 |
-| 展示只读 | 通过 | 匿名直开、URL 冻结布局、实时同步、全量 58 人同屏、零成员 WS/零 POST/零身份 Cookie |
+| 展示只读 | 通过 | 匿名直开、URL 冻结布局、实时同步、58 人全量同屏（卡片数量 + 裁剪容器无内部滚动 + 网格与末卡片几何包含，两种布局）、零成员 WS/零 POST/零身份 Cookie |
 | 最终记录可读取 | 通过 | 完成/未完成快照记录页、两种布局、终态分流、真实 404；真实归档与 90 天清理由 Workers 生命周期测试证明 |
 | 生命周期清理有效 | 通过 | 真实 workerd + SQLite 的到期裁决/快照/删除测试；本地测量确认清理后无业务表 |
 
@@ -54,11 +55,14 @@
    缺头像与最长名称代理人。
 2. 断线与恢复：同身份第二页面、部分页面关闭不掉线、刷新恢复身份、最后一页掉线暂停、
    断线期间本地筛选/布局可用且服务端操作禁用、暂停换人、原选手重连降级为观众、结果未知核对
-   （断线触发的暂停保持到房主手动恢复）、房主兼任选手。
+   （确定性注入：代理扣下服务端已提交的成功回执再切断，断言「正在核对结果…」、重连后同
+   operationId 同载荷字节重发、服务端回执幂等重放 bp.version 不变、整场只推进一次；断线
+   触发的暂停保持到房主手动恢复）、房主兼任选手。
 3. 展示页：匿名直开、URL 冻结布局（含刷新与非法参数回退）、公开预选与结果实时同步、
-   58 人全量同屏无整页越界、无搜索/确认/面板入口、仅展示 WS 且零 POST/零身份 Cookie。
-4. 记录页：完成与未完成快照、两种布局、控制面板到期时间、零 WS/零 POST、入房中被归档转
-   记录读取；真实 404 走统一不存在页。
+   58 人全量同屏（卡片数量 + 裁剪容器无内部滚动 + 网格与末卡片几何包含，byPick 与竖排
+   两种布局）、无搜索/确认/面板入口、仅展示 WS（websocket 事件观测）且零 POST/零身份 Cookie。
+4. 记录页：完成与未完成快照、两种布局、控制面板到期时间、零业务 WS（websocket 事件观测）
+   与零 POST、入房中被归档转记录读取；真实 404 走统一不存在页。
 
 ## 覆盖映射
 
@@ -68,7 +72,7 @@
 | 身份、Cookie、权限、房主兼任、换人（[房间角色](specs/room-roles.md)） | `tests/workers/rooms`、`room-websocket`、`room-presence` | E2E 主线权限断言、resilience 换人与兼任 |
 | 多页面、掉线暂停、重连核对（[房间角色](specs/room-roles.md)、[单局常规 BP](specs/single-game-bp.md)） | `tests/web/room-session`、`tests/workers/room-presence`、`room-commands` | E2E resilience（真实断线注入） |
 | 房间界面、两布局、控制面板、搜索筛选（[房间布局](specs/room-layout.md)） | `tests/web/pick-layout`、`host-panels`、`operation-feedback`、`form-validation` | E2E 主线与 resilience；PR6 历史浏览器验收 |
-| 独立展示页（[房间布局](specs/room-layout.md#实时展示页)） | `tests/web/display-*`、`tests/workers/room-websocket` | E2E 展示页；PR8 浏览器验收（58 人同屏） |
+| 独立展示页（[房间布局](specs/room-layout.md#实时展示页)） | `tests/web/display-*`、`tests/workers/room-websocket` | E2E 展示页（58 人同屏含几何包含断言）；PR8 浏览器验收 |
 | 归档、只读记录、12 小时与 90 天（[房间保留与只读记录](specs/room-roles.md#房间保留与只读记录)） | `tests/workers/room-lifecycle`（受控时间戳 + 真实 Alarm）、`tests/web/record-view` | E2E 记录页（合法快照响应注入）；PR9 浏览器验收 |
 | 代理人数据目录（[代理人数据接入](specs/agent-data.md)） | `tests/rules/agent-catalog` | E2E 缺头像/最长名称代理人 |
 | 资源与预算估算（[Cloudflare 部署与预算评估](specs/cloudflare-budget.md)） | `tests/measure/room-resources`（按需运行） | 本地基准数字见预算文档 |
@@ -85,8 +89,10 @@ PR1–PR9 的浏览器验收证据保存在提交时的临时目录（`/tmp/zzzb
   以受控时间戳 + 真实 Alarm 触发证明；没有等待自然 12 小时，也没有在生产环境快进时间。
 - **记录页 UI**：浏览器侧以「合法固定快照响应」注入验证（与 PR9 验收同一手法）；这不代表
   浏览器端走过自然归档流程，自然归档由上述 Workers 生命周期测试证明。
-- **本地资源数字**：来自本地 workerd 观测（`pnpm measure:rooms`），不是 Cloudflare 计费
-  实测；换算规则与边界见[预算文档](specs/cloudflare-budget.md#容量估算方法与本地基准)。
+- **本地资源数字**：来自本地 workerd 观测（`pnpm measure:rooms`；SQL 行成本为官方 SQL
+  API `cursor.rowsRead`/`cursor.rowsWritten` 实测，内容为 UTF-8 字节，存储为
+  `databaseSize` 分配），不是 Cloudflare 计费实测；运行时长不做本地换算。换算规则与边界见
+  [预算文档](specs/cloudflare-budget.md#容量估算方法与本地基准)。
 - **展示/归档同屏与可读性**：已在 58 人名单、1440×900 与 1280×640 下验证；其他尺寸或更长
   名单需重新评估（沿用[房间布局](specs/room-layout.md#待确认的展示细节)的待确认项）。
 
@@ -109,7 +115,10 @@ PR1–PR9 的浏览器验收证据保存在提交时的临时目录（`/tmp/zzzb
 
 ## 本次验收使用的门禁结果
 
-- `pnpm lint`、`pnpm format:check`、`pnpm typecheck`、`pnpm build`：通过。
-- `pnpm test`：通过（32 个文件、362 条测试，含真实 workerd 集成）。
-- `pnpm test:e2e`：通过（4 条真实浏览器验收，共享一次 `cf dev` 启动）。
-- `pnpm measure:rooms`：通过（本文件引用的本地基准数字来源）。
+- `pnpm lint`、`pnpm format:check`、`pnpm typecheck`：通过（修复提交后复跑）。
+- `pnpm test`：通过（32 个文件、362 条测试，含真实 workerd 集成）；本轮修复未改动产品代码
+  与常规测试配置，复用冻结提交 `06e2f95` 的完整结果，后续 CI 会再次执行。
+- `pnpm build`：通过（同上，复用冻结提交结果）。
+- `pnpm test:e2e`：通过（4 条真实浏览器验收，共享一次 `cf dev` 启动；本轮修复后运行）。
+- `pnpm measure:rooms`：通过（本轮修复后运行；报告打印到标准输出并持久化到
+  `node_modules/.tmp/measure-report.json`，本文件引用的本地基准数字来源）。
