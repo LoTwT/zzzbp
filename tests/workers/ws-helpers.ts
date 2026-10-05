@@ -93,7 +93,8 @@ export class TestWsClient {
   readonly received: string[] = [];
   /** 尚未被 waitFor 消费的消息。 */
   private readonly unconsumed: string[] = [];
-  closeEvent: { code: number; reason: string } | null = null;
+  /** 客户端观察到的关闭事件（含 wasClean，用于握手完成判定）。 */
+  closeEvent: { code: number; reason: string; wasClean: boolean } | null = null;
 
   private constructor(socket: WebSocket) {
     this.socket = socket;
@@ -103,7 +104,7 @@ export class TestWsClient {
       this.unconsumed.push(event.data);
     });
     socket.addEventListener("close", (event) => {
-      this.closeEvent = { code: event.code, reason: event.reason };
+      this.closeEvent = { code: event.code, reason: event.reason, wasClean: event.wasClean };
     });
   }
 
@@ -208,8 +209,11 @@ export class TestWsClient {
     };
   }
 
-  /** 等待服务端关闭连接并返回关闭码；超时抛错。 */
-  async waitForClose(label: string, timeoutMs = 3000): Promise<{ code: number; reason: string }> {
+  /** 等待服务端关闭连接并返回关闭码、原因与 wasClean；超时抛错。 */
+  async waitForClose(
+    label: string,
+    timeoutMs = 3000,
+  ): Promise<{ code: number; reason: string; wasClean: boolean }> {
     const deadline = Date.now() + timeoutMs;
     while (this.closeEvent === null) {
       if (Date.now() >= deadline) {
@@ -225,8 +229,9 @@ export class TestWsClient {
     this.socket.send(typeof payload === "string" ? payload : JSON.stringify(payload));
   }
 
-  close(): void {
-    this.socket.close();
+  /** 客户端发起关闭；携带可选状态码（默认无状态码）。 */
+  close(code?: number): void {
+    this.socket.close(code);
   }
 }
 

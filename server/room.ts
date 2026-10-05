@@ -992,10 +992,17 @@ export class Room extends DurableObject {
    *
    * 注册表由运行时维护，休眠/实例重建后依然准确；这是在线状态的唯一
    * 权威来源，存储中的 online 标志只是它的持久投影。
+   *
+   * 只统计 readyState 为 OPEN 的连接：close 回调触发时连接可能仍处于
+   * CLOSING/CLOSED 且仍被 getWebSockets 枚举（见 handleConnectionEnded），
+   * 关闭中的连接已不可用，计为在线会吞掉掉线暂停与全员离开计时；同一
+   * 身份其他 OPEN 页面仍使成员在线（多页面语义不变），展示与被拒连接
+   * 从不计入。
    */
   private connectedMemberIds(): Set<string> {
     const ids = new Set<string>();
     for (const socket of this.ctx.getWebSockets()) {
+      if (socket.readyState !== WebSocket.OPEN) continue;
       const attachment = readAttachment(socket);
       if (attachment?.kind === "member") {
         ids.add(attachment.memberId);
@@ -1150,13 +1157,37 @@ export class Room extends DurableObject {
   }
 
   /**
-   * 连接关闭：清理完全依赖运行时的断开语义——本兼容日期下 webSocketClose
-   * 触发前 runtime 已完成 close 握手，关闭的连接不再出现在 getWebSockets；
-   * 休眠（实例驱逐但连接保留）不会触发本回调，因此不会把休眠当成掉线。
-   * 只处理成员连接的「最后一个连接离开」。
+   * 连接关闭：先幂等完成关闭回应（见 completeCloseHandshake），再做
+   * 成员在线清理。不假设 runtime 按兼容日期自动完成 close 握手：线上
+   * 观测（2026-10-05，preview）close 回调触发时被关闭连接 readyState 仍
+   * 为 CLOSING、仍被 getWebSockets 枚举，客户端在应用未回应时收不到
+   * 关闭事件；关闭回应与在线判定都不依赖注册表在回调时已移除连接。
    */
-  async webSocketClose(ws: WebSocket): Promise<void> {
+  async webSocketClose(ws: WebSocket, code: number): Promise<void> {
+    this.completeCloseHandshake(ws, code);
     this.handleConnectionEnded(ws);
+  }
+
+  /**
+   * 幂等、安全地完成关闭回应：对端发起的关闭需要一条关回帧才完成握手，
+   * 本兼容日期不保证 runtime 自动代发（证据同上）。只回合法状态码——
+   * 1000 或 3000–4999 原样回显，其余（1005/1006 等保留码、无状态码）
+   * 回不带状态码的关闭帧，不直接复制对端 code；不回显对端 reason
+   * （无需输出用户 reason，也避免超长 reason 触发新异常）。连接已
+   * CLOSED、重复回调或平台拒绝重复关闭都安全跳过。成员、展示与被拒
+   * 连接一视同仁，不产生任何存储或在线状态写入。
+   */
+  private completeCloseHandshake(ws: WebSocket, code: number): void {
+    if (ws.readyState === WebSocket.CLOSED) return;
+    try {
+      if (code === 1000 || (code >= 3000 && code <= 4999)) {
+        ws.close(code);
+      } else {
+        ws.close();
+      }
+    } catch {
+      // 关闭已在途或平台拒绝重复关闭：不影响成员在线清理。
+    }
   }
 
   /**
@@ -1169,10 +1200,10 @@ export class Room extends DurableObject {
   }
 
   /**
-   * 连接结束后的在线处理：完全依赖运行时的断开语义——本兼容日期下
-   * webSocketClose 触发前 runtime 已完成 close 握手，关闭的连接不再
-   * 出现在 getWebSockets；休眠（实例驱逐但连接保留）不会触发本回调，
-   * 因此不会把休眠当成掉线。
+   * 连接结束后的在线处理：运行时可能在回调期间仍枚举关闭中/已关闭的
+   * 连接（线上观测：readyState=2 且 listed=true），因此在线判定只认
+   * OPEN（connectedMemberIds），不假设回调时注册表已移除该连接；休眠
+   * （实例驱逐但连接保留）不会触发本回调，因此不会把休眠当成掉线。
    *
    * 处理方式是整房在线协调（见 reconcilePresenceInTransaction）：以实际
    * 连接为权威，最后一个连接离开才使成员下线（含掉线暂停与计时补写），

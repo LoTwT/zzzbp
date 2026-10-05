@@ -231,7 +231,7 @@ profile/隐私窗口或不同设备；**同一浏览器的普通多标签共享�
   - 控制台：Workers & Pages → `zzzbp-preview` → Deployments → 选择目标版本 → Rollback
     （[官方说明](https://developers.cloudflare.com/workers/configuration/versions-and-deployments/rollbacks/)）。
   - CLI：`pnpm exec cf workers versions list --worker-id zzzbp-preview` 取得目标版本 ID，再
-    `pnpm exec cf workers deployments create --worker zzzbp-preview --versions '[{"version_id":"<版本 ID>","percentage":100}]'`。
+    `pnpm exec cf workers deployments create --worker zzzbp-preview --strategy percentage --versions '[{"version_id":"<版本 ID>","percentage":100}]'`。
   - 平台限制（以官方说明为准）：只能回滚到最近 100 个版本；若所选版本与当前活动部署之间
     发生过 Durable Object 类生命周期变更（经 `exports` 或旧版 `migrations`），或绑定资源
     （R2/KV/queue 等）被删除或修改，平台会拒绝回滚。本项目尚未部署、也无多个已发布版本；

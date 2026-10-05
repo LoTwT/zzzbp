@@ -1,4 +1,4 @@
-import { evictDurableObject } from "cloudflare:test";
+import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { exports } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
 import { agentCatalogData } from "../../shared/agents/catalog";
@@ -47,6 +47,70 @@ async function lastMemberLeftAt(roomId: string): Promise<string | null> {
   });
   if (entry.kind !== "live") throw new Error("房间不存在");
   return entry.lastMemberLeftAt;
+}
+
+/** 已安装「关闭中连接仍被枚举」包装的房间 → 原 ctx（供恢复）。 */
+const savedContexts = new Map<string, object>();
+
+/**
+ * 测试侧最小可恢复包装：复现线上观测到的 close 回调注册表边界。
+ *
+ * 线上证据（2026-10-05，preview）：close 回调触发时，被关闭的连接
+ * readyState=2（CLOSING）且仍被 getWebSockets 枚举。本测试环境的 workerd
+ * 在回调前已把连接移出注册表（关闭回调内 listed=false），因此这里把指定
+ * 成员的真实连接对象追加进 getWebSockets 结果：回调期间该对象即为
+ * CLOSING，完全关闭后为 CLOSED，从而在真实房间与真实关闭回调上复现
+ * 「仍能枚举到 CLOSING/CLOSED 成员连接」这一线上 API 边界。包装只影响
+ * 当前实例的注册表读取，可用 restoreRoomContext 还原。
+ */
+async function keepMemberSocketListed(roomId: string, memberId: string): Promise<void> {
+  const stub = exports.Room.get(exports.Room.idFromName(roomId));
+  await runInDurableObject(stub, (instance, state) => {
+    const target = state.getWebSockets().find((socket) => {
+      const attachment = socket.deserializeAttachment() as {
+        kind?: unknown;
+        memberId?: unknown;
+      } | null;
+      return attachment?.kind === "member" && attachment.memberId === memberId;
+    });
+    if (target === undefined) throw new Error(`未找到成员 ${memberId} 的连接`);
+
+    const context = (instance as unknown as { ctx: object }).ctx;
+    if (!savedContexts.has(roomId)) savedContexts.set(roomId, context);
+    const patched = new Proxy(context, {
+      get(targetCtx, property) {
+        if (property === "getWebSockets") {
+          return () =>
+            (targetCtx as { getWebSockets(): WebSocket[] }).getWebSockets().concat(target);
+        }
+        const value = Reflect.get(targetCtx, property, targetCtx) as unknown;
+        return typeof value === "function" ? value.bind(targetCtx) : value;
+      },
+    });
+    Object.defineProperty(instance, "ctx", { value: patched, configurable: true });
+  });
+}
+
+/** 还原被包装的 ctx；未包装时为无操作。 */
+async function restoreRoomContext(roomId: string): Promise<void> {
+  const original = savedContexts.get(roomId);
+  if (original === undefined) return;
+  savedContexts.delete(roomId);
+  const stub = exports.Room.get(exports.Room.idFromName(roomId));
+  await runInDurableObject(stub, (instance) => {
+    Object.defineProperty(instance, "ctx", { value: original, configurable: true });
+  });
+}
+
+/** 轮询等待空房期限 Alarm 写入（观察，不触发任何业务入口）。 */
+async function waitForAlarm(roomId: string, timeoutMs = 3000): Promise<number | null> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const alarm = await currentAlarm(roomId);
+    if (alarm !== null) return alarm;
+    if (Date.now() >= deadline) return null;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
 }
 
 /** 开局环境：房主 + 两名在席选手，全部已连接，BP 进行中。 */
@@ -829,5 +893,86 @@ describe("在线协调与故障恢复（以实际连接为权威）", () => {
     room.aWs.close();
     room.bWs.close();
     recovered.close();
+  });
+});
+
+describe("关闭回调的注册表边界（线上观测复现）", () => {
+  it("关闭中成员连接仍被枚举时：在席选手掉线立即暂停并广播，全员离开后计时与 Alarm 正常", async () => {
+    const room = await runningRoom("关闭边界赛");
+    const roomId = room.host.roomId;
+    expect(
+      await room.waitForHostView((view) => view.bpStatus === "running", "开局后的 running 视图"),
+    ).not.toBeNull();
+    const display = await TestWsClient.connectDisplay(roomId);
+    await display.next("displayView");
+
+    // 复现线上边界：B 的关闭中连接在 close 回调期间仍会被 getWebSockets 枚举。
+    await keepMemberSocketListed(roomId, room.playerB.memberId);
+
+    // B（在席选手）全部页面断开：close 路径应立即判离线并暂停，直接向
+    // host/display 广播最新视图；不依赖 HTTP 读取或新命令触发补偿。
+    room.bWs.close();
+    expect(
+      await room.waitForHostView((view) => view.bpStatus === "paused", "B 掉线后的 hostView"),
+    ).not.toBeNull();
+    expect(
+      await display.waitFor((message) => {
+        try {
+          const parsed = JSON.parse(message ?? "") as {
+            kind?: string;
+            view?: { bpStatus?: string };
+          };
+          return parsed.kind === "displayView" && parsed.view?.bpStatus === "paused";
+        } catch {
+          return false;
+        }
+      }, "B 掉线后的 displayView（暂停）"),
+    ).not.toBeNull();
+    expect(await queryRoomRows(roomId, "SELECT bp_status FROM room_meta")).toEqual([
+      { bp_status: "paused" },
+    ]);
+    expect(await memberOnline(roomId, room.playerB.memberId)).toBe(0);
+
+    // 全员离开：追加枚举的关闭连接（此时已是 CLOSED）不阻止全员离开计时，
+    // 空房期限 Alarm 按新的离开时间调度。
+    room.hostWs.close();
+    room.aWs.close();
+    expect(await waitMemberOnline(roomId, room.playerA.memberId, 0)).toBe(true);
+    expect(await waitMemberOnline(roomId, room.host.memberId, 0)).toBe(true);
+    const leftAt = await lastMemberLeftAt(roomId);
+    expect(leftAt).not.toBeNull();
+    const alarm = await waitForAlarm(roomId);
+    expect(alarm).not.toBeNull();
+    expect(
+      Math.abs((alarm ?? 0) - (Date.parse(leftAt ?? "") + 12 * 60 * 60 * 1000)),
+    ).toBeLessThanOrEqual(5_000);
+
+    display.close(1000);
+    const displayClose = await display.waitForClose("展示连接关闭");
+    expect(displayClose.wasClean).toBe(true);
+    expect(displayClose.code).toBe(1000);
+    await restoreRoomContext(roomId);
+  });
+
+  it("关闭中页面仍被枚举时同身份其他 OPEN 页面保持在线，最后一页离开才离线", async () => {
+    const host = await createRoomViaHttp("多页面边界赛", "主持人");
+    const roomId = host.roomId;
+    const page1 = await TestWsClient.connectMember(roomId, host.secret);
+    await page1.next("hostView");
+    const page2 = await TestWsClient.connectMember(roomId, host.secret);
+    await page2.next("hostView");
+    expect(await memberOnline(roomId, host.memberId)).toBe(1);
+
+    await keepMemberSocketListed(roomId, host.memberId);
+    // 关闭其中一个页面：仍有一个 OPEN 页面，成员保持在线（多页面语义）。
+    page1.close();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(await memberOnline(roomId, host.memberId)).toBe(1);
+
+    // 最后一页离开：关闭中/已关闭的残留连接不能把成员继续算作在线。
+    page2.close();
+    expect(await waitMemberOnline(roomId, host.memberId, 0)).toBe(true);
+    expect(await lastMemberLeftAt(roomId)).not.toBeNull();
+    await restoreRoomContext(roomId);
   });
 });
