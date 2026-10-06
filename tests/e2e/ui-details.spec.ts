@@ -1,8 +1,9 @@
 import { expect, test } from "vitest";
 import { chromium } from "playwright";
-import type { Page } from "playwright";
+import type { Page, WebSocketRoute } from "playwright";
 import {
   AGENTS,
+  assertHeaderPrioritizesCenter,
   assertNoOverflow,
   assertNoPageErrors,
   assertNoSlotNumbers,
@@ -202,6 +203,37 @@ test("实时房间：控制面板入口再点、外部首次点击、Esc 与关�
     await expectDisabled(confirmButton(playerA.page));
     expect(await preselectText(playerA.page, AGENTS[0]?.name ?? "").count()).toBe(0);
 
+    // ---- 拦截不依赖时长与位移：长按（850ms）与同一次按下内移动 8px 都只收起面板 ----
+    for (const [label, holdMs, movePx] of [
+      ["长按 850ms", 850, 0],
+      ["同按钮内移动 8px", 0, 8],
+    ] as const) {
+      await openPanel(playerA.page);
+      const box = await panel(playerA.page).boundingBox();
+      if (box === null) throw new Error("未找到控制面板");
+      const point = await playerA.page.evaluate((panelLeft: number) => {
+        const cards = [...document.querySelectorAll("[aria-label='代理人池'] ul li button")];
+        const card = cards.find((candidate) => {
+          const rect = candidate.getBoundingClientRect();
+          return rect.width > 24 && rect.right < panelLeft - 8;
+        });
+        if (card === undefined) throw new Error("未找到面板之外的代理人卡片");
+        const rect = card.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      }, box.x);
+      await playerA.page.mouse.move(point.x, point.y);
+      await playerA.page.mouse.down();
+      if (holdMs > 0) await playerA.page.waitForTimeout(holdMs);
+      if (movePx > 0) await playerA.page.mouse.move(point.x + movePx, point.y, { steps: 2 });
+      await playerA.page.mouse.up();
+      await expectHidden(panel(playerA.page));
+      await expectDisabled(confirmButton(playerA.page));
+      expect(
+        await preselectText(playerA.page, AGENTS[0]?.name ?? "").count(),
+        `${label} 仍触发了底层预选`,
+      ).toBe(0);
+    }
+
     // ---- Esc：面板关闭且焦点回到入口 ----
     await openPanel(playerA.page);
     await playerA.page.keyboard.press("Escape");
@@ -301,6 +333,52 @@ test("实时房间：两轮分隔、槽位数字移除与队名/同高/背景一
 
     assertNoPageErrors(host);
     assertNoPageErrors(playerB);
+  } finally {
+    await browser.close();
+  }
+}, 240_000);
+
+test("长队名 + 窄窗口：中央赛事信息不被挤压（1024×1080 连接中断态）", async () => {
+  const browser = await chromium.launch();
+  const teamNameA = "甲".repeat(32);
+  const teamNameB = "乙".repeat(32);
+  try {
+    const host = await newRoomContext(browser, "host", { width: 1024, height: 1080 });
+    const player = await newRoomContext(browser, "player", { width: 1024, height: 768 });
+    // 成员通道代理：用于稳定观察「连接中断」提示（与 resilience 同一手法）。
+    let failConnections = false;
+    const sockets: WebSocketRoute[] = [];
+    await host.page.routeWebSocket(/\/api\/rooms\/[^/]+\/ws$/, (client) => {
+      if (failConnections) {
+        void client.close();
+        return;
+      }
+      sockets.push(client.connectToServer());
+    });
+
+    const roomUrl = await createRoomViaUi(host, "首版验收·顶部空间", "主办小鱼");
+    await joinRoomViaUi(player, roomUrl, "选手甲");
+    await openPanel(host.page);
+    await saveTeamName(host.page, "A", teamNameA);
+    await saveTeamName(host.page, "B", teamNameB);
+    await assignSeatViaUi(host.page, "A", "选手甲");
+    await assignSeatViaUi(host.page, "B", "主办小鱼");
+    await closePanel(host.page);
+
+    // 制造连接中断：拒绝重连，稳定显示连接提示（1024×1080 高窗口禁用格更大）。
+    failConnections = true;
+    for (const socket of sockets) socket.close();
+    await host.page.getByText("连接中断", { exact: true }).waitFor({ state: "visible" });
+    await assertHeaderPrioritizesCenter(host.page, "1024×1080 长队名");
+    await assertNoOverflow(host.page, "1024×1080 长队名");
+    // 最小高度组合同样成立。
+    await host.page.setViewportSize({ width: 1024, height: 768 });
+    await host.page.getByText("连接中断", { exact: true }).waitFor({ state: "visible" });
+    await assertHeaderPrioritizesCenter(host.page, "1024×768 长队名");
+    await assertNoOverflow(host.page, "1024×768 长队名");
+
+    assertNoPageErrors(host);
+    assertNoPageErrors(player);
   } finally {
     await browser.close();
   }
