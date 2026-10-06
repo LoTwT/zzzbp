@@ -79,7 +79,12 @@ export async function newSameIdentityPage(context: RoomContext, label: string): 
   return page;
 }
 
-/** 整页无横向/纵向越界（页面级滚动被布局约束，仅内部列表滚动）。 */
+/**
+ * 整页不超出工作区基准（docs/specs/room-layout.md「设备支持范围」：
+ * 工作区宽 = max(可用内容区宽度, 1024px)，高 = max(可用内容区高度, 768px)）——
+ * 视口低于对应基准时允许且仅允许整页滚动到该基准，超过即视为内容把工作区
+ * 撑开。各区域内部列表的滚动仍由布局约束，不在此断言。
+ */
 export async function assertNoOverflow(page: Page, label: string): Promise<void> {
   const info = await page.evaluate(() => ({
     scrollW: document.documentElement.scrollWidth,
@@ -87,9 +92,11 @@ export async function assertNoOverflow(page: Page, label: string): Promise<void>
     vw: window.innerWidth,
     vh: window.innerHeight,
   }));
-  if (info.scrollW > info.vw + 1 || info.scrollH > info.vh + 1) {
+  const maxPageHeight = Math.max(info.vh, 768);
+  const maxPageWidth = Math.max(info.vw, 1024);
+  if (info.scrollW > maxPageWidth + 1 || info.scrollH > maxPageHeight + 1) {
     throw new Error(
-      `${label} 页面出现整页越界（${info.scrollW}x${info.scrollH} vs ${info.vw}x${info.vh}）`,
+      `${label} 页面出现整页越界（${info.scrollW}x${info.scrollH} vs ${info.vw}x${info.vh}，横向上限 ${maxPageWidth}、纵向上限 ${maxPageHeight}）`,
     );
   }
 }

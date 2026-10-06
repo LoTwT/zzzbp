@@ -28,23 +28,25 @@ defineProps<{
     "
   >
     <AgentAvatar :agent="agent" />
-    <!-- 已禁用：明显斜杠覆盖。 -->
-    <svg
+    <!-- 已禁用：明显斜杠覆盖，按头像的圆形轮廓裁切（素材透明角之外
+         不延伸），保证斜杠贴合头像本身。 -->
+    <span
       v-if="status === 'banned'"
-      class="absolute inset-0 size-full text-neutral-700"
-      viewBox="0 0 56 56"
+      class="absolute inset-0 overflow-hidden rounded-full"
       aria-hidden="true"
     >
-      <line
-        x1="6"
-        y1="50"
-        x2="50"
-        y2="6"
-        stroke="currentColor"
-        stroke-width="3"
-        stroke-linecap="round"
-      />
-    </svg>
+      <svg class="absolute inset-0 size-full text-neutral-700" viewBox="0 0 56 56">
+        <line
+          x1="6"
+          y1="50"
+          x2="50"
+          y2="6"
+          stroke="currentColor"
+          stroke-width="3"
+          stroke-linecap="round"
+        />
+      </svg>
+    </span>
     <!-- 已选用：角落小勾选图标（仅提交成功后出现）。 -->
     <span
       v-if="status === 'picked'"
