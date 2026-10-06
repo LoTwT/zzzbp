@@ -104,6 +104,18 @@ onMounted(loadEntry);
   <!-- 只读记录：所有访问者同一套界面，快照是唯一数据来源；全屏布局。 -->
   <RecordView v-if="phase === 'record' && snapshot !== null" :record="snapshot" />
 
+  <!-- 实时房间工作区：独立的铺满布局（宽度/最小高度见 RoomWorkspace 根节点），
+       不与首页/入房表单的居中单列容器共用布局基准。 -->
+  <RoomWorkspace
+    v-else-if="phase === 'room' && memberView !== null"
+    :room-id="roomId"
+    :initial-view="memberView"
+    @identity-lost="onIdentityLost"
+    @room-gone="onRoomGone"
+    @room-archived="onRoomArchived"
+  />
+
+  <!-- 首页式居中单列容器：仅承载加载/不存在/首次入房表单这些窄内容状态。 -->
   <main
     v-else
     class="mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center gap-8 px-6"
@@ -144,15 +156,6 @@ onMounted(loadEntry);
       @joined="onJoined"
       @archived="onJoinArchived"
       @not-found="onJoinNotFound"
-    />
-
-    <RoomWorkspace
-      v-else-if="phase === 'room' && memberView !== null"
-      :room-id="roomId"
-      :initial-view="memberView"
-      @identity-lost="onIdentityLost"
-      @room-gone="onRoomGone"
-      @room-archived="onRoomArchived"
     />
   </main>
 </template>

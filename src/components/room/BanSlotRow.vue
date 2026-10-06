@@ -26,7 +26,7 @@ defineProps<{
     <div
       v-for="slot in slots"
       :key="slot.slotId"
-      class="relative size-8 shrink-0 rounded-md border bg-(--surface-panel) p-0.5 sm:size-9"
+      class="relative size-[var(--room-ban-slot,2.25rem)] shrink-0 rounded-md border bg-(--surface-panel) p-0.5"
       :class="slot.active ? 'border-lavender-500' : 'border-(--border-default)'"
     >
       <!-- 当前操作位：进行中呼吸；暂停/断线静态高亮，保留预选展示。 -->

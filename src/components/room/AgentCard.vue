@@ -26,6 +26,8 @@ function onClick(): void {
 </script>
 
 <template>
+  <!-- 头像宽度跟随网格单元格（auto-fill 列宽）放大，8.5rem 为尺寸上限：
+       工作区超过上限宽度后多出的空间转为更多列数，不再继续放大头像。 -->
   <button
     type="button"
     class="group relative flex w-full flex-col items-center gap-1 rounded-lg p-1.5 focus-ring-inset"
@@ -38,11 +40,11 @@ function onClick(): void {
     :aria-label="`${agent.name}${status === 'banned' ? '（已禁用）' : status === 'picked' ? '（已选用）' : ''}`"
     @click="onClick"
   >
-    <span class="relative block size-14">
+    <span class="relative mx-auto block aspect-square w-full max-w-[8.5rem]">
       <AgentStatusAvatar :agent="agent" :status="status" />
     </span>
     <span
-      class="w-full truncate text-center text-xs text-neutral-700"
+      class="w-full truncate text-center text-xs text-neutral-700 xl:text-sm"
       :title="agent.fullName ?? agent.name"
       >{{ agent.name }}</span
     >

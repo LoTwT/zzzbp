@@ -8,6 +8,7 @@ import {
   filterAgentEntries,
   type AgentPoolQuery,
 } from "../../../shared/agents/filter";
+import type { AgentClassification } from "../../../shared/agents/schema";
 import { SlidersHorizontal } from "@lucide/vue";
 import AgentCard from "./AgentCard.vue";
 import AgentPoolToolbar from "./AgentPoolToolbar.vue";
@@ -171,6 +172,9 @@ const pickColumns = computed(() =>
 
 const isSeatedMember = computed(() => view.value !== null && view.value.self.seatTeam !== null);
 
+/** 目录未就绪时工具栏的分类占位：不渲染分类按钮，仅保留搜索与清除入口。 */
+const EMPTY_CLASSIFICATIONS: readonly AgentClassification[] = [];
+
 const agentQuery = ref<AgentPoolQuery>({ ...EMPTY_AGENT_POOL_QUERY });
 
 watch(isSeatedMember, (seated) => {
@@ -299,7 +303,22 @@ function closePanel(): void {
 </script>
 
 <template>
-  <div v-if="view !== null" class="flex h-dvh min-h-0 flex-col overflow-hidden">
+  <!--
+    工作区基准（docs/specs/room-layout.md「设备支持范围」）：
+    - 宽度：占满浏览器内容区，最大 1920px（120rem）并左右居中；最小 1024px
+      （64rem）——窄于最小宽度时保持 1024px，由整页横向滚动兜底，不压缩布局；
+    - 高度：确定为「可用内容区高度与 768px 的较大值」——达到 768px 时撑满
+      视口且页面不滚动，低于 768px 时保持 768px 由整页纵向滚动兜底（高度
+      必须是确定值：不定高度会让主体 flex-basis 回退为内容尺寸，把工作区
+      撑高）；
+    - 内部各区域自行约束溢出（中央列表与两侧选用列内滚动），根节点不再
+      裁剪，保证低于最小宽度/最小高度时整页滚动可达。
+    room-workspace 挂载密度变量（见 src/assets/main.css）。
+  -->
+  <div
+    v-if="view !== null"
+    class="room-workspace mx-auto flex h-[max(100dvh,48rem)] w-full max-w-[120rem] min-w-[64rem] flex-col"
+  >
     <RoomHeader
       :room-name="view.roomName"
       :bp-status-text="bpStatusText"
@@ -309,7 +328,9 @@ function closePanel(): void {
       :breathing="breathing"
     />
 
-    <main class="grid min-h-0 flex-1 grid-cols-[7.5rem_1fr_7.5rem] items-stretch gap-3 p-3">
+    <main
+      class="grid min-h-0 flex-1 grid-cols-[var(--room-side-col,7.5rem)_1fr_var(--room-side-col,7.5rem)] grid-rows-[minmax(0,1fr)] items-stretch gap-3 p-3"
+    >
       <PickColumn
         :team-name="pickColumns.A.teamName"
         :rows="pickColumns.A.rows"
@@ -325,11 +346,16 @@ function closePanel(): void {
       >
         <!-- 池区（筛选栏 + 滚动列表）：控制面板的覆盖范围限制在此区域内。 -->
         <div class="relative flex min-h-0 flex-1 flex-col">
+          <!--
+            工具栏按权限渲染（目录未就绪也预留：搜索框常驻，分类按钮随目录
+            出现），保持加载前后池区框架高度稳定；分类列表为空时仅显示
+            搜索框与两个清除入口。
+          -->
           <AgentPoolToolbar
-            v-if="isSeatedMember && catalogModel !== null"
+            v-if="isSeatedMember"
             v-model="agentQuery"
-            :elements="catalogModel.elements"
-            :specialties="catalogModel.specialties"
+            :elements="catalogModel?.elements ?? EMPTY_CLASSIFICATIONS"
+            :specialties="catalogModel?.specialties ?? EMPTY_CLASSIFICATIONS"
           />
 
           <div
@@ -362,8 +388,10 @@ function closePanel(): void {
               </p>
             </template>
             <template v-else>
+              <!-- 单元格宽度下限随工作区宽度分档（--room-pool-cell），列数
+                   由可用宽度自动推导；头像尺寸随单元格放大并设上限。 -->
               <ul
-                class="mx-auto grid w-full max-w-4xl grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-1"
+                class="mx-auto grid w-full grid-cols-[repeat(auto-fill,minmax(var(--room-pool-cell,4.5rem),1fr))] gap-1.5"
               >
                 <li v-for="entry in filteredEntries" :key="entry.id">
                   <AgentCard

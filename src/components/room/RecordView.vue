@@ -98,7 +98,13 @@ async function copyRecordLink(): Promise<void> {
 </script>
 
 <template>
-  <div class="flex h-dvh min-h-0 flex-col overflow-hidden">
+  <!--
+    工作区宽度/高度基准与实时房间一致（见 RoomWorkspace 根节点说明）：
+    最大 1920px 居中、最小 1024px（窄于最小宽度时保持 1024px 由整页横向
+    滚动兜底），高度确定为「可用内容区高度与 768px 的较大值」（低于 768px
+    时由整页纵向滚动兜底）。中央记录列表仍仅在自身区域内滚动。
+  -->
+  <div class="mx-auto flex h-[max(100dvh,48rem)] w-full max-w-[120rem] min-w-[64rem] flex-col">
     <RoomHeader
       :room-name="record.roomName"
       :bp-status-text="statusText"
