@@ -405,6 +405,54 @@ export async function assertNoSlotNumbers(
 }
 
 /**
+ * 顶部优先级：空间不足时先收缩队名，中央赛事信息保持可读。
+ *
+ * 量测：中央列剩余宽度（房间名/状态所在列，含 12rem 下限）、连接提示与
+ * 状态是否仍单行渲染（不出现逐字竖排）、双方队名是否已截断（说明先收缩
+ * 的是队名而不是中央信息）。
+ */
+export async function assertHeaderPrioritizesCenter(page: Page, label: string): Promise<void> {
+  const geometry = await page.evaluate(() => {
+    const header = document.querySelector("header");
+    if (!(header instanceof HTMLElement)) throw new Error("未找到顶部区域");
+    const title = header.querySelector("h1");
+    const center = title?.parentElement ?? null;
+    if (!(center instanceof HTMLElement)) throw new Error("未找到中央赛事信息列");
+    const centerBox = center.getBoundingClientRect();
+    const singleLine = (element: Element | null): number | null =>
+      element instanceof HTMLElement ? Math.round(element.getBoundingClientRect().height) : null;
+    const names = [...header.querySelectorAll("p[title]")].filter(
+      (element): element is HTMLElement => element instanceof HTMLElement,
+    );
+    return {
+      centerWidth: Math.round(centerBox.width),
+      statusHeight: singleLine(header.querySelector("h1")?.nextElementSibling ?? null),
+      noticeHeight: singleLine(header.querySelector('[role="status"]')),
+      names: names.map((element) => ({
+        text: (element.textContent ?? "").trim(),
+        truncated: element.scrollWidth > element.clientWidth,
+        width: Math.round(element.getBoundingClientRect().width),
+      })),
+    };
+  });
+  if (geometry.centerWidth < 176) {
+    throw new Error(`${label} 中央赛事信息列被挤压到 ${geometry.centerWidth}px（下限 11rem）`);
+  }
+  if (geometry.statusHeight !== null && geometry.statusHeight > 28) {
+    throw new Error(`${label} 状态行高度 ${geometry.statusHeight}px，出现换行/竖排`);
+  }
+  if (geometry.noticeHeight !== null && geometry.noticeHeight > 28) {
+    throw new Error(`${label} 连接提示高度 ${geometry.noticeHeight}px，出现换行/竖排`);
+  }
+  if (geometry.names.length !== 2 || geometry.names.some((entry) => !entry.truncated)) {
+    const detail = geometry.names
+      .map((entry) => `${entry.text.slice(0, 6)}…(${entry.width}px,truncated=${entry.truncated})`)
+      .join(" ");
+    throw new Error(`${label} 长队名没有先收缩/截断：${detail}`);
+  }
+}
+
+/**
  * 确认按钮不被面板覆盖：面板只覆盖池区，底部操作区保持独立（见
  * docs/specs/room-layout.md「控制面板」「桌面端滚动方式」）。用矩形相交
  * 判定，与页面是否滚动无关（低于最小高度时操作区可能位于首屏之外）。

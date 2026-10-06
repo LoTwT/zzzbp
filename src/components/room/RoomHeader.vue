@@ -34,10 +34,16 @@ defineProps<{
 </script>
 
 <template>
+  <!--
+    三列：两侧队伍组（禁用格 + 队名）与中央赛事信息。中间列有 12rem 下限，
+    「先收缩队名、再让中央文字截断」是明确的优先级：空间不足时队名退到
+    3.5rem（悬停提示补全），中央的房间名、状态与连接提示保持一行可读，
+    不出现逐字竖排；状态行整体可换行但每个条目自身不断行。
+  -->
   <header
-    class="grid shrink-0 grid-cols-[auto_1fr_auto] items-center gap-4 border-b border-(--border-default) bg-(--surface-canvas) px-4 py-2.5"
+    class="grid shrink-0 grid-cols-[auto_minmax(12rem,1fr)_auto] items-center gap-4 border-b border-(--border-default) bg-(--surface-canvas) px-4 py-2.5"
   >
-    <div class="flex items-center gap-3">
+    <div class="flex min-w-0 items-center gap-3">
       <BanSlotRow
         :slots="banSlots.A"
         :preselect-agent="preselectAgent"
@@ -46,7 +52,7 @@ defineProps<{
       />
       <!-- 队伍标识：紧邻禁用区靠近中间的一侧（A 方在禁用格右侧）。 -->
       <p
-        class="max-w-[10rem] truncate text-sm font-medium text-(--text-secondary)"
+        class="max-w-[10rem] min-w-[3.5rem] truncate text-sm font-medium text-(--text-secondary)"
         :title="teamNames.A"
       >
         {{ teamNames.A }}
@@ -57,12 +63,14 @@ defineProps<{
       <h1 class="max-w-full truncate text-lg font-semibold text-(--text-primary)" :title="roomName">
         {{ roomName }}
       </h1>
-      <p class="flex items-center gap-2 text-xs text-(--text-secondary)">
-        <span>{{ bpStatusText }}</span>
+      <p
+        class="flex max-w-full flex-wrap items-center justify-center gap-2 text-xs text-(--text-secondary)"
+      >
+        <span class="whitespace-nowrap">{{ bpStatusText }}</span>
         <!-- 本机连接提示：连接正常时隐藏，不广播、不解释暂停原因。 -->
         <span
           v-if="connectionText !== null"
-          class="flex items-center gap-1 rounded-full bg-(--status-warning-bg) px-2 py-0.5 text-(--status-warning-fg)"
+          class="flex items-center gap-1 rounded-full bg-(--status-warning-bg) px-2 py-0.5 whitespace-nowrap text-(--status-warning-fg)"
           role="status"
         >
           <WifiOff v-if="connectionIcon" class="size-3.5" aria-hidden="true" />
@@ -71,10 +79,10 @@ defineProps<{
       </p>
     </div>
 
-    <div class="flex items-center gap-3">
+    <div class="flex min-w-0 items-center gap-3">
       <!-- 队伍标识：紧邻禁用区靠近中间的一侧（B 方在禁用格左侧）。 -->
       <p
-        class="max-w-[10rem] truncate text-sm font-medium text-(--text-secondary)"
+        class="max-w-[10rem] min-w-[3.5rem] truncate text-sm font-medium text-(--text-secondary)"
         :title="teamNames.B"
       >
         {{ teamNames.B }}
