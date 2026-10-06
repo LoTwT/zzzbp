@@ -1,88 +1,64 @@
 import {
-  BP_PICK_SEGMENTS,
   BP_STEPS,
+  getBpStep,
   type BpSlotId,
   type BpStep,
   type BpTeam,
 } from "../../shared/bp/steps";
 
 /**
- * 选用区布局：个人的两档显示设置与槽位行推导。
+ * 选用区槽位结构：九格竖排的行推导与两轮分隔位置。
  *
- * 行内容一律由权威顺序推导（BP_STEPS / BP_PICK_SEGMENTS），不另维护任何
- * 顺序数组；「按 Pick 分行」直接消费 shared/bp/steps.ts 的连续选用段。
- * 布局是个人显示偏好：只影响自己页面，A、B 两侧一起切换，切换只重排
- * 槽位，不改变 BP 进度、已提交结果、预选对象与 active 位置（见
- * docs/specs/room-layout.md「选用区布局」）。
+ * 行内容一律由权威顺序（BP_STEPS）推导，不另维护任何顺序数组：A、B
+ * 两侧各自按本方选用序号排列，每行 1 个槽位，共 9 行（docs/specs/
+ * room-layout.md「选用区布局」）。实时房间、展示页与记录页共用同一
+ * 推导，两侧槽位语义一致。
  */
-
-/** 布局标识：vertical 为默认 9 格竖排，byPick 为按 Pick 分行。 */
-export type PickLayout = "vertical" | "byPick";
-
-/** 全部布局及其界面文案，顺序即面板中的展示顺序。 */
-export const PICK_LAYOUT_LABELS: ReadonlyArray<{
-  readonly id: PickLayout;
-  readonly label: string;
-}> = [
-  { id: "vertical", label: "9 格竖排" },
-  { id: "byPick", label: "按 Pick 分行" },
-];
-
-/** 个人布局偏好的存储键（localStorage，不涉及任何身份凭据）。 */
-export const PICK_LAYOUT_STORAGE_KEY = "zzzbp.pick-layout";
-
-/** 浏览器 localStorage 的最小结构视图：避免在本模块引入 DOM 类型依赖。 */
-interface StorageLike {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-}
-
-function browserStorage(): StorageLike | null {
-  const candidate = (globalThis as { localStorage?: unknown }).localStorage;
-  if (
-    typeof candidate === "object" &&
-    candidate !== null &&
-    typeof (candidate as StorageLike).getItem === "function" &&
-    typeof (candidate as StorageLike).setItem === "function"
-  ) {
-    return candidate as StorageLike;
-  }
-  return null;
-}
-
-/**
- * 读取个人布局偏好：无存储、不可用或值非法时回退默认竖排。
- *
- * 实时展示页优先从 URL 布局参数继承打开时的布局（见 display-url.ts）；
- * 仅当参数缺失或非法时以本函数的本地偏好兜底。读取不修改存储，展示页
- * 之后独立保留打开时的布局。
- */
-export function readPickLayoutPreference(): PickLayout {
-  const storage = browserStorage();
-  if (storage === null) return "vertical";
-  try {
-    const raw = storage.getItem(PICK_LAYOUT_STORAGE_KEY);
-    return raw === "byPick" ? "byPick" : "vertical";
-  } catch {
-    return "vertical";
-  }
-}
-
-/** 写入个人布局偏好；存储不可用（隐私模式等）时静默跳过，不影响当前会话。 */
-export function writePickLayoutPreference(layout: PickLayout): void {
-  const storage = browserStorage();
-  if (storage === null) return;
-  try {
-    storage.setItem(PICK_LAYOUT_STORAGE_KEY, layout);
-  } catch {
-    // 忽略写入失败：布局设置只影响本页显示，会话内仍生效。
-  }
-}
 
 /** 单个选用槽位的引用信息。 */
 export interface PickSlotRef {
   readonly slotId: BpSlotId;
   readonly step: BpStep;
+}
+
+/**
+ * 第二轮禁用的起始本方序号：每方 4 个禁用位按前 2 位与后 2 位分两轮
+ * （docs/specs/single-game-bp.md「已确认的操作顺序」）。
+ */
+export const SECOND_BAN_ROUND_START_ORDINAL = 3;
+
+/**
+ * 第二轮选用的起始本方序号：每方 9 个选用位按前 6 位与后 3 位分两轮。
+ */
+export const SECOND_PICK_ROUND_START_ORDINAL = 7;
+
+/** 判定选用区轮次边界所需的最小槽位信息（实时投影与快照投影共用）。 */
+export interface PickOrdinalSlot {
+  readonly step: { readonly sideOrdinal: number };
+}
+
+/**
+ * 两轮禁用之间的分隔位置：返回需要在其之前插入分隔线的槽位下标。
+ *
+ * 边界按权威操作位推导（本方第 3 个禁用位开启第二轮），与显示顺序无关；
+ * 投影尚未到达或没有第二轮（返回 -1）时不显示分隔线。
+ */
+export function banRoundBreakIndex(slots: readonly { readonly slotId: BpSlotId }[]): number {
+  return slots.findIndex(
+    (slot) => getBpStep(slot.slotId).sideOrdinal >= SECOND_BAN_ROUND_START_ORDINAL,
+  );
+}
+
+/**
+ * 两轮选用之间的分隔位置：返回需要在其之前插入分隔线的行下标。
+ *
+ * 边界一律按本方的选用序号判断——第 7 个选用位开启第二轮，不按显示行数
+ * 平分；九格竖排返回第 7 行下标（其前 6 行、其后 3 行）。
+ */
+export function pickRoundBreakIndex(rows: readonly (readonly PickOrdinalSlot[])[]): number {
+  return rows.findIndex(
+    (row) => row.length > 0 && row[0]!.step.sideOrdinal >= SECOND_PICK_ROUND_START_ORDINAL,
+  );
 }
 
 /** 某方全部选用位，按权威顺序（sideOrdinal 1..9）排列。 */
@@ -101,20 +77,7 @@ export function banStepsOfTeam(team: BpTeam): readonly PickSlotRef[] {
   }));
 }
 
-/**
- * 按布局推导某方选用槽位的行结构。
- *
- * vertical：每行 1 个，共 9 行；byPick：每段连续同方选用为一行，直接使用
- * BP_PICK_SEGMENTS 的静态推导（A 方 6 行、B 方 5 行）。
- */
-export function pickSlotRows(
-  team: BpTeam,
-  layout: PickLayout,
-): readonly (readonly PickSlotRef[])[] {
-  if (layout === "byPick") {
-    return BP_PICK_SEGMENTS[team].map((segment) =>
-      segment.map((step) => ({ slotId: step.slotId, step })),
-    );
-  }
+/** 某方选用槽位的行结构：九格竖排，每行 1 个槽位，共 9 行。 */
+export function pickSlotRows(team: BpTeam): readonly (readonly PickSlotRef[])[] {
   return pickStepsOfTeam(team).map((slot) => [slot]);
 }

@@ -2,29 +2,33 @@
 @import "@ayingott/theme";
 
 /*
+ * 选用区行/卡片的伸展基准：实时房间、匿名展示页与只读记录页共用同一套
+ * 自适应填充卡片，因此定义在 :root（各页的尺寸档位仍按页面作用域覆盖）。
+ * 卡片随所在行伸展填满列宽，行在列高内伸展吸收多余高度：九格竖排的
+ * 两侧选用区因此与中央区域上下同高。
+ */
+:root {
+  --room-pick-gap: 0.375rem; /* 选用行/卡片间距 */
+  --room-pick-row-grow: 1; /* 选用行在剩余高度内伸展 */
+  --room-pick-card-flex: 1 1 0; /* 选用卡片在行内伸展 */
+  --room-pick-card-w: auto;
+  --room-pick-card-h: auto;
+  --room-pick-avatar-max: 4.5rem; /* 选用卡片头像上限 */
+}
+
+/*
  * 实时房间工作区的密度基准（docs/specs/room-layout.md「设备支持范围」）。
- *
  * 宽度按浏览器内容区 1024–1920px 适配，超过 1920px 由 RoomWorkspace 根
  * 节点限宽居中，因此宽度档位到 1664px 后不再放大；两侧选用区列宽与中
- * 央网格单元格下限按宽度分档（列数随宽度推导）。选用卡片在行内伸展填
- * 满可用宽高（PickColumn 的自适应形态），头像尺寸上限按视口高度分档
- * （工作区高度规则见 RoomWorkspace 根节点），高度充裕时多余空间主要由
- * 中央代理人列表的可见行数吸收，不为填满空间无限放大头像与字号。
- *
- * 只读记录页与实时展示页不挂载 room-workspace：PickColumn 取兜底值回到
- * 固定方形槽位（2.75rem，改动前的既有尺寸），避免共享组件在两页发生
- * 布局回归。
+ * 央网格单元格下限按宽度分档（列数随宽度推导）。头像尺寸上限按视口
+ * 高度分档（工作区高度规则见 RoomWorkspace 根节点），高度充裕时多余
+ * 空间主要由中央代理人列表的可见行数吸收，不为填满空间无限放大头像
+ * 与字号。顶部禁用格尺寸仅实时房间分档放大，展示页与记录页沿用兜底值。
  */
 .room-workspace {
   --room-ban-slot: 2.75rem; /* 顶部禁用格 */
   --room-side-col: 9.5rem; /* 两侧选用区列宽 */
   --room-pool-cell: 6rem; /* 中央网格单元格宽度下限 */
-  --room-pick-gap: 0.375rem; /* 选用行/卡片间距 */
-  --room-pick-row-grow: 1; /* 选用行在剩余高度内伸展 */
-  --room-pick-card-flex: 1 1 0; /* 选用卡片在行内伸展（单格占满、双格均分） */
-  --room-pick-card-w: auto;
-  --room-pick-card-h: auto;
-  --room-pick-avatar-max: 4.5rem; /* 选用卡片头像上限 */
 }
 
 /* 高度 ≥840px：顶部禁用格放大一档。 */
@@ -60,6 +64,7 @@
 
 /*
  * 当前操作槽位的呼吸动效：高亮描边 + 轻微扩散（进行中且连接正常时启用）。
+ * 描边与扩散色都取主题的强调色语义变量（--accent-primary），不写死色阶；
  * 已暂停或断线时组件改用静态高亮描边，不挂载本动画；系统减少动效偏好下
  * 直接关闭动画，仅保留描边。
  */
@@ -67,13 +72,13 @@
   0%,
   100% {
     box-shadow:
-      0 0 0 2px var(--color-lavender-500),
-      0 0 0 6px rgb(127 112 191 / 0.28);
+      0 0 0 2px var(--accent-primary),
+      0 0 0 6px color-mix(in srgb, var(--accent-primary) 30%, transparent);
   }
   50% {
     box-shadow:
-      0 0 0 2px var(--color-lavender-500),
-      0 0 0 12px rgb(127 112 191 / 0.1);
+      0 0 0 2px var(--accent-primary),
+      0 0 0 12px color-mix(in srgb, var(--accent-primary) 12%, transparent);
   }
 }
 

@@ -19,20 +19,18 @@ import { fetchRoomCatalog } from "../../room/api";
 import type { RoomCatalogModel } from "../../room/room-catalog";
 import { toRoomCatalogModel } from "../../room/room-catalog";
 import {
-  readPickLayoutPreference,
-  writePickLayoutPreference,
-  type PickLayout,
-} from "../../room/pick-layout";
-import {
   banSlotsOfView,
   currentStepOf,
   EMPTY_BAN_SLOTS,
   EMPTY_PICK_COLUMNS,
+  EMPTY_TEAM_LABELS,
   pickColumnsOfView,
   preselectAgentOf,
+  teamLabelsOfView,
 } from "../../room/view-projections";
 import { RoomSession } from "../../room/room-session";
 import { IDENTITY_CHANGED } from "../../room/command-errors";
+import { memberIdentityText } from "../../room/member-identity";
 import { pendingOperationText } from "../../room/operation-feedback";
 
 // 房间工作区：顶部（两侧禁用区 + 赛事信息）与主体（两侧选用区 + 中央代理
@@ -148,24 +146,20 @@ const poolStatuses = computed<ReadonlyMap<string, AgentPoolStatus> | null>(() =>
   return computeAgentPoolStatuses(catalog, view.value.submissions);
 });
 
-// 禁用/选用槽位与空席「待选择」规则由 view-projections 统一派生
-// （与实时展示页共用同一份投影语义）；视图未到达时以空投影占位。
+// 禁用/选用槽位、队伍标识与空席「待选择」规则由 view-projections 统一
+// 派生（与实时展示页共用同一份投影语义）；视图未到达时以空投影占位。
 const banSlots = computed(() =>
   view.value === null ? EMPTY_BAN_SLOTS : banSlotsOfView(view.value, catalogModel.value),
 );
 
-// ---- 个人布局：A、B 两侧一起切换，切换只重排槽位。 ----
+const teamLabels = computed(() =>
+  view.value === null ? EMPTY_TEAM_LABELS : teamLabelsOfView(view.value),
+);
 
-const pickLayout = ref<PickLayout>(readPickLayoutPreference());
-
-watch(pickLayout, (layout) => {
-  writePickLayoutPreference(layout);
-});
+// ---- 选用区：九格竖排（个人布局设置已取消，各页面统一）。 ----
 
 const pickColumns = computed(() =>
-  view.value === null
-    ? EMPTY_PICK_COLUMNS
-    : pickColumnsOfView(view.value, catalogModel.value, pickLayout.value),
+  view.value === null ? EMPTY_PICK_COLUMNS : pickColumnsOfView(view.value, catalogModel.value),
 );
 
 // ---- 代理人池筛选：仅选手（含兼任房主）可用，失去席位恢复完整列表。 ----
@@ -300,6 +294,17 @@ function closePanel(): void {
   // 面板关闭后焦点回到入口，保持键盘操作连续。
   void nextTick(() => panelEntryEl.value?.focus());
 }
+
+/** 入口按钮：再次点击收起面板（外部点击不会误判入口，由面板自身处理）。 */
+function togglePanel(): void {
+  if (panelOpen.value) closePanel();
+  else panelOpen.value = true;
+}
+
+/** 本人身份提示：昵称 + 当前身份，随服务端最新视图更新（含换人）。 */
+const selfIdentityText = computed(() =>
+  view.value === null ? "" : memberIdentityText(view.value.self),
+);
 </script>
 
 <template>
@@ -323,6 +328,7 @@ function closePanel(): void {
       :room-name="view.roomName"
       :bp-status-text="bpStatusText"
       :connection-text="connectionText"
+      :team-names="teamLabels"
       :ban-slots="banSlots"
       :preselect-agent="preselectAgent"
       :breathing="breathing"
@@ -332,7 +338,6 @@ function closePanel(): void {
       class="grid min-h-0 flex-1 grid-cols-[var(--room-side-col,7.5rem)_1fr_var(--room-side-col,7.5rem)] grid-rows-[minmax(0,1fr)] items-stretch gap-3 p-3"
     >
       <PickColumn
-        :team-name="pickColumns.A.teamName"
         :rows="pickColumns.A.rows"
         :preselect-agent="preselectAgent"
         :breathing="breathing"
@@ -365,13 +370,13 @@ function closePanel(): void {
           >
             <template v-if="catalogState !== 'ready'">
               <div
-                class="flex size-full flex-col items-center justify-center gap-2 text-sm text-neutral-500"
+                class="flex size-full flex-col items-center justify-center gap-2 text-sm text-(--text-muted)"
               >
                 <template v-if="catalogState === 'loading'">
                   <p>正在加载代理人名单…</p>
                 </template>
                 <template v-else>
-                  <p class="text-danger-700" role="alert">代理人名单加载失败</p>
+                  <p class="text-(--status-danger-fg)" role="alert">代理人名单加载失败</p>
                   <button
                     type="button"
                     class="rounded-lg border border-(--border-default) px-3 py-1.5 text-xs font-medium focus-ring hover:bg-(--surface-subtle)"
@@ -383,7 +388,7 @@ function closePanel(): void {
               </div>
             </template>
             <template v-else-if="filteredEntries.length === 0">
-              <p class="py-10 text-center text-sm text-neutral-500">
+              <p class="py-10 text-center text-sm text-(--text-muted)">
                 没有符合搜索或筛选条件的代理人
               </p>
             </template>
@@ -411,18 +416,16 @@ function closePanel(): void {
             :session="session"
             :view="view"
             :catalog-model="catalogModel"
-            :layout="pickLayout"
             :connected="connected"
             :room-id="roomId"
             @close="closePanel"
-            @update:layout="pickLayout = $event"
           />
         </div>
 
         <!-- 连接层全局提示（服务端连接通知），随最新视图自动清除。 -->
         <p
           v-if="session.globalNotice.value !== null"
-          class="shrink-0 px-3 pb-1 text-center text-xs text-amber-800"
+          class="shrink-0 px-3 pb-1 text-center text-xs text-(--status-warning-fg)"
           role="status"
         >
           {{ session.globalNotice.value }}
@@ -430,13 +433,14 @@ function closePanel(): void {
 
         <!--
           底部操作区（固定，不被面板覆盖）：确认按钮相对整个池区几何居中，
-          控制面板入口固定右下，二者始终可见可达。
+          控制面板入口固定右下，二者始终可见可达；左侧为本人身份常驻提示
+          （昵称 + 当前身份，长昵称截断，不遮挡中央确认按钮与右侧入口）。
         -->
         <div class="shrink-0 border-t border-(--border-default) px-3 py-2.5">
           <!-- 挂起操作提示：与确认按钮可见性解耦（轮到对方/完成/被换下仍可见）。 -->
           <p
             v-if="slotOperationFeedbackText !== null"
-            class="pb-1.5 text-center text-xs text-amber-800"
+            class="pb-1.5 text-center text-xs text-(--status-warning-fg)"
             role="status"
           >
             {{ slotOperationFeedbackText }}
@@ -445,7 +449,7 @@ function closePanel(): void {
                不可见的房主面板操作），任何角色可见，不随视图推进清掉。 -->
           <p
             v-if="session.identityNotice.value !== null"
-            class="pb-1.5 text-center text-xs text-amber-800"
+            class="pb-1.5 text-center text-xs text-(--status-warning-fg)"
             role="status"
           >
             {{ session.identityNotice.value }}
@@ -455,16 +459,23 @@ function closePanel(): void {
                由上方通用提示展示，不重复）。 -->
           <p
             v-if="confirmErrorText !== null"
-            class="pb-1.5 text-center text-xs text-danger-700"
+            class="pb-1.5 text-center text-xs text-(--status-danger-fg)"
             role="alert"
           >
             {{ confirmErrorText }}
           </p>
-          <div class="relative flex min-h-10 items-center">
+          <div class="relative flex min-h-10 items-center gap-3">
+            <p
+              class="max-w-[calc(50%-6rem)] min-w-0 truncate text-xs text-(--text-muted)"
+              :title="selfIdentityText"
+              aria-live="polite"
+            >
+              {{ selfIdentityText }}
+            </p>
             <button
               v-if="confirmVisible"
               type="button"
-              class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-lavender-600 px-10 py-2 text-sm font-semibold text-white focus-ring hover:bg-lavender-700 disabled:cursor-not-allowed disabled:opacity-50"
+              class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-(--accent-primary) px-10 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="confirmDisabled"
               @click="sendConfirm"
             >
@@ -473,9 +484,10 @@ function closePanel(): void {
             <button
               ref="panelEntryEl"
               type="button"
-              class="relative ml-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium text-neutral-700 focus-ring hover:bg-(--surface-subtle)"
+              class="relative ml-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium text-(--text-secondary) focus-ring hover:bg-(--surface-subtle)"
               aria-haspopup="dialog"
-              @click="panelOpen = true"
+              data-panel-entry
+              @click="togglePanel"
             >
               <SlidersHorizontal class="size-4" aria-hidden="true" />
               控制面板
@@ -485,7 +497,6 @@ function closePanel(): void {
       </section>
 
       <PickColumn
-        :team-name="pickColumns.B.teamName"
         :rows="pickColumns.B.rows"
         :preselect-agent="preselectAgent"
         :breathing="breathing"

@@ -11,14 +11,20 @@ import {
   agentCard,
   assertNoOverflow,
   assertNoPageErrors,
+  assertNoSlotNumbers,
+  assertPickColumnsMatchPool,
+  assertRoundBreaks,
+  assertTeamNameBesideBans,
   avatarUrlOf,
   closePanel,
   createRoomViaUi,
   expectCount,
+  expectHidden,
   expectVisible,
   joinRoomViaUi,
   newRoomContext,
   openPanel,
+  panel,
   preselectText,
   saveTeamName,
   assignSeatViaUi,
@@ -31,11 +37,11 @@ import { E2E_BASE_URL } from "./server";
 /**
  * 展示页与只读记录页端到端验收（PR10）。
  *
- * 展示页走真实后端：匿名直开（无昵称、无入房表单）、URL 冻结布局、
- * 公开预选与禁选结果实时同步、全量代理人同屏（卡片数量 + 裁剪容器无
- * 内部滚动 + 网格与末卡片几何包含，两种代表布局）、无搜索/确认/面板
- * 入口、不建立成员身份（websocket 事件观测：仅展示 WS；请求观测：
- * 零 POST /api/rooms）。
+ * 展示页走真实后端：匿名直开（无昵称、无入房表单）、九格竖排（旧链接
+ * 上的多余布局参数被忽略）、公开预选与禁选结果实时同步、全量代理人同屏
+ * （卡片数量 + 裁剪容器无内部滚动 + 网格与末卡片几何包含）、队名在顶部
+ * 禁用区旁、无搜索/确认/面板入口、不建立成员身份（websocket 事件观测：
+ * 仅展示 WS；请求观测：零 POST /api/rooms）。
  *
  * 记录页采用分层证据：浏览器侧注入「合法固定快照响应」验证记录界面
  * 与终态分流（与 PR9 验收同一手法）；真实的 12 小时到期裁决、Alarm
@@ -50,6 +56,11 @@ const AVATAR_CDN_PATTERN = "**/static.nanoka.cc/**";
 function displayCard(page: Page, name: string, state?: "已禁用" | "已选用") {
   const label = state === undefined ? name : `${name}（${state}）`;
   return page.locator(`li[aria-label="${label}"]`);
+}
+
+/** 记录页中央禁选顺序列表行（顺序 / 操作 / 代理人）。 */
+function recordRows(page: Page) {
+  return page.locator("section[aria-label='禁选顺序'] li");
 }
 
 /** 归档快照构造：前 count 步按权威顺序与目录条目生成合法快照。 */
@@ -144,7 +155,7 @@ async function assertDisplayPoolFits(page: Page, label: string): Promise<void> {
   if (!geometry.lastWithin) throw new Error(`${label} 末卡片超出裁剪容器（可能被裁切）`);
 }
 
-test("展示页：匿名直开、布局冻结、实时同步且不建立成员身份", async () => {
+test("展示页：匿名直开、实时同步且不建立成员身份", async () => {
   const browser = await chromium.launch();
   try {
     // ---- 真实后端：建房开局并推进三步 ----
@@ -167,17 +178,17 @@ test("展示页：匿名直开、布局冻结、实时同步且不建立成员�
     await submitStep(playerA.page, "AB1", plan[0] ?? "");
     await submitStep(playerB.page, "BB1", plan[1] ?? "");
 
-    // ---- 匿名上下文直开展示页（URL 冻结布局 byPick，1280×640） ----
+    // ---- 匿名上下文直开展示页（固定九格竖排，1280×640） ----
     const display = await newRoomContext(browser, "display", { width: 1280, height: 640 });
     const displayRequests: Array<{ url: string; method: string }> = [];
     watchNetwork(display.page, displayRequests);
     const displaySockets: string[] = [];
     display.page.on("websocket", (socket) => displaySockets.push(socket.url()));
-    await display.page.goto(`${E2E_BASE_URL}/rooms/${roomId}/display?layout=byPick`);
+    await display.page.goto(`${E2E_BASE_URL}/rooms/${roomId}/display`);
     await display.page.getByText("首版验收·展示赛").first().waitFor();
     await waitForStatus(display.page, "进行中");
-    // URL 冻结布局生效：B 方选用区按 Pick 分行共 5 行（竖排为 9 行）。
-    await expectCount(display.page.locator('section[aria-label="B 方选用区"] > div > div'), 5);
+    // 九格竖排：双方选用区各 9 行（每行 1 个槽位）。
+    await expectCount(display.page.locator('section[aria-label="B 方选用区"] > div > div'), 9);
     // 无入房表单、无搜索/确认/面板入口。
     expect(await display.page.getByRole("heading", { name: "进入房间" }).count()).toBe(0);
     expect(await display.page.getByLabel("搜索代理人名称").count()).toBe(0);
@@ -187,16 +198,22 @@ test("展示页：匿名直开、布局冻结、实时同步且不建立成员�
     );
     // 全量代理人同屏：58 名全部渲染，页面无整页越界。
     await expectCount(display.page.locator("section[aria-label='代理人池'] li"), AGENTS.length);
-    await assertNoOverflow(display.page, "展示页 byPick 1280x640");
-    await assertDisplayPoolFits(display.page, "展示页 byPick 1280x640");
-    // 已禁用结果与队名同步（缺头像代理人正常显示名称）。
+    await assertNoOverflow(display.page, "展示页 1280x640");
+    await assertDisplayPoolFits(display.page, "展示页 1280x640");
+    // 两轮分隔（禁用 2 | 2、选用 6 / 3）与选用槽位无数字角标：
+    // 与实时房间、记录页同一套判定。
+    await assertRoundBreaks(display.page, "展示页");
+    await assertNoSlotNumbers(display.page, "展示页", new Set(AGENTS.map((a) => a.name)));
+    // 两侧选用槽位为九行填充卡片，与中央代理人池上下同高。
+    await assertPickColumnsMatchPool(display.page, "展示页 1280x640");
+    // 队名与已禁用结果同步（队名在顶部禁用区旁；缺头像代理人正常显示名称）。
     await displayCard(display.page, plan[1] ?? "", "已禁用").waitFor({ state: "visible" });
-    await display.page.getByText("乙队", { exact: true }).first().waitFor();
+    await assertTeamNameBesideBans(display.page, "展示页", { A: "甲队", B: "乙队" });
 
-    // 刷新同一链接仍保留冻结布局（不写回存储、不回落本地偏好）。
+    // 刷新后仍是同一套固定布局（不读写本地偏好）。
     await display.page.reload();
     await display.page.getByText("首版验收·展示赛").first().waitFor();
-    await expectCount(display.page.locator('section[aria-label="B 方选用区"] > div > div'), 5);
+    await expectCount(display.page.locator('section[aria-label="B 方选用区"] > div > div'), 9);
 
     // ---- 公开预选实时同步到展示页 ----
     await agentCard(playerA.page, plan[2] ?? "").click();
@@ -204,12 +221,12 @@ test("展示页：匿名直开、布局冻结、实时同步且不建立成员�
     await submitStep(playerA.page, "AB2", plan[2] ?? "");
     await displayCard(display.page, plan[2] ?? "", "已禁用").waitFor({ state: "visible" });
 
-    // ---- 布局参数缺失/非法：回退本地偏好（新上下文默认竖排） ----
-    await display.page.goto(`${E2E_BASE_URL}/rooms/${roomId}/display?layout=nonsense`);
+    // ---- 旧链接上的多余布局参数被忽略：仍是九格竖排 ----
+    await display.page.goto(`${E2E_BASE_URL}/rooms/${roomId}/display?layout=byPick`);
     await display.page.getByText("首版验收·展示赛").first().waitFor();
     await waitForStatus(display.page, "进行中");
     await expectCount(display.page.locator('section[aria-label="B 方选用区"] > div > div'), 9);
-    await assertDisplayPoolFits(display.page, "展示页 竖排 1280x640");
+    await assertDisplayPoolFits(display.page, "展示页 带旧布局参数 1280x640");
 
     // ---- 展示连接不建立成员身份：仅展示 WS、零成员 WS、零 POST、零 Cookie ----
     expect(displaySockets.some((url) => url.endsWith(`/api/rooms/${roomId}/display/ws`))).toBe(
@@ -233,7 +250,7 @@ test("展示页：匿名直开、布局冻结、实时同步且不建立成员�
   }
 }, 240_000);
 
-test("记录页：完成/未完成快照、两布局、终态分流与真实 404", async () => {
+test("记录页：完成/未完成快照、终态分流与真实 404", async () => {
   const browser = await chromium.launch();
   try {
     const context = await browser.newContext({ viewport: { width: 1280, height: 640 } });
@@ -270,7 +287,13 @@ test("记录页：完成/未完成快照、两布局、终态分流与真实 404
     await page.getByText("只读记录 · 已完成", { exact: true }).waitFor();
     await page.getByText("共 26 步", { exact: true }).waitFor();
     await page.getByRole("heading", { name: "归档验收赛" }).waitFor();
-    await assertNoOverflow(page, "记录页 已完成 1280x640");
+    // 记录页沿用实时房间的两轮分隔与无数字角标（槽位已填满，可见文本只能是名称）。
+    await assertRoundBreaks(page, "记录页 已完成");
+    await assertNoSlotNumbers(
+      page,
+      "记录页 已完成",
+      new Set(completed.operations.map((operation) => operation.agentName)),
+    );
     // 列表首步与末步：连续顺序、左右方动作文案、缺头像/最长名称代表。
     await page.getByText("第 1 步：左方禁用", { exact: false }).first().waitFor();
     await page
@@ -280,12 +303,25 @@ test("记录页：完成/未完成快照、两布局、终态分流与真实 404
       .first()
       .waitFor();
     await page.getByText("已禁用：", { exact: false }).first().waitFor();
+    // 中央列表的步骤序号保留（与已移除的槽位数字角标无关）。
+    expect((await recordRows(page).first().innerText()).trimStart().startsWith("1")).toBe(true);
+    // 归档记录页不虚构成员身份：不出现本人身份提示。
+    expect(await page.locator("p[aria-live='polite']").count()).toBe(0);
 
-    // 两种布局切换（个人设置，不改变快照）。
+    // 固定九格竖排；队名在顶部禁用区旁，选用区与中央列表同高。
+    await expectCount(page.locator('section[aria-label="A 方选用区"] > div > div'), 9);
+    await expectCount(page.locator('section[aria-label="B 方选用区"] > div > div'), 9);
+    await assertTeamNameBesideBans(page, "记录页", { A: "甲队", B: "乙".repeat(32) });
+    await assertPickColumnsMatchPool(page, "记录页 已完成", "禁选顺序");
+    await assertNoOverflow(page, "记录页 已完成 1280x640");
+    await assertRoundBreaks(page, "记录页 已完成");
+    // 记录页控制面板：入口再点收起，外部点击只收起面板。
     await openPanel(page);
-    await page.getByRole("button", { name: "按 Pick 分行", exact: true }).click();
-    await closePanel(page);
-    await assertNoOverflow(page, "记录页 已完成 byPick");
+    await page.getByRole("button", { name: "控制面板", exact: true }).click();
+    await expectHidden(panel(page));
+    await openPanel(page);
+    await page.mouse.click(8, 8);
+    await expectHidden(panel(page));
     // 控制面板：复制链接与记录到期时间。
     await openPanel(page);
     await expectVisible(page.getByRole("button", { name: "复制房间链接", exact: true }));
@@ -293,7 +329,7 @@ test("记录页：完成/未完成快照、两布局、终态分流与真实 404
     await closePanel(page);
 
     // 完成快照阶段的记录页零业务 WS（websocket 事件观测）与零 POST（请求观测）。
-    // 断言点在多次页面交互之后（渲染、两布局、面板），任何 WS 握手都已被记录。
+    // 断言点在多次页面交互之后（渲染、滚动、面板），任何 WS 握手都已被记录。
     const socketsAfterCompleted = [...recordSockets];
     expect(socketsAfterCompleted.filter((url) => url.endsWith("/ws"))).toHaveLength(0);
     expect(

@@ -127,6 +127,16 @@ socket 并 `accept()`（与 Worker 代理 DO 的官方模式一致）；当前�
   区域，模板与样式的类型检查依赖 `vue-tsc`。
 - Oxfmt（`.oxfmtrc.json`）负责格式化，`sortTailwindcss` 指向
   `src/assets/main.css` 以识别主题扩展的类名顺序；`docs/` 与锁文件不参与格式化。
+- 界面配色统一取 `@ayingott/theme`（当前为默认 Paper 浅色主题）的语义角色：
+  背景用 `--surface-canvas` / `--surface-panel` / `--surface-elevated` /
+  `--surface-subtle` / `--surface-muted`，文字用 `--text-primary` /
+  `--text-secondary` / `--text-muted` / `--text-inverse` / `--text-accent`，
+  边界用 `--border-subtle` / `--border-default` / `--border-strong`，操作与强调用
+  `--accent-primary(-hover/-active)` / `--accent-soft` / `--accent-contrast(-hover/-active)`，
+  状态用 `--status-*`，焦点用 `focus-ring` 工具类；不再直接指定
+  `neutral`/`lavender` 等固定色阶（图像遮罩、禁选状态遮罩按实际用途处理）。
+  主题入口、密度变量与槽位动效见 `src/assets/main.css`；本轮不引入主题切换、
+  深色（`.dark`）或 Neo-Brutalism 方案。
 - 提交钩子由 simple-git-hooks + lint-staged 组成：pre-commit 对暂存文件先执行
   `oxlint --fix` 再执行 `oxfmt`（同一批文件顺序执行，避免并发写入），并保留
   lint-staged 默认的部分暂存保护。`pnpm install` 时自动安装钩子。

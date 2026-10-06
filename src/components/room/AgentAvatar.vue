@@ -41,7 +41,7 @@ watch(
     <!-- 缺路径/加载失败：圆形占位（与素材的圆形轮廓协调），名称仍由外层展示。 -->
     <span
       v-else
-      class="flex size-full items-center justify-center rounded-full bg-(--surface-subtle) text-neutral-400"
+      class="flex size-full items-center justify-center rounded-full bg-(--surface-subtle) text-(--text-muted)"
       :title="agent === null ? '' : agent.name"
     >
       <ImageOff v-if="agent !== null" class="size-2/5" aria-hidden="true" />

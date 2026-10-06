@@ -34,7 +34,7 @@ defineProps<{
       <AgentStatusAvatar :agent="agent" :status="status" />
     </span>
     <span
-      class="w-full text-center break-words text-neutral-700"
+      class="w-full text-center break-words text-(--text-secondary)"
       :style="{ fontSize: `${NAME_FONT_PX}px`, lineHeight: `${NAME_LINE_PX}px` }"
       :title="agent.fullName ?? agent.name"
       >{{ agent.name }}</span

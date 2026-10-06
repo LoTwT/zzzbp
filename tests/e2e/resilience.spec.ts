@@ -246,12 +246,9 @@ test("断线恢复：多页面掉线暂停、本地操作、换人与结果未�
     await waitForStatus(host.page, "已暂停");
     await waitForStatus(spectator.page, "已暂停");
 
-    // ---- 断线期间：本地筛选与布局仍可用，服务端操作被禁用 ----
+    // ---- 断线期间：本地筛选仍可用，服务端操作被禁用 ----
     // p1 保留最后收到的画面（进行中、A 为当前操作方），不显示暂停。
     await waitForStatus(playerA.page, "进行中");
-    await openPanel(playerA.page);
-    await playerA.page.getByRole("button", { name: "按 Pick 分行", exact: true }).click();
-    await closePanel(playerA.page);
     // 名称搜索仅命中唯一代理人（本地筛选覆盖全部状态）。
     await playerA.page.getByLabel("搜索代理人名称").fill(LONGEST_NAME_AGENT.name);
     await expectCount(playerA.page.locator('section[aria-label="代理人池"] ul li'), 1);

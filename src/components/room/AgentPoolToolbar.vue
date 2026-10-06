@@ -135,7 +135,7 @@ watch(
             <TooltipTrigger as-child>
               <button
                 type="button"
-                class="flex size-6 items-center justify-center rounded border border-(--border-default) text-neutral-500 focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-40"
+                class="flex size-6 items-center justify-center rounded border border-(--border-default) text-(--text-muted) focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-40"
                 :disabled="query.elementIds.length === 0"
                 aria-label="清除属性筛选"
                 @click="clearElements"
@@ -145,7 +145,7 @@ watch(
             </TooltipTrigger>
             <TooltipPortal>
               <TooltipContent
-                class="rounded-md bg-neutral-900 px-2 py-1 text-xs text-white shadow-md"
+                class="rounded-md bg-(--text-primary) px-2 py-1 text-xs text-(--text-inverse) shadow-md"
               >
                 清除属性筛选
               </TooltipContent>
@@ -155,7 +155,7 @@ watch(
             v-for="classification in elements"
             :key="classification.id"
             :model-value="query.elementIds.includes(classification.id)"
-            class="rounded border px-1.5 py-0.5 text-xs focus-ring data-[state=on]:border-lavender-500 data-[state=on]:bg-lavender-100 data-[state=on]:font-medium data-[state=on]:text-lavender-800"
+            class="rounded border px-1.5 py-0.5 text-xs focus-ring data-[state=on]:border-(--accent-primary) data-[state=on]:bg-(--accent-soft) data-[state=on]:font-medium data-[state=on]:text-(--text-accent)"
             @update:model-value="toggleElement(classification.id)"
           >
             {{ classification.name }}
@@ -175,7 +175,7 @@ watch(
             <TooltipTrigger as-child>
               <button
                 type="button"
-                class="flex size-6 items-center justify-center rounded border border-(--border-default) text-neutral-500 focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-40"
+                class="flex size-6 items-center justify-center rounded border border-(--border-default) text-(--text-muted) focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-40"
                 :disabled="query.specialtyIds.length === 0"
                 aria-label="清除特性筛选"
                 @click="clearSpecialties"
@@ -185,7 +185,7 @@ watch(
             </TooltipTrigger>
             <TooltipPortal>
               <TooltipContent
-                class="rounded-md bg-neutral-900 px-2 py-1 text-xs text-white shadow-md"
+                class="rounded-md bg-(--text-primary) px-2 py-1 text-xs text-(--text-inverse) shadow-md"
               >
                 清除特性筛选
               </TooltipContent>
@@ -195,7 +195,7 @@ watch(
             v-for="classification in specialties"
             :key="classification.id"
             :model-value="query.specialtyIds.includes(classification.id)"
-            class="rounded border px-1.5 py-0.5 text-xs focus-ring data-[state=on]:border-lavender-500 data-[state=on]:bg-lavender-100 data-[state=on]:font-medium data-[state=on]:text-lavender-800"
+            class="rounded border px-1.5 py-0.5 text-xs focus-ring data-[state=on]:border-(--accent-primary) data-[state=on]:bg-(--accent-soft) data-[state=on]:font-medium data-[state=on]:text-(--text-accent)"
             @update:model-value="toggleSpecialty(classification.id)"
           >
             {{ classification.name }}
@@ -205,7 +205,7 @@ watch(
         <!-- 名称搜索：包含匹配简短名与官方全名，trim 后为空不限制；
              固定在第一行右侧（单行 ml-auto，两行 grid 首行末列）。 -->
         <div ref="searchEl" class="tb-search ml-auto flex shrink-0 items-center gap-1.5">
-          <Search class="size-4 shrink-0 text-neutral-400" aria-hidden="true" />
+          <Search class="size-4 shrink-0 text-(--text-muted)" aria-hidden="true" />
           <input
             v-model="searchModel"
             class="w-44 shrink-0 rounded-lg border border-(--border-default) bg-(--surface-elevated) px-2.5 py-1 text-sm focus-ring"

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   BP_ACTION_COUNTS,
-  BP_PICK_SEGMENTS,
   BP_STEPS,
   BP_STEP_COUNT,
   BP_STEP_ORDER,
@@ -61,32 +60,6 @@ describe("BP 26 步权威定义", () => {
       expect(banOrdinals).toEqual([1, 2, 3, 4]);
       expect(pickOrdinals).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
       expect(BP_ACTION_COUNTS[team]).toEqual({ ban: 4, pick: 9 });
-    }
-  });
-
-  it("每方连续选用段：A 6 段、B 5 段，行内容与房间布局规格一致", () => {
-    expect(BP_PICK_SEGMENTS.A.map((segment) => segment.map((step) => step.slotId))).toEqual([
-      ["AP1"],
-      ["AP2", "AP3"],
-      ["AP4", "AP5"],
-      ["AP6"],
-      ["AP7", "AP8"],
-      ["AP9"],
-    ]);
-    expect(BP_PICK_SEGMENTS.B.map((segment) => segment.map((step) => step.slotId))).toEqual([
-      ["BP1", "BP2"],
-      ["BP3", "BP4"],
-      ["BP5", "BP6"],
-      ["BP7"],
-      ["BP8", "BP9"],
-    ]);
-    for (const team of ["A", "B"] as const) {
-      for (const segment of BP_PICK_SEGMENTS[team]) {
-        for (const step of segment) {
-          expect(step.action).toBe("pick");
-          expect(step.team).toBe(team);
-        }
-      }
     }
   });
 

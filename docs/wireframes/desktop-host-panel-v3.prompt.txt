@@ -13,9 +13,9 @@ Change 1, other members:
 - Twelve is simply the illustrative count. Do not add a second panel or any diagram showing the navigation.
 
 Change 2, show the new display-page entry:
-- Keep the section heading “显示与分享” and the “选用区布局” label.
-- Keep the existing two-option control “9 格竖排” selected and “按 Pick 分行” unselected.
-- Directly BELOW the layout switch, add a FULL-WIDTH secondary action button labeled EXACTLY “打开展示页”, with a small external-page arrow ↗ icon.
+- Keep the section heading “显示与分享”.
+- Do NOT draw any “选用区布局” label or layout switch: the pick area is always a fixed nine-slot vertical column, so the former two-option control is removed.
+- Directly BELOW the section heading, add a FULL-WIDTH secondary action button labeled EXACTLY “打开展示页”, with a small external-page arrow ↗ icon.
 - Directly BELOW that button, retain a separate FULL-WIDTH “复制房间链接” button with link icon.
 - These are two distinct stacked actions: open display page, then copy room link.
 - Use the vertical space freed by removing the full member list. Fit both buttons INSIDE the existing drawer, without making the drawer taller, covering the original fixed entry, shrinking the text excessively, or adding a footer.

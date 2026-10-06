@@ -35,7 +35,7 @@ defineProps<{
       class="absolute inset-0 overflow-hidden rounded-full"
       aria-hidden="true"
     >
-      <svg class="absolute inset-0 size-full text-neutral-700" viewBox="0 0 56 56">
+      <svg class="absolute inset-0 size-full text-(--text-secondary)" viewBox="0 0 56 56">
         <line
           x1="6"
           y1="50"
@@ -50,7 +50,7 @@ defineProps<{
     <!-- 已选用：角落小勾选图标（仅提交成功后出现）。 -->
     <span
       v-if="status === 'picked'"
-      class="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-mint-600 text-white"
+      class="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-(--status-success) text-(--text-inverse)"
       aria-hidden="true"
     >
       <Check class="size-3" />
