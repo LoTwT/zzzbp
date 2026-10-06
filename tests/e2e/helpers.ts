@@ -290,3 +290,236 @@ export async function expectDisabled(locator: Locator): Promise<void> {
     throw new Error("期望元素禁用，实际可用");
   }
 }
+
+// ---- 两轮分隔与选用槽位内容（实时房间、展示页、记录页共用同一几何断言） ----
+
+interface Rect {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+}
+
+/** 在页面内量取槽位/分隔线矩形所需的原始数据。 */
+async function readSlotGeometry(
+  page: Page,
+  side: "A" | "B",
+): Promise<{
+  readonly banBreakCount: number;
+  readonly pickBreakCount: number;
+  readonly banBreak: Rect | null;
+  readonly banBefore: Rect | null;
+  readonly banAfter: Rect | null;
+  readonly pickBreak: Rect | null;
+  readonly pickBefore: Rect | null;
+  readonly pickAfter: Rect | null;
+}> {
+  return page.evaluate((team) => {
+    const toRect = (element: Element | null): Rect | null => {
+      if (element === null) return null;
+      const box = element.getBoundingClientRect();
+      return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+    };
+    const banArea = document.querySelector(`[aria-label="${team} 方禁用区"]`);
+    const pickArea = document.querySelector(`[aria-label="${team} 方选用区"]`);
+    const banBreaks = banArea?.querySelectorAll('[data-round-break="ban"]') ?? [];
+    const pickBreaks = pickArea?.querySelectorAll('[data-round-break="pick"]') ?? [];
+    return {
+      banBreakCount: banBreaks.length,
+      pickBreakCount: pickBreaks.length,
+      banBreak: toRect(banBreaks[0] ?? null),
+      banBefore: toRect(banArea?.querySelector(`[data-slot-id="${team}B2"]`) ?? null),
+      banAfter: toRect(banArea?.querySelector(`[data-slot-id="${team}B3"]`) ?? null),
+      pickBreak: toRect(pickBreaks[0] ?? null),
+      pickBefore: toRect(pickArea?.querySelector(`[data-slot-id="${team}P6"]`) ?? null),
+      pickAfter: toRect(pickArea?.querySelector(`[data-slot-id="${team}P7"]`) ?? null),
+    };
+  }, side);
+}
+
+/**
+ * 两轮分隔的几何断言：每方禁用区恰有一条竖线落在第 2、3 个禁用位之间，
+ * 每方选用区恰有一条横线落在第 6、7 个选用位之间（与布局无关，按权威
+ * 槽位判定；实时房间、展示页、记录页一致）。
+ */
+export async function assertRoundBreaks(page: Page, label: string): Promise<void> {
+  for (const side of ["A", "B"] as const) {
+    const geometry = await readSlotGeometry(page, side);
+    if (geometry.banBreakCount !== 1 || geometry.pickBreakCount !== 1) {
+      throw new Error(
+        `${label} ${side} 方分隔线数量异常（禁用 ${geometry.banBreakCount}、选用 ${geometry.pickBreakCount}）`,
+      );
+    }
+    const { banBreak, banBefore, banAfter, pickBreak, pickBefore, pickAfter } = geometry;
+    if (banBreak === null || banBefore === null || banAfter === null) {
+      throw new Error(`${label} ${side} 方缺少禁用槽位或分隔线`);
+    }
+    if (!(banBreak.left >= banBefore.right && banBreak.right <= banAfter.left)) {
+      throw new Error(`${label} ${side} 方禁用分隔线未落在第 2、3 个禁用位之间`);
+    }
+    if (pickBreak === null || pickBefore === null || pickAfter === null) {
+      throw new Error(`${label} ${side} 方缺少选用槽位或分隔线`);
+    }
+    if (!(pickBreak.top >= pickBefore.bottom && pickBreak.bottom <= pickAfter.top)) {
+      throw new Error(`${label} ${side} 方选用分隔线未落在第 6、7 个选用位之间`);
+    }
+  }
+}
+
+/**
+ * 选用槽位的可见文本：跳过 sr-only（读屏专用）文案，得到用户实际看到
+ * 的文字。槽位不显示数字角标，因此可见文本只能是代理人名称或空串。
+ */
+export async function pickCardVisibleTexts(page: Page, side: "A" | "B"): Promise<string[]> {
+  return page.evaluate((team) => {
+    const visibleTextOf = (element: Element): string => {
+      let text = "";
+      for (const node of element.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          text += node.textContent ?? "";
+          continue;
+        }
+        if (!(node instanceof HTMLElement) || node.classList.contains("sr-only")) continue;
+        text += visibleTextOf(node);
+      }
+      return text;
+    };
+    const cards = document.querySelectorAll(`[aria-label="${team} 方选用区"] [data-slot-id]`);
+    return [...cards].map((card) => visibleTextOf(card).trim());
+  }, side);
+}
+
+/** 断言选定槽位没有可见的数字角标（只允许空串或代理人名称）。 */
+export async function assertNoSlotNumbers(
+  page: Page,
+  label: string,
+  expectedNames: ReadonlySet<string>,
+): Promise<void> {
+  for (const side of ["A", "B"] as const) {
+    const texts = await pickCardVisibleTexts(page, side);
+    for (const text of texts) {
+      if (text === "" || expectedNames.has(text)) continue;
+      throw new Error(`${label} ${side} 方选用槽位出现非名称可见内容：「${text}」`);
+    }
+  }
+}
+
+/**
+ * 确认按钮不被面板覆盖：面板只覆盖池区，底部操作区保持独立（见
+ * docs/specs/room-layout.md「控制面板」「桌面端滚动方式」）。用矩形相交
+ * 判定，与页面是否滚动无关（低于最小高度时操作区可能位于首屏之外）。
+ */
+export async function assertConfirmNotCovered(page: Page, label: string): Promise<void> {
+  await expectVisible(confirmButton(page));
+  const result = await page.evaluate(() => {
+    const dialog = document.querySelector('[role="dialog"][aria-label="控制面板"]');
+    const button = [...document.querySelectorAll("button")].find((candidate) =>
+      /确认禁用|确认选用/.test(candidate.textContent ?? ""),
+    );
+    if (!(dialog instanceof HTMLElement) || !(button instanceof HTMLElement)) {
+      throw new Error("未找到控制面板或确认按钮");
+    }
+    const panel = dialog.getBoundingClientRect();
+    const box = button.getBoundingClientRect();
+    return {
+      overlaps:
+        box.left < panel.right &&
+        box.right > panel.left &&
+        box.top < panel.bottom &&
+        box.bottom > panel.top,
+    };
+  });
+  if (result.overlaps) throw new Error(`${label} 控制面板覆盖了确认按钮`);
+}
+
+/**
+ * 队伍标识位置：队名紧邻各自禁用区靠近中间的一侧（A 在禁用格右侧、
+ * B 在禁用格左侧，两队名称分列赛事信息两旁），同处顶部区域且与禁用区
+ * 同一行；文本与期望一致（空席为「待选择」）。
+ */
+export async function assertTeamNameBesideBans(
+  page: Page,
+  label: string,
+  expected: Readonly<Record<"A" | "B", string>>,
+): Promise<void> {
+  const geometry = await page.evaluate(() => {
+    const header = document.querySelector("header");
+    const read = (team: "A" | "B") => {
+      const ban = header?.querySelector(`[aria-label="${team} 方禁用区"]`);
+      if (!(ban instanceof HTMLElement)) return null;
+      const name = team === "A" ? ban.nextElementSibling : ban.previousElementSibling;
+      if (!(name instanceof HTMLElement)) return null;
+      const banBox = ban.getBoundingClientRect();
+      const nameBox = name.getBoundingClientRect();
+      return {
+        text: (name.textContent ?? "").trim(),
+        insideHeader: header?.contains(name) === true,
+        sameRow: nameBox.top < banBox.bottom && nameBox.bottom > banBox.top,
+        // A 方队名在禁用格右侧、B 方在左侧（都靠中间）。
+        innerA: team === "A" ? nameBox.left >= banBox.right - 1 : true,
+        innerB: team === "B" ? nameBox.right <= banBox.left + 1 : true,
+      };
+    };
+    return { A: read("A"), B: read("B") };
+  });
+  for (const side of ["A", "B"] as const) {
+    const entry = geometry[side];
+    if (entry === null) throw new Error(`${label} ${side} 方缺少队名或禁用区`);
+    if (!entry.insideHeader) throw new Error(`${label} ${side} 方队名不在顶部区域`);
+    if (!entry.sameRow) throw new Error(`${label} ${side} 方队名与禁用区不在同一行`);
+    if (!entry.innerA || !entry.innerB) {
+      throw new Error(`${label} ${side} 方队名没有落在禁用区靠中间的一侧`);
+    }
+    if (entry.text !== expected[side]) {
+      throw new Error(`${label} ${side} 方队名显示「${entry.text}」，期望「${expected[side]}」`);
+    }
+  }
+}
+
+/**
+ * 选用区与中央区域同高：两侧选用槽位（九行填充卡片）的上下边界与中央
+ * 面板对齐——顶部不含队名条（队名在顶部禁用区旁），底部由最后一行撑满，
+ * 偏差不超过 8px（列内边距与两轮分隔线）。
+ * 中央区域的 aria-label 在实时房间/展示页为「代理人池」，记录页为「禁选顺序」。
+ */
+export async function assertPickColumnsMatchPool(
+  page: Page,
+  label: string,
+  centerAriaLabel = "代理人池",
+): Promise<void> {
+  const geometry = await page.evaluate((centerLabel) => {
+    const panel = document.querySelector(`section[aria-label="${centerLabel}"]`);
+    if (!(panel instanceof HTMLElement)) throw new Error(`未找到中央区域：${centerLabel}`);
+    const panelBox = panel.getBoundingClientRect();
+    const sides = (["A", "B"] as const).map((team) => {
+      const cards = [
+        ...document.querySelectorAll(`[aria-label="${team} 方选用区"] [data-slot-id]`),
+      ];
+      if (cards.length === 0) throw new Error(`未找到 ${team} 方选用槽位`);
+      const boxes = cards.map((card) => card.getBoundingClientRect());
+      return {
+        count: cards.length,
+        top: Math.min(...boxes.map((box) => box.top)),
+        bottom: Math.max(...boxes.map((box) => box.bottom)),
+        card: { w: Math.round(boxes[0]!.width), h: Math.round(boxes[0]!.height) },
+      };
+    });
+    return { panel: { top: panelBox.top, bottom: panelBox.bottom }, sides };
+  }, centerAriaLabel);
+  for (const [index, side] of geometry.sides.entries()) {
+    const name = index === 0 ? "A" : "B";
+    if (side.count !== 9) {
+      throw new Error(`${label} ${name} 方选用槽位应为 9 个，实际 ${side.count} 个`);
+    }
+    if (Math.abs(side.top - geometry.panel.top) > 8) {
+      throw new Error(
+        `${label} ${name} 方选用槽位顶部与中央区域不齐（${side.top.toFixed(1)} vs ${geometry.panel.top.toFixed(1)}，槽位 ${side.card.w}×${side.card.h}）`,
+      );
+    }
+    if (Math.abs(side.bottom - geometry.panel.bottom) > 8) {
+      throw new Error(
+        `${label} ${name} 方选用槽位底部与中央区域不齐（${side.bottom.toFixed(1)} vs ${geometry.panel.bottom.toFixed(1)}）`,
+      );
+    }
+  }
+}

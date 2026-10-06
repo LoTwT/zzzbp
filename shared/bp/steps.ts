@@ -145,34 +145,5 @@ function computeActionCounts(): Readonly<Record<BpTeam, Readonly<Record<BpAction
   return counts;
 }
 
+/** 每方的动作数量（禁用 4、选用 9），由权威顺序推导。 */
 export const BP_ACTION_COUNTS = computeActionCounts();
-
-/**
- * 每方的连续选用段，用于「按 Pick 分行」选用区布局。
- *
- * 按全局顺序扫描：仅当相邻两个步骤（index 连续）同时是选用且属于同一方时
- * 归入同一段；被禁用或对方选用隔开的位置开启新段。段内顺序即确认顺序。
- * A 方共 6 段、B 方共 5 段，行内容见 docs/specs/room-layout.md「选用区布局」。
- */
-function computePickSegments(): Readonly<Record<BpTeam, readonly (readonly BpStep[])[]>> {
-  const segments: Record<BpTeam, BpStep[][]> = { A: [], B: [] };
-  let previousPick: BpStep | undefined;
-  for (const step of BP_STEPS) {
-    if (step.action !== "pick") continue;
-    const teamSegments = segments[step.team];
-    const continuesRun =
-      previousPick !== undefined &&
-      previousPick.team === step.team &&
-      previousPick.index === step.index - 1;
-    if (continuesRun) {
-      teamSegments[teamSegments.length - 1].push(step);
-    } else {
-      teamSegments.push([step]);
-    }
-    previousPick = step;
-  }
-  return segments;
-}
-
-/** 每方的连续选用段（静态推导）：A 6 段、B 5 段。 */
-export const BP_PICK_SEGMENTS = computePickSegments();

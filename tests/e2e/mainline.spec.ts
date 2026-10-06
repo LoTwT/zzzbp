@@ -6,13 +6,13 @@ import {
   LONGEST_NAME_AGENT,
   NO_AVATAR_AGENTS,
   agentCard,
+  assertConfirmNotCovered,
   assertNoOverflow,
   assertNoPageErrors,
   closePanel,
   confirmButton,
   expectDisabled,
   expectEnabled,
-  expectVisible,
   createRoomViaUi,
   joinRoomViaUi,
   newRoomContext,
@@ -30,9 +30,9 @@ import {
  * 入房、房主分席开局，经完整 26 步公开预选与确认，到完成后撤回、恢复、
  * 重开与再次开局的一条完整交付线。
  *
- * 视口与布局代表组合：房主/选手 A/观众 1440×900（默认竖排），选手 B
- * 1280×640 + 按 Pick 分行（小窗口 + 长昵称/长队名 + 个人布局切换）。
- * 缺头像与最长名称代理人纳入 26 步序列（展示后备不改变操作可用性）。
+ * 视口组合：房主/选手 A/观众 1440×900，选手 B 1280×640（小窗口 + 长昵称
+ * 与 32 码点长队名）。缺头像与最长名称代理人纳入 26 步序列（展示后备
+ * 不改变操作可用性）。
  */
 
 /** 一局 26 步的代理人分配：目录顺序前 26 名，替换两个代表（缺头像、最长名）。 */
@@ -102,12 +102,9 @@ test("主线：建房 → 隔离身份入房 → 分席开局 → 完整 26 步 
       await waitForStatus(ctx.page, "进行中");
     }
 
-    // ---- 完整 26 步：公开预选、跨页同步、两种布局 ----
-    // 选手 B 切到「按 Pick 分行」（个人设置，仅影响本页）。
-    await openPanel(playerB.page);
-    await playerB.page.getByRole("button", { name: "按 Pick 分行", exact: true }).click();
-    await closePanel(playerB.page);
-    await assertNoOverflow(playerB.page, "选手B byPick 进行中");
+    // ---- 完整 26 步：公开预选、跨页同步 ----
+    // 小窗口（1280×640）页面在开局后先确认无整页越界。
+    await assertNoOverflow(playerB.page, "选手B 进行中");
 
     // 面板打开时底部确认按钮不被遮挡（1280×640 小窗口组合）。
     // B 方第一个操作位 BB1 之前轮到 A（AB1）：先由 A 操作一步再检查 B 的面板遮挡。
@@ -125,13 +122,13 @@ test("主线：建房 → 隔离身份入房 → 分席开局 → 完整 26 步 
     // 双页面同步：观众页同步看到已禁用状态。
     await agentCard(spectator.page, secondChoice, "已禁用").waitFor({ state: "visible" });
 
-    // BB1（B 方）：面板打开状态下确认按钮仍可点击（面板不挡必要操作）。
+    // BB1（B 方）：面板打开时底部确认按钮仍未被遮挡（面板只覆盖池区，
+    // 不遮操作区）。外部首次点击只收起面板，因此这里按几何判定后收起面板，
+    // 再走正常预选与确认。
     await openPanel(playerB.page);
-    await agentCard(playerB.page, plan[1] ?? "").click();
-    await expectVisible(confirmButton(playerB.page));
-    await confirmButton(playerB.page).click();
-    await agentCard(playerB.page, plan[1] ?? "", "已禁用").waitFor({ state: "visible" });
+    await assertConfirmNotCovered(playerB.page, "选手B 面板打开");
     await closePanel(playerB.page);
+    await submitStep(playerB.page, "BB1", plan[1] ?? "");
 
     // 其余 24 步（AB2 … AP9）：按操作位在对应选手页执行，观众页逐轮同步。
     for (let index = 2; index < BP_ORDER.length; index += 1) {
@@ -146,7 +143,7 @@ test("主线：建房 → 隔离身份入房 → 分席开局 → 完整 26 步 
       await waitForStatus(ctx.page, "已完成");
     }
     await assertNoOverflow(host.page, "房主 已完成");
-    await assertNoOverflow(playerB.page, "选手B byPick 已完成");
+    await assertNoOverflow(playerB.page, "选手B 已完成");
 
     // ---- 已完成撤回：回到 AP9 并暂停，由房主恢复 ----
     await openPanel(host.page);

@@ -76,7 +76,7 @@ async function submit(): Promise<void> {
   <main class="mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center gap-10 px-6">
     <div class="text-center">
       <h1 class="text-3xl font-semibold tracking-tight">绝区零 BP</h1>
-      <p class="mt-2 text-base text-neutral-600">危局强袭战</p>
+      <p class="mt-2 text-base text-(--text-muted)">危局强袭战</p>
     </div>
 
     <form
@@ -88,18 +88,22 @@ async function submit(): Promise<void> {
 
       <p
         v-if="props.notice !== null && props.notice !== undefined"
-        class="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-center text-xs leading-5 text-amber-800"
+        class="mt-4 rounded-lg bg-(--status-warning-bg) px-3 py-2 text-center text-xs leading-5 text-(--status-warning-fg)"
         role="status"
       >
         {{ props.notice }}
       </p>
 
-      <p class="mt-4 text-center text-lg font-medium break-all text-neutral-900">{{ roomName }}</p>
-      <p class="mt-1 text-center text-xs text-neutral-500">进入后为观众，选手由房主安排。</p>
+      <p class="mt-4 text-center text-lg font-medium break-all text-(--text-primary)">
+        {{ roomName }}
+      </p>
+      <p class="mt-1 text-center text-xs text-(--text-muted)">进入后为观众，选手由房主安排。</p>
 
       <div class="mt-6 flex flex-col gap-5">
         <div class="flex flex-col gap-1.5">
-          <label class="text-sm font-medium text-neutral-800" for="join-nickname">你的昵称</label>
+          <label class="text-sm font-medium text-(--text-secondary)" for="join-nickname"
+            >你的昵称</label
+          >
           <input
             id="join-nickname"
             v-model="nickname"
@@ -110,20 +114,24 @@ async function submit(): Promise<void> {
             name="nickname"
             autocomplete="off"
           />
-          <p v-if="nicknameError !== null" id="join-nickname-error" class="text-xs text-danger-700">
+          <p
+            v-if="nicknameError !== null"
+            id="join-nickname-error"
+            class="text-xs text-(--status-danger-fg)"
+          >
             {{ nicknameError }}
           </p>
         </div>
 
         <button
           type="submit"
-          class="w-full rounded-lg bg-lavender-600 px-4 py-2.5 text-sm font-semibold text-white focus-ring hover:bg-lavender-700 disabled:cursor-not-allowed disabled:opacity-50"
+          class="w-full rounded-lg bg-(--accent-primary) px-4 py-2.5 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="!canSubmit"
         >
           {{ submitting ? "进入中…" : "进入房间" }}
         </button>
 
-        <p v-if="formError !== null" class="text-sm text-danger-700" role="alert">
+        <p v-if="formError !== null" class="text-sm text-(--status-danger-fg)" role="alert">
           {{ formError }}
         </p>
       </div>

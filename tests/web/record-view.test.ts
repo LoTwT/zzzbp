@@ -9,6 +9,7 @@ import {
   recordBanSlots,
   recordPickColumns,
   recordStatusText,
+  recordTeamLabels,
 } from "../../src/room/record-view";
 
 // 只读记录页的快照投影：禁用/选用槽位、行结构与文案全部由快照与权威
@@ -77,23 +78,20 @@ test("禁用槽位：每方 4 个、未提交保持空槽、无 active", () => {
   expect(banSlots.B.every((slot) => slot.active === false)).toBe(true);
 });
 
-test("选用区：默认竖排每方 9 行，byPick 按连续选用段分行；队名来自快照", () => {
+test("选用区：每方九格竖排（每行 1 个）；队名标识来自快照", () => {
   // 前 6 步：AP1（A 方第 1 选用）与 BP1（B 方第 1 选用）已提交。
   const partial = snapshotOf(6);
-  const vertical = recordPickColumns(partial, "vertical");
-  expect(vertical.A.rows).toHaveLength(9);
-  expect(vertical.A.rows.every((row) => row.length === 1)).toBe(true);
-  expect(vertical.A.teamName).toBe("左方队");
-  expect(vertical.B.teamName).toBe("右方队");
-  expect(vertical.A.rows[0]?.[0]?.agent?.name).toBe("代理人 9005");
-  expect(vertical.A.rows[1]?.[0]?.agent).toBeNull();
-  expect(vertical.B.rows[0]?.[0]?.agent?.name).toBe("代理人 9006");
-
-  // byPick：A 方 6 行、B 方 5 行（行结构与实时房间同一权威推导）。
-  const byPick = recordPickColumns(partial, "byPick");
-  expect(byPick.A.rows).toHaveLength(6);
-  expect(byPick.B.rows).toHaveLength(5);
-  expect(byPick.A.rows.every((row) => row.every((slot) => slot.active === false))).toBe(true);
+  const columns = recordPickColumns(partial);
+  expect(columns.A.rows).toHaveLength(9);
+  expect(columns.A.rows.every((row) => row.length === 1)).toBe(true);
+  expect(columns.B.rows).toHaveLength(9);
+  expect(columns.A.rows[0]?.[0]?.slotId).toBe("AP1");
+  expect(columns.A.rows[0]?.[0]?.agent?.name).toBe("代理人 9005");
+  expect(columns.A.rows[1]?.[0]?.agent).toBeNull();
+  expect(columns.B.rows[0]?.[0]?.agent?.name).toBe("代理人 9006");
+  expect(columns.A.rows.every((row) => row.every((slot) => slot.active === false))).toBe(true);
+  // 队伍标识（顶部禁用区旁）直接来自快照。
+  expect(recordTeamLabels(partial)).toEqual({ A: "左方队", B: "右方队" });
 });
 
 test("到期时间格式化为本地日期；非法值兜底", () => {

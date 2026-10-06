@@ -121,7 +121,11 @@ onMounted(loadEntry);
     class="mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center gap-8 px-6"
   >
     <template v-if="phase === 'loading'">
-      <p v-if="loadFailed" class="max-w-sm text-center text-sm text-danger-700" role="alert">
+      <p
+        v-if="loadFailed"
+        class="max-w-sm text-center text-sm text-(--status-danger-fg)"
+        role="alert"
+      >
         房间信息加载失败，请检查网络后重试。
         <button
           type="button"
@@ -131,17 +135,17 @@ onMounted(loadEntry);
           重新加载
         </button>
       </p>
-      <p v-else class="text-sm text-neutral-500">正在加载房间…</p>
+      <p v-else class="text-sm text-(--text-muted)">正在加载房间…</p>
     </template>
 
     <template v-else-if="phase === 'not-found'">
       <div
         class="w-full max-w-sm rounded-xl border border-(--border-default) bg-(--surface-panel) p-8 text-center shadow-sm"
       >
-        <p class="text-lg font-semibold text-neutral-900">房间不存在或已过期</p>
+        <p class="text-lg font-semibold text-(--text-primary)">房间不存在或已过期</p>
         <RouterLink
           to="/"
-          class="mt-6 inline-block w-full rounded-lg bg-lavender-600 px-4 py-2.5 text-sm font-semibold text-white focus-ring hover:bg-lavender-700"
+          class="mt-6 inline-block w-full rounded-lg bg-(--accent-primary) px-4 py-2.5 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active)"
         >
           创建新房间
         </RouterLink>

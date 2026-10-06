@@ -37,8 +37,8 @@
 | 真实多人操作一致 | 通过 | 真实浏览器 E2E 主线：UI 建房、隔离身份入房、分席开局、完整 26 步、公开预选与双页面同步 |
 | 权限正确 | 通过 | 观众/房主/选手权限断言（E2E + Workers 集成）；换人后原选手降级、房主兼任、越权命令拒绝 |
 | 断线可恢复 | 通过 | 部分页面关闭不掉线、最后一页掉线暂停、断线期间本地可用/服务端禁用、原选手重连、结果未知同 operationId 收敛 |
-| 展示只读 | 通过 | 匿名直开、URL 冻结布局、实时同步、58 人全量同屏（卡片数量 + 裁剪容器无内部滚动 + 网格与末卡片几何包含，两种布局）、零成员 WS/零 POST/零身份 Cookie |
-| 最终记录可读取 | 通过 | 完成/未完成快照记录页、两种布局、终态分流、真实 404；真实归档与 90 天清理由 Workers 生命周期测试证明 |
+| 展示只读 | 通过 | 匿名直开、实时同步、58 人全量同屏（卡片数量 + 裁剪容器无内部滚动 + 网格与末卡片几何包含）、零成员 WS/零 POST/零身份 Cookie |
+| 最终记录可读取 | 通过 | 完成/未完成快照记录页、终态分流、真实 404；真实归档与 90 天清理由 Workers 生命周期测试证明 |
 | 生命周期清理有效 | 通过 | 真实 workerd + SQLite 的到期裁决/快照/删除测试；本地测量确认清理后无业务表 |
 
 ## 验证方式与命令
@@ -58,21 +58,25 @@
 只回收自身进程；workerd 本地状态使用一次性临时目录，测试数据与开发状态互不污染。CI 的
 `e2e` job 安装 Chromium（`pnpm exec playwright install --with-deps chromium`）后运行同一命令。
 
-浏览器验收覆盖（`tests/e2e`，4 条）：
+浏览器验收覆盖（`tests/e2e`，5 条）：
 
 1. 主线：UI 建房 → 三方入房 → 队名/分席/开局 → 完整 26 步（含公开预选更换与跨页同步）→
-   已完成 → 撤回 → 恢复 → 重开 → 再次开局；1440×900 与 1280×640、两种布局、长队名/长昵称、
+   已完成 → 撤回 → 恢复 → 重开 → 再次开局；1440×900 与 1280×640、长队名/长昵称、
    缺头像与最长名称代理人。
 2. 断线与恢复：同身份第二页面、部分页面关闭不掉线、刷新恢复身份、最后一页掉线暂停、
-   断线期间本地筛选/布局可用且服务端操作禁用、暂停换人、原选手重连降级为观众、结果未知核对
+   断线期间本地筛选可用且服务端操作禁用、暂停换人、原选手重连降级为观众、结果未知核对
    （确定性注入：代理扣下服务端已提交的成功回执再切断，断言「正在核对结果…」、重连后同
    operationId 同载荷字节重发、服务端回执幂等重放 bp.version 不变、整场只推进一次；断线
    触发的暂停保持到房主手动恢复）、房主兼任选手。
-3. 展示页：匿名直开、URL 冻结布局（含刷新与非法参数回退）、公开预选与结果实时同步、
-   58 人全量同屏（卡片数量 + 裁剪容器无内部滚动 + 网格与末卡片几何包含，byPick 与竖排
-   两种布局）、无搜索/确认/面板入口、仅展示 WS（websocket 事件观测）且零 POST/零身份 Cookie。
-4. 记录页：完成与未完成快照、两种布局、控制面板到期时间、零业务 WS（websocket 事件观测）
+3. 展示页：匿名直开、公开预选与结果实时同步、58 人全量同屏（卡片数量 + 裁剪容器无内部
+   滚动 + 网格与末卡片几何包含）、无搜索/确认/面板入口、仅展示 WS（websocket 事件观测）
+   且零 POST/零身份 Cookie。
+4. 记录页：完成与未完成快照、控制面板到期时间、零业务 WS（websocket 事件观测）
    与零 POST、入房中被归档转记录读取；真实 404 走统一不存在页。
+5. 房间 UI 细节：本人身份提示（房主/兼任/选手/观众/换人，长昵称截断且不遮挡确认按钮与
+   面板入口）、控制面板四种关闭路径（入口再点、外部首次点击只收起、Esc、关闭按钮）与外部
+   点击不触发底层预选、两轮分隔（禁用 2 | 2、选用 6 / 3）与选用槽位无数字角标、队名在顶部
+   禁用区旁与选用区/中央池同高、1920px 以上顶部与全局背景同色。
 
 ## 覆盖映射
 
@@ -81,7 +85,7 @@
 | 26 步顺序、代理人互斥、预选/确认/撤回/重开（[单局常规 BP](specs/single-game-bp.md)） | `tests/rules/bp-*`、`tests/workers/room-commands` | E2E 主线完整 26 步 + 撤回/重开 |
 | 身份、Cookie、权限、房主兼任、换人（[房间角色](specs/room-roles.md)） | `tests/workers/rooms`、`room-websocket`、`room-presence` | E2E 主线权限断言、resilience 换人与兼任 |
 | 多页面、掉线暂停、重连核对（[房间角色](specs/room-roles.md)、[单局常规 BP](specs/single-game-bp.md)） | `tests/web/room-session`、`tests/workers/room-presence`、`room-commands` | E2E resilience（真实断线注入） |
-| 房间界面、两布局、控制面板、搜索筛选（[房间布局](specs/room-layout.md)） | `tests/web/pick-layout`、`host-panels`、`operation-feedback`、`form-validation` | E2E 主线与 resilience；PR6 历史浏览器验收 |
+| 房间界面、控制面板、搜索筛选（[房间布局](specs/room-layout.md)） | `tests/web/pick-layout`、`host-panels`、`operation-feedback`、`form-validation` | E2E 主线与 resilience；PR6 历史浏览器验收 |
 | 独立展示页（[房间布局](specs/room-layout.md#实时展示页)） | `tests/web/display-*`、`tests/workers/room-websocket` | E2E 展示页（58 人同屏含几何包含断言）；PR8 浏览器验收 |
 | 归档、只读记录、12 小时与 90 天（[房间保留与只读记录](specs/room-roles.md#房间保留与只读记录)） | `tests/workers/room-lifecycle`（受控时间戳 + 真实 Alarm）、`tests/web/record-view` | E2E 记录页（合法快照响应注入）；PR9 浏览器验收 |
 | 代理人数据目录（[代理人数据接入](specs/agent-data.md)） | `tests/rules/agent-catalog` | E2E 缺头像/最长名称代理人 |

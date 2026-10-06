@@ -20,6 +20,7 @@ import { isHostManagementView, type RoomView } from "../../room/room-session";
 import type { RoomCatalogModel } from "../../room/room-catalog";
 import { TeamNameDraft } from "../../room/team-name-draft";
 import { pendingOperationText } from "../../room/operation-feedback";
+import { usePanelDismiss } from "../../room/panel-dismiss";
 import { displayPagePath } from "../../room/display-url";
 import {
   memberRoleText,
@@ -29,7 +30,6 @@ import {
   startBlockers,
   undoTargetDescription,
 } from "../../room/host-panels";
-import { PICK_LAYOUT_LABELS, type PickLayout } from "../../room/pick-layout";
 
 // 控制面板：池内右下入口打开，右侧覆盖中央代理人池区域，不压缩网格、
 // 不遮顶部与双方禁选区（docs/specs/room-layout.md「控制面板」，线框
@@ -44,7 +44,6 @@ const props = defineProps<{
   readonly session: RoomSession;
   readonly view: RoomView;
   readonly catalogModel: RoomCatalogModel | null;
-  readonly layout: PickLayout;
   readonly connected: boolean;
   /** 当前房间 ID：构建展示页链接使用。 */
   readonly roomId: string;
@@ -52,7 +51,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: "close"): void;
-  (event: "update:layout", layout: PickLayout): void;
 }>();
 
 type Subview = "main" | "members" | "seat";
@@ -88,6 +86,14 @@ const { copy, copied } = useClipboard({ legacy: true });
 
 // 面板根元素：打开时聚焦，返回焦点由父组件管理。
 const rootEl = ref<HTMLElement | null>(null);
+
+// 外部点击关闭（面板或入口之外按下时收起整个面板）：首次外部点击只
+// 收起面板，不触发底层的代理人预选/确认；入口按钮由标记属性识别，
+// 开关语义保留给入口自身（见 src/room/panel-dismiss.ts）。
+usePanelDismiss({
+  panel: () => rootEl.value,
+  close: () => emit("close"),
+});
 
 onMounted(() => {
   rootEl.value?.focus();
@@ -282,16 +288,11 @@ function onWindowKeydown(event: KeyboardEvent): void {
   else subview.value = "main";
 }
 
-function chooseLayout(layout: PickLayout): void {
-  emit("update:layout", layout);
-}
-
 /**
- * 展示页链接：显式携带当前布局（打开时冻结继承；展示页只读取一次，
- * 不跟随本页后续切换）。新标签页打开并保留原操作页，noopener 防止
- * 展示页反向操作原页。
+ * 展示页链接：新标签页打开并保留原操作页，noopener 防止展示页反向操作
+ * 原页。选用区固定九格竖排，链接不再携带布局参数。
  */
-const displayHref = computed(() => displayPagePath(props.roomId, props.layout));
+const displayHref = computed(() => displayPagePath(props.roomId));
 
 async function copyRoomLink(): Promise<void> {
   await copy(window.location.href);
@@ -375,17 +376,17 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
         <button
           v-if="subview !== 'main'"
           type="button"
-          class="flex items-center gap-1 rounded px-1.5 py-1 text-sm text-neutral-600 focus-ring hover:text-neutral-900"
+          class="flex items-center gap-1 rounded px-1.5 py-1 text-sm text-(--text-muted) focus-ring hover:text-(--text-primary)"
           @click="backToMain"
         >
           <ArrowLeft class="size-4" aria-hidden="true" />
           返回
         </button>
-        <h2 class="truncate text-base font-semibold text-neutral-900">{{ panelTitle }}</h2>
+        <h2 class="truncate text-base font-semibold text-(--text-primary)">{{ panelTitle }}</h2>
       </div>
       <button
         type="button"
-        class="flex size-7 items-center justify-center rounded text-neutral-500 focus-ring hover:text-neutral-900"
+        class="flex size-7 items-center justify-center rounded text-(--text-muted) focus-ring hover:text-(--text-primary)"
         aria-label="关闭控制面板"
         @click="emit('close')"
       >
@@ -397,25 +398,25 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
     <div v-if="subview === 'main'" class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
       <!-- 比赛控制（仅房主） -->
       <section v-if="isHost && hostView !== null" class="flex flex-col gap-2" aria-label="比赛控制">
-        <h3 class="text-xs font-semibold tracking-wide text-neutral-500">比赛控制</h3>
+        <h3 class="text-xs font-semibold tracking-wide text-(--text-muted)">比赛控制</h3>
 
         <template v-if="hostView.bpStatus === 'waiting'">
           <button
             type="button"
-            class="rounded-lg bg-lavender-600 px-3 py-2 text-sm font-semibold text-white focus-ring hover:bg-lavender-700 disabled:cursor-not-allowed disabled:opacity-50"
+            class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="commandButtonState('startBp', blockers.length > 0).disabled"
             @click="session.sendCommand({ type: 'startBp' })"
           >
             {{ commandLabel("startBp", "开始中…", "开始 BP") }}
           </button>
-          <ul v-if="blockers.length > 0" class="flex flex-col gap-0.5 text-xs text-neutral-500">
+          <ul v-if="blockers.length > 0" class="flex flex-col gap-0.5 text-xs text-(--text-muted)">
             <li v-for="blocker in blockers" :key="blocker">· {{ blocker }}</li>
           </ul>
         </template>
         <button
           v-else-if="hostView.bpStatus === 'running'"
           type="button"
-          class="rounded-lg bg-lavender-600 px-3 py-2 text-sm font-semibold text-white focus-ring hover:bg-lavender-700 disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="commandButtonState('pauseBp', false).disabled"
           @click="session.sendCommand({ type: 'pauseBp' })"
         >
@@ -424,7 +425,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
         <button
           v-else-if="hostView.bpStatus === 'paused'"
           type="button"
-          class="rounded-lg bg-lavender-600 px-3 py-2 text-sm font-semibold text-white focus-ring hover:bg-lavender-700 disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="commandButtonState('resumeBp', false).disabled"
           @click="session.sendCommand({ type: 'resumeBp' })"
         >
@@ -434,13 +435,17 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           v-if="
             scopeErrorText('startBp') ?? scopeErrorText('pauseBp') ?? scopeErrorText('resumeBp')
           "
-          class="text-xs text-danger-700"
+          class="text-xs text-(--status-danger-fg)"
           role="alert"
         >
           {{ scopeErrorText("startBp") ?? scopeErrorText("pauseBp") ?? scopeErrorText("resumeBp") }}
         </p>
         <!-- 按钮因状态切换消失时，原命令的挂起/核对状态由此提示承接。 -->
-        <p v-if="controlFeedbackText !== null" class="text-xs text-amber-800" role="status">
+        <p
+          v-if="controlFeedbackText !== null"
+          class="text-xs text-(--status-warning-fg)"
+          role="status"
+        >
           {{ controlFeedbackText }}
         </p>
 
@@ -454,10 +459,14 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
             <Undo2 class="size-4" aria-hidden="true" />
             {{ commandLabel("undoBpStep", "撤回中…", "撤回上一步") }}
           </button>
-          <p v-if="undoDescription !== null" class="text-xs text-neutral-500">
+          <p v-if="undoDescription !== null" class="text-xs text-(--text-muted)">
             可撤回：{{ undoDescription }}
           </p>
-          <p v-if="scopeErrorText('undoBpStep')" class="text-xs text-danger-700" role="alert">
+          <p
+            v-if="scopeErrorText('undoBpStep')"
+            class="text-xs text-(--status-danger-fg)"
+            role="alert"
+          >
             {{ scopeErrorText("undoBpStep") }}
           </p>
         </div>
@@ -476,15 +485,15 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           </button>
           <div
             v-else
-            class="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3"
+            class="flex flex-col gap-2 rounded-lg border border-(--status-warning-border) bg-(--status-warning-bg) p-3"
           >
-            <p class="text-xs leading-5 text-amber-900">
+            <p class="text-xs leading-5 text-(--status-warning-fg)">
               重开将清空本局全部禁选结果与未提交预选；保留房间、成员、席位与队伍名，并返回待开始。
             </p>
             <div class="flex gap-2">
               <button
                 type="button"
-                class="flex-1 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-semibold text-white focus-ring hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                class="flex-1 rounded-lg bg-(--status-danger) px-3 py-1.5 text-sm font-semibold text-(--text-inverse) focus-ring hover:bg-(--status-danger-fg) disabled:cursor-not-allowed disabled:opacity-50"
                 :disabled="commandButtonState('restartBp', false).disabled"
                 @click="session.sendCommand({ type: 'restartBp' })"
               >
@@ -498,7 +507,11 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
                 取消
               </button>
             </div>
-            <p v-if="scopeErrorText('restartBp')" class="text-xs text-danger-700" role="alert">
+            <p
+              v-if="scopeErrorText('restartBp')"
+              class="text-xs text-(--status-danger-fg)"
+              role="alert"
+            >
               {{ scopeErrorText("restartBp") }}
             </p>
           </div>
@@ -511,10 +524,10 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
         class="mt-6 flex flex-col gap-3"
         aria-label="队伍与成员"
       >
-        <h3 class="text-xs font-semibold tracking-wide text-neutral-500">队伍与成员</h3>
+        <h3 class="text-xs font-semibold tracking-wide text-(--text-muted)">队伍与成员</h3>
         <div v-for="team in ['A', 'B'] as const" :key="team" class="flex flex-col gap-2">
           <div class="flex items-center gap-2">
-            <Pencil class="size-3.5 shrink-0 text-neutral-400" aria-hidden="true" />
+            <Pencil class="size-3.5 shrink-0 text-(--text-muted)" aria-hidden="true" />
             <label class="sr-only" :for="`team-name-${team}`">
               {{
                 hostView.teamNames[team] === "" ? sideLabel(team) : hostView.teamNames[team]
@@ -524,7 +537,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
               :id="`team-name-${team}`"
               :value="teamDrafts[team].draft"
               class="min-w-0 flex-1 rounded-lg border border-(--border-default) bg-(--surface-elevated) px-2.5 py-1.5 text-sm focus-ring"
-              :class="{ 'border-danger-500': teamNameErrors[team] !== null }"
+              :class="{ 'border-(--status-danger)': teamNameErrors[team] !== null }"
               type="text"
               :placeholder="`${sideLabel(team)}队伍名`"
               @input="onTeamNameInput(team, ($event.target as HTMLInputElement).value)"
@@ -545,7 +558,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           </div>
           <p
             v-if="teamNameErrors[team] !== null || scopeErrorText(`setTeamName:${team}`) !== null"
-            class="text-xs text-danger-700"
+            class="text-xs text-(--status-danger-fg)"
             role="alert"
           >
             {{ teamNameErrors[team] ?? scopeErrorText(`setTeamName:${team}`) }}
@@ -556,15 +569,21 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
               <!-- 选手行：昵称 + 在线状态 + 更换入口（按状态开放）。 -->
               <span
                 class="size-2 shrink-0 rounded-full"
-                :class="seatedMemberOf(hostView, team)?.online ? 'bg-mint-500' : 'bg-neutral-300'"
+                :class="
+                  seatedMemberOf(hostView, team)?.online
+                    ? 'bg-(--status-success)'
+                    : 'bg-(--surface-muted)'
+                "
                 aria-hidden="true"
               />
-              <span class="min-w-0 flex-1 truncate text-sm text-neutral-800">
+              <span class="min-w-0 flex-1 truncate text-sm text-(--text-secondary)">
                 {{ seatedMemberOf(hostView, team)?.nickname ?? "待选择" }}
                 <span
                   class="ml-1 text-xs"
                   :class="
-                    seatedMemberOf(hostView, team)?.online ? 'text-mint-700' : 'text-neutral-400'
+                    seatedMemberOf(hostView, team)?.online
+                      ? 'text-(--status-success-fg)'
+                      : 'text-(--text-muted)'
                   "
                 >
                   {{ seatedMemberOf(hostView, team)?.online ? "在线" : "离线" }}
@@ -583,7 +602,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
               </button>
             </template>
             <template v-else>
-              <span class="min-w-0 flex-1 text-sm text-neutral-400">待选择</span>
+              <span class="min-w-0 flex-1 text-sm text-(--text-muted)">待选择</span>
               <button
                 type="button"
                 class="shrink-0 rounded-lg border border-(--border-default) px-2.5 py-1.5 text-xs font-medium focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
@@ -594,7 +613,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
               </button>
             </template>
           </div>
-          <p v-if="hostView.bpStatus === 'running'" class="text-xs text-neutral-400">
+          <p v-if="hostView.bpStatus === 'running'" class="text-xs text-(--text-muted)">
             暂停后可更换选手
           </p>
         </div>
@@ -602,45 +621,25 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
         <!-- 其他成员：单行入口，主面板不铺开名单。 -->
         <button
           type="button"
-          class="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-neutral-700 focus-ring hover:bg-(--surface-subtle)"
+          class="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-(--text-secondary) focus-ring hover:bg-(--surface-subtle)"
           @click="subview = 'members'"
         >
-          <Users class="size-4 text-neutral-400" aria-hidden="true" />
+          <Users class="size-4 text-(--text-muted)" aria-hidden="true" />
           其他成员（{{ otherRows.length }}）
-          <ChevronRight class="ml-auto size-4 text-neutral-400" aria-hidden="true" />
+          <ChevronRight class="ml-auto size-4 text-(--text-muted)" aria-hidden="true" />
         </button>
       </section>
 
-      <!-- 显示与分享（所有角色） -->
+      <!-- 显示与分享（所有角色；选用区固定九格竖排，无可切换项） -->
       <section class="mt-6 flex flex-col gap-2" aria-label="显示与分享">
-        <h3 class="text-xs font-semibold tracking-wide text-neutral-500">显示与分享</h3>
-        <div class="flex items-center gap-2">
-          <span class="text-sm text-neutral-600">选用区布局</span>
-          <div class="ml-auto flex rounded-lg border border-(--border-default) p-0.5">
-            <button
-              v-for="option in PICK_LAYOUT_LABELS"
-              :key="option.id"
-              type="button"
-              class="rounded-md px-2.5 py-1 text-xs font-medium focus-ring"
-              :class="
-                layout === option.id
-                  ? 'bg-lavender-100 text-lavender-800'
-                  : 'text-neutral-600 hover:bg-(--surface-subtle)'
-              "
-              :aria-pressed="layout === option.id"
-              @click="chooseLayout(option.id)"
-            >
-              {{ option.label }}
-            </button>
-          </div>
-        </div>
+        <h3 class="text-xs font-semibold tracking-wide text-(--text-muted)">显示与分享</h3>
         <a
           :href="displayHref"
           target="_blank"
           rel="noopener"
           class="flex items-center gap-2 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring hover:bg-(--surface-subtle)"
         >
-          <ExternalLink class="size-4 text-neutral-400" aria-hidden="true" />
+          <ExternalLink class="size-4 text-(--text-muted)" aria-hidden="true" />
           打开展示页
         </a>
         <button
@@ -648,7 +647,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           class="flex items-center gap-2 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring hover:bg-(--surface-subtle)"
           @click="copyRoomLink"
         >
-          <Link2 class="size-4 text-neutral-400" aria-hidden="true" />
+          <Link2 class="size-4 text-(--text-muted)" aria-hidden="true" />
           {{ copied ? "已复制" : "复制房间链接" }}
         </button>
       </section>
@@ -657,10 +656,10 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
     <!-- 其他成员列表：固定人数与列头，仅列表滚动。 -->
     <div v-else-if="subview === 'members'" class="flex min-h-0 flex-1 flex-col px-4 py-4">
       <div class="shrink-0 pb-2">
-        <p class="text-xs text-neutral-500">共 {{ otherRows.length }} 人</p>
+        <p class="text-xs text-(--text-muted)">共 {{ otherRows.length }} 人</p>
         <div
           :class="MEMBER_GRID_CLASS"
-          class="border-b border-(--border-subtle) pb-1 text-xs text-neutral-500"
+          class="border-b border-(--border-subtle) pb-1 text-xs text-(--text-muted)"
         >
           <span class="size-2" aria-hidden="true" />
           <span>昵称</span>
@@ -678,14 +677,19 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           >
             <span
               class="size-2 shrink-0 rounded-full"
-              :class="member.online ? 'bg-mint-500' : 'bg-neutral-300'"
+              :class="member.online ? 'bg-(--status-success)' : 'bg-(--surface-muted)'"
               aria-hidden="true"
             />
-            <span class="min-w-0 truncate text-sm text-neutral-800" :title="member.nickname">{{
-              member.nickname
-            }}</span>
-            <span class="text-xs text-neutral-500">{{ memberRoleText(member) }}</span>
-            <span class="text-xs" :class="member.online ? 'text-mint-700' : 'text-neutral-400'">
+            <span
+              class="min-w-0 truncate text-sm text-(--text-secondary)"
+              :title="member.nickname"
+              >{{ member.nickname }}</span
+            >
+            <span class="text-xs text-(--text-muted)">{{ memberRoleText(member) }}</span>
+            <span
+              class="text-xs"
+              :class="member.online ? 'text-(--status-success-fg)' : 'text-(--text-muted)'"
+            >
               {{ member.online ? "在线" : "离线" }}
             </span>
           </li>
@@ -696,24 +700,28 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
     <!-- 席位选择：待开始分配与暂停换人共用同一列表；目标队伍与当前选手固定。 -->
     <div v-else class="flex min-h-0 flex-1 flex-col px-4 py-4">
       <div class="shrink-0 pb-2">
-        <div class="flex flex-col gap-0.5 text-sm text-neutral-700">
+        <div class="flex flex-col gap-0.5 text-sm text-(--text-secondary)">
           <p>目标队伍：{{ seatTargetLabel }}</p>
           <p>当前选手：{{ currentSeatedMember?.nickname ?? "待选择" }}</p>
         </div>
         <p
           v-if="scopeErrorText(`assignSeat:${seatTeam}`)"
-          class="mt-2 text-xs text-danger-700"
+          class="mt-2 text-xs text-(--status-danger-fg)"
           role="alert"
         >
           {{ scopeErrorText(`assignSeat:${seatTeam}`) }}
         </p>
         <!-- 目标行成为「当前选手」或不在列表中时，挂起状态由此提示承接。 -->
-        <p v-if="seatAssignFeedbackText !== null" class="mt-2 text-xs text-amber-800" role="status">
+        <p
+          v-if="seatAssignFeedbackText !== null"
+          class="mt-2 text-xs text-(--status-warning-fg)"
+          role="status"
+        >
           {{ seatAssignFeedbackText }}
         </p>
         <div
           :class="SEAT_GRID_CLASS"
-          class="mt-2 border-b border-(--border-subtle) pb-1 text-xs text-neutral-500"
+          class="mt-2 border-b border-(--border-subtle) pb-1 text-xs text-(--text-muted)"
         >
           <span class="size-2" aria-hidden="true" />
           <span>昵称</span>
@@ -733,20 +741,26 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           >
             <span
               class="size-2 shrink-0 rounded-full"
-              :class="row.member.online ? 'bg-mint-500' : 'bg-neutral-300'"
+              :class="row.member.online ? 'bg-(--status-success)' : 'bg-(--surface-muted)'"
               aria-hidden="true"
             />
-            <span class="min-w-0 truncate text-sm text-neutral-800" :title="row.member.nickname">
+            <span
+              class="min-w-0 truncate text-sm text-(--text-secondary)"
+              :title="row.member.nickname"
+            >
               {{ row.member.nickname }}
             </span>
-            <span class="text-xs text-neutral-500">{{ memberRoleText(row.member) }}</span>
-            <span class="text-xs" :class="row.member.online ? 'text-mint-700' : 'text-neutral-400'">
+            <span class="text-xs text-(--text-muted)">{{ memberRoleText(row.member) }}</span>
+            <span
+              class="text-xs"
+              :class="row.member.online ? 'text-(--status-success-fg)' : 'text-(--text-muted)'"
+            >
               {{ row.member.online ? "在线" : "离线" }}
             </span>
             <button
               v-if="row.isCurrent"
               type="button"
-              class="justify-self-end rounded-lg border border-(--border-default) px-2.5 py-1 text-xs font-medium text-neutral-400 disabled:cursor-not-allowed"
+              class="justify-self-end rounded-lg border border-(--border-default) px-2.5 py-1 text-xs font-medium text-(--text-muted) disabled:cursor-not-allowed"
               disabled
             >
               当前选手
@@ -757,8 +771,8 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
               class="justify-self-end rounded-lg border px-2.5 py-1 text-xs font-medium focus-ring disabled:cursor-not-allowed disabled:opacity-50"
               :class="
                 row.eligible
-                  ? 'border-lavender-500 text-lavender-700 hover:bg-lavender-50'
-                  : 'border-(--border-default) text-neutral-400'
+                  ? 'border-(--accent-primary) text-(--text-accent) hover:bg-(--accent-soft)'
+                  : 'border-(--border-default) text-(--text-muted)'
               "
               :disabled="
                 !row.eligible ||
@@ -776,7 +790,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           </li>
         </ul>
       </div>
-      <p class="shrink-0 pt-2 text-xs text-neutral-400">BP 保持当前状态，选手安排由房主确认。</p>
+      <p class="shrink-0 pt-2 text-xs text-(--text-muted)">BP 保持当前状态，选手安排由房主确认。</p>
     </div>
   </aside>
 </template>

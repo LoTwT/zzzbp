@@ -1,7 +1,7 @@
 import type { BpTeam } from "../../shared/bp/steps";
 import type { ArchivedOperation, ArchiveSnapshot } from "../../shared/contracts/records";
 import type { AgentDisplayBase } from "./room-catalog";
-import { banStepsOfTeam, pickSlotRows, type PickLayout } from "./pick-layout";
+import { banStepsOfTeam, pickSlotRows } from "./pick-layout";
 import type { BanSlotView, PickSlotView, TeamPickColumnView } from "./view-projections";
 
 /**
@@ -9,8 +9,8 @@ import type { BanSlotView, PickSlotView, TeamPickColumnView } from "./view-proje
  *
  * 归档快照是唯一数据来源：不请求当前 catalog 重解释旧名称或头像，
  * 代理人展示信息在归档时已固定在快照中（agentName/agentAvatarUrl）。
- * 行结构沿用 pick-layout 的权威顺序推导，与实时房间/展示页同一套
- * 槽位语义；所有槽位静态展示（无 active、无预选、无动效）。
+ * 行结构沿用 pick-layout 的权威顺序推导（九格竖排），与实时房间/
+ * 展示页同一套槽位语义；所有槽位静态展示（无 active、无预选、无动效）。
  */
 
 /** 由快照单步构造最小代理人展示信息（AgentAvatar/状态视觉共用）。 */
@@ -54,15 +54,21 @@ export function recordBanSlots(
   return result;
 }
 
-/** 双方选用区（按个人布局分行）；未完成的槽位保持空白。 */
-export function recordPickColumns(
-  snapshot: ArchiveSnapshot,
-  layout: PickLayout,
-): Record<BpTeam, TeamPickColumnView> {
+/**
+ * 双方队伍标识（顶部禁用区旁的队名）：直接来自快照（开局要求双方队名
+ * 已填写，实际不为空）；空值按原样展示，不用「待选择」占位（归档房间
+ * 的席位不再变化）。
+ */
+export function recordTeamLabels(snapshot: ArchiveSnapshot): Record<BpTeam, string> {
+  return { A: snapshot.teamNames.A, B: snapshot.teamNames.B };
+}
+
+/** 双方选用区（九格竖排）；未完成的槽位保持空白。 */
+export function recordPickColumns(snapshot: ArchiveSnapshot): Record<BpTeam, TeamPickColumnView> {
   const result = {} as Record<BpTeam, TeamPickColumnView>;
   const bySlot = new Map(snapshot.operations.map((operation) => [operation.slotId, operation]));
   for (const team of ["A", "B"] as const) {
-    const rows = pickSlotRows(team, layout).map((row) =>
+    const rows = pickSlotRows(team).map((row) =>
       row.map(({ slotId, step }): PickSlotView => {
         const operation = bySlot.get(slotId);
         return {
@@ -73,9 +79,7 @@ export function recordPickColumns(
         };
       }),
     );
-    // 队名直接来自快照（开局要求双方队名已填写，实际不为空）；空值按
-    // 原样展示，不用「待选择」占位（归档房间的席位不再变化）。
-    result[team] = { teamName: snapshot.teamNames[team], rows };
+    result[team] = { rows };
   }
   return result;
 }

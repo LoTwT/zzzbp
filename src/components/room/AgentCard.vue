@@ -44,7 +44,7 @@ function onClick(): void {
       <AgentStatusAvatar :agent="agent" :status="status" />
     </span>
     <span
-      class="w-full truncate text-center text-xs text-neutral-700 xl:text-sm"
+      class="w-full truncate text-center text-xs text-(--text-secondary) xl:text-sm"
       :title="agent.fullName ?? agent.name"
       >{{ agent.name }}</span
     >
