@@ -18,7 +18,7 @@
 | `tests/rules/` | 纯规则与合同测试（Node 环境）。 | — |
 | `tests/web/` | 浏览器端纯逻辑回归（Node 环境，注入假传输）。 | — |
 | `tests/workers/` | Worker 与房间对象集成测试（真实 workerd）：HTTP/身份/Cookie（`rooms.test.ts`）、SQLite 持久化与实例重建（`room-storage.test.ts`）、WS 通道边界（`room-websocket.test.ts`）、命令管线与去重回执（`room-commands.test.ts`）、在线计数与休眠恢复（`room-presence.test.ts`）、生命周期裁决/归档快照/Alarm 调度与 90 天清理（`room-lifecycle.test.ts`），共享辅助 `ws-helpers.ts`。 | — |
-| `tests/e2e/` | 真实浏览器验收（PR10）：Vitest Node 项目 + Playwright 驱动真实 `cf dev`；`global-setup.ts` 管理服务与临时持久化目录，覆盖主线 26 步、断线/换人/核对、展示页与记录页，以及首页「最近参与」清单（`home-history.spec.ts`：记录时机、状态分流、清空确认、键盘与滚动）。 | — |
+| `tests/e2e/` | 真实浏览器验收（PR10）：Vitest Node 项目 + Playwright 驱动真实 `cf dev`；`global-setup.ts` 管理服务与临时持久化目录，覆盖主线 26 步、断线/换人/核对、展示页与记录页，以及首页「最近参与」清单（`home-history.spec.ts`：记录时机、状态分流、清空确认、在途响应不复活记录、键盘与滚动）。 | — |
 | `tests/measure/` | 本地资源基准（PR10，按需运行）：真实 workerd + SQLite 的消息量、表行数、SQLite 分配与本地耗时测量。 | — |
 
 `shared/` 不依赖前端与服务端实现；服务端把 `shared/` 的纯函数作为唯一状态

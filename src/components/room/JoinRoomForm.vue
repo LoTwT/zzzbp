@@ -15,6 +15,11 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  /**
+   * 提交通过校验、入房请求即将发出：父级据此捕获「最近参与」写入令牌，
+   * 使请求在途期间发生的移除/清空能作废本次写入。
+   */
+  (event: "joining"): void;
   (event: "joined", view: RoomMemberView): void;
   /**
    * 入房请求进行中房间被归档（410 ROOM_ARCHIVED）：父级沿原链接转入
@@ -51,6 +56,7 @@ async function submit(): Promise<void> {
   formError.value = null;
   if (nicknameError.value !== null) return;
   submitting.value = true;
+  emit("joining");
   const result = await joinRoom(props.roomId, nickname.value);
   submitting.value = false;
   if (result.ok) {

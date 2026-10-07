@@ -7,7 +7,7 @@ import JoinRoomForm from "../components/room/JoinRoomForm.vue";
 import RecordView from "../components/room/RecordView.vue";
 import RoomWorkspace from "../components/room/RoomWorkspace.vue";
 import { fetchRoomEntry } from "../room/api";
-import { roomHistory } from "../room/room-history";
+import { roomHistory, type RoomHistoryToken } from "../room/room-history";
 
 // 房间入口（/rooms/:roomId）：按生命周期与身份分流。
 // - 不存在/已过期（真正 404）：提示并提供「创建新房间」入口；
@@ -20,7 +20,9 @@ import { roomHistory } from "../room/room-history";
 //
 // 「最近参与」本机清单按服务端成功响应记录参与：有效身份恢复与以昵称
 // 加入都算参与（含普通观众）；仅停留在昵称表单、匿名展示页与归档页都
-// 不新增或更新记录（docs/specs/room-roles.md「本机参与记录」）。
+// 不新增或更新记录（docs/specs/room-roles.md「本机参与记录」）。写入令牌在
+// 动作发起时（入口读取、入房提交）捕获：请求在途期间记录被移除或清空则
+// 放弃本次写入，不让迟到响应复活记录。
 
 type Phase = "loading" | "not-found" | "join" | "room" | "record";
 
@@ -35,15 +37,14 @@ const loadFailed = ref(false);
 /** 回到首次入房时的原因提示（如 WS AUTH_FAILED：原身份已失效）。 */
 const joinNotice = ref<string | null>(null);
 
-/** 记录本机参与（房间名以服务端确认为准）；写入失败只影响本机清单提示。 */
-function rememberParticipation(name: string): void {
-  const token = roomHistory.begin(roomId);
-  roomHistory.commit(token, { roomName: name });
-}
+/** 入房请求发起时捕获的写入令牌：请求在途期间被移除/清空则放弃本次写入。 */
+let joinParticipation: RoomHistoryToken | null = null;
 
 async function loadEntry(): Promise<void> {
   phase.value = "loading";
   loadFailed.value = false;
+  // 令牌在请求发起时捕获：请求在途期间记录被移除或清空，成功响应不再写入。
+  const token = roomHistory.begin(roomId);
   const result = await fetchRoomEntry(roomId);
   if (result.ok) {
     if (result.value.kind === "archived") {
@@ -57,7 +58,7 @@ async function loadEntry(): Promise<void> {
     memberView.value = result.value.memberView;
     if (result.value.memberView !== null) {
       // 主动打开活动房间并成功恢复有效身份：算一次参与。
-      rememberParticipation(result.value.roomName);
+      roomHistory.commit(token, { roomName: result.value.roomName });
     }
     phase.value = result.value.memberView === null ? "join" : "room";
     return;
@@ -72,12 +73,20 @@ async function loadEntry(): Promise<void> {
   phase.value = "not-found";
 }
 
+/** 提交入房前捕获令牌：请求在途期间记录被移除或清空，成功后不再写入。 */
+function onJoining(): void {
+  joinParticipation = roomHistory.begin(roomId);
+}
+
 function onJoined(view: RoomMemberView): void {
   memberView.value = view;
   roomName.value = view.roomName;
   joinNotice.value = null;
-  // 以昵称成功加入（服务端成功响应）：算一次参与。
-  rememberParticipation(view.roomName);
+  // 以昵称成功加入（服务端成功响应）：算一次参与。令牌缺失说明本次加入没有
+  // 经过提交（不应发生），此时不写入，避免把迟到响应当成新的参与。
+  const token = joinParticipation;
+  joinParticipation = null;
+  if (token !== null) roomHistory.commit(token, { roomName: view.roomName });
   phase.value = "room";
 }
 
@@ -174,6 +183,7 @@ onMounted(loadEntry);
       :room-id="roomId"
       :room-name="roomName"
       :notice="joinNotice"
+      @joining="onJoining"
       @joined="onJoined"
       @archived="onJoinArchived"
       @not-found="onJoinNotFound"

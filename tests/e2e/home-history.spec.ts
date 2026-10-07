@@ -624,3 +624,171 @@ test("本机存储写入被拒时提示未保存，且不阻断创建与进入",
     await browser.close();
   }
 });
+
+test("会话存储端点访问即抛错（禁用存储）时不阻断创建、进入与记录", async () => {
+  const browser = await chromium.launch();
+  try {
+    const host = await newRoomContext(browser, "host", { width: 1440, height: 900 });
+    // 浏览器禁用存储时访问存储端点的属性本身抛 SecurityError（不是读写端点
+    // 抛错）：写入失败提示用的会话存储端点必须同样按不可用降级，不能让一次
+    // 成功写入变成未处理异常而中断进入房间。
+    await host.page.addInitScript(() => {
+      Object.defineProperty(window, "sessionStorage", {
+        configurable: true,
+        get: (): never => {
+          throw new DOMException("access denied", "SecurityError");
+        },
+      });
+    });
+
+    await host.page.goto(E2E_BASE_URL + "/");
+    const list = card(host.page);
+    await expectVisible(list.getByText("还没有参与记录，创建或加入房间后会自动记录。"));
+
+    // 创建成功照常进入房间，记录照常写入：会话存储不可用只影响失败提示的
+    // 跨刷新可见性。
+    const roomUrl = await createRoomViaUi(host, "最近参与·会话存储禁用赛", "主办小鱼");
+    expect(roomUrl).toContain("/rooms/");
+    await host.page.getByRole("heading", { name: "最近参与·会话存储禁用赛" }).waitFor();
+
+    await host.page.goto(E2E_BASE_URL + "/");
+    await expectCount(list.getByRole("listitem"), 1);
+    await expectVisible(list.getByText("最近参与·会话存储禁用赛", { exact: true }));
+    expect(Object.keys(await readStoredHistory(host.page))).toHaveLength(1);
+    assertNoPageErrors(host);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("身份恢复请求在途期间被另一标签页移除：迟到响应不复活记录，也不阻断进入", async () => {
+  const browser = await chromium.launch();
+  try {
+    const host = await newRoomContext(browser, "host", { width: 1440, height: 900 });
+    const roomName = "最近参与·在途赛";
+    const roomUrl = await createRoomViaUi(host, roomName, "主办小鱼");
+    const roomId = /\/rooms\/([^/?#]+)/.exec(roomUrl)?.[1] ?? "";
+    expect(roomId).not.toBe("");
+    await host.page.goto(E2E_BASE_URL + "/");
+    await expectCount(card(host.page).getByRole("listitem"), 1);
+
+    // 真实调用顺序：入口读取发出后才在另一标签页移除，响应晚于移除到达。
+    const waiting: Array<() => void> = [];
+    const entryPattern = new RegExp("/api/rooms/" + roomId + "$");
+    const historyKey = "zzzbp.recent-rooms.v1." + roomId;
+    await host.context.route(entryPattern, async (route) => {
+      await new Promise<void>((resolve) => waiting.push(resolve));
+      await route.continue();
+    });
+    await host.page.goto(roomUrl);
+    await waitFor(() => waiting.length === 1, "身份恢复请求没有进入在途状态");
+
+    // 本页的存储观察者由发起写入时的 begin() 安装：事件到达即作废在途写入。
+    // 该监听器先于本探针注册，探针只确认事件已送达本页。
+    const removalSeen = host.page.evaluate(
+      (key) =>
+        new Promise<void>((resolve) => {
+          window.addEventListener("storage", (event) => {
+            if (event.key === key) resolve();
+          });
+        }),
+      historyKey,
+    );
+    const remover = await newSameIdentityPage(host, "remover");
+    await remover.goto(E2E_BASE_URL + "/");
+    const removerCard = card(remover);
+    await expectCount(removerCard.getByRole("listitem"), 1);
+    await row(removerCard, roomName).getByRole("button", { name: "移除" }).click();
+    await removalSeen;
+    expect(await readStoredHistory(remover)).toEqual({});
+
+    // 放行迟到响应：身份恢复照常进入房间，但不复活已被移除的记录。
+    waiting.splice(0).forEach((release) => release());
+    await host.page.getByRole("heading", { name: roomName }).waitFor();
+    await host.context.unroute(entryPattern);
+    expect(await readStoredHistory(host.page)).toEqual({});
+    await expectVisible(removerCard.getByText("还没有参与记录，创建或加入房间后会自动记录。"));
+
+    // 用户再次主动进入该房间：正常记录，保护不越过用户意图。
+    await host.page.goto(roomUrl);
+    await host.page.getByRole("heading", { name: roomName }).waitFor();
+    await host.page.goto(E2E_BASE_URL + "/");
+    await expectCount(card(host.page).getByRole("listitem"), 1);
+    await expectVisible(card(host.page).getByText(roomName, { exact: true }));
+
+    assertNoPageErrors(host);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("入房请求在途期间清空历史：迟到响应不复活记录，也不阻断进入", async () => {
+  const browser = await chromium.launch();
+  try {
+    const host = await newRoomContext(browser, "host", { width: 1440, height: 900 });
+    const roomName = "最近参与·入房在途赛";
+    const roomUrl = await createRoomViaUi(host, roomName, "主办小鱼");
+    const roomId = /\/rooms\/([^/?#]+)/.exec(roomUrl)?.[1] ?? "";
+    expect(roomId).not.toBe("");
+    const historyKey = "zzzbp.recent-rooms.v1." + roomId;
+
+    const guest = await newRoomContext(browser, "guest", { width: 1280, height: 640 });
+    // 预置一条记录：不使用会随每次加载重置的注入脚本，避免掩盖真实因果。
+    await guest.page.goto(E2E_BASE_URL + "/");
+    await guest.page.evaluate(
+      (payload) => {
+        window.localStorage.setItem(payload.key, JSON.stringify(payload.entry));
+      },
+      {
+        key: historyKey,
+        entry: { version: 1, roomId, roomName, lastVisitedAt: "2026-10-07T06:00:00.000Z" },
+      },
+    );
+
+    // 真实调用顺序：入房请求发出后才清空历史，响应晚于清空到达。
+    const waiting: Array<() => void> = [];
+    const joinPattern = new RegExp("/api/rooms/" + roomId + "/members$");
+    await guest.context.route(joinPattern, async (route) => {
+      await new Promise<void>((resolve) => waiting.push(resolve));
+      await route.continue();
+    });
+    await guest.page.goto(roomUrl);
+    await guest.page.getByRole("heading", { name: "进入房间" }).waitFor();
+    await guest.page.fill("#join-nickname", "观众星河");
+    const removalSeen = guest.page.evaluate(
+      (key) =>
+        new Promise<void>((resolve) => {
+          window.addEventListener("storage", (event) => {
+            if (event.key === key) resolve();
+          });
+        }),
+      historyKey,
+    );
+    await guest.page.getByRole("button", { name: "进入房间", exact: true }).click();
+    await waitFor(() => waiting.length === 1, "入房请求没有进入在途状态");
+
+    // 同一上下文的另一标签页清空历史（真实二次确认）：本页经存储事件作废在途写入。
+    const remover = await newSameIdentityPage(guest, "guest-remover");
+    await remover.goto(E2E_BASE_URL + "/");
+    const removerCard = card(remover);
+    await expectCount(removerCard.getByRole("listitem"), 1);
+    await removerCard.getByRole("button", { name: "清空历史", exact: true }).click();
+    await removerCard.getByRole("button", { name: "确认清空", exact: true }).click();
+    expect(await readStoredHistory(remover)).toEqual({});
+    await removalSeen;
+
+    // 放行迟到响应：以昵称加入照常进入房间，但清空后不复活记录。
+    waiting.splice(0).forEach((release) => release());
+    await guest.page.getByRole("heading", { name: roomName }).waitFor();
+    await guest.context.unroute(joinPattern);
+    await expectVisible(removerCard.getByText("还没有参与记录，创建或加入房间后会自动记录。"));
+    await guest.page.goto(E2E_BASE_URL + "/");
+    await expectVisible(card(guest.page).getByText("还没有参与记录，创建或加入房间后会自动记录。"));
+    expect(await readStoredHistory(guest.page)).toEqual({});
+
+    assertNoPageErrors(guest);
+    assertNoPageErrors(host);
+  } finally {
+    await browser.close();
+  }
+});
