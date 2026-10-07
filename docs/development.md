@@ -77,7 +77,8 @@ Worker 的运行时与绑定类型由 `cf workers types`（或 Cloudflare Vite �
   BP 规则测试在对应 PR 中加入。
 - `tests/web/`：浏览器端纯逻辑回归，Node 环境：表单字段校验（中文文案与
   trim/码点边界）、选用区布局推导、房主面板派生与 WS 会话状态机（注入假
-  传输驱动，不依赖真实浏览器）。
+  传输驱动，不依赖真实浏览器）、本机「最近参与」清单的存储与状态映射
+  （注入假存储与假时钟）。
 - `tests/workers/`：Worker 与房间对象集成测试，运行在真实 workerd（miniflare）；
   通过 `@cloudflare/vitest-plugin` 的 `experimental.newConfig` 直接加载
   `cloudflare.config.ts`，与部署配置共用同一份入口、兼容性设置与 SQLite 房间对象
