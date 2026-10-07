@@ -146,7 +146,7 @@ const poolStatuses = computed<ReadonlyMap<string, AgentPoolStatus> | null>(() =>
   return computeAgentPoolStatuses(catalog, view.value.submissions);
 });
 
-// 禁用/选用槽位、队伍标识与空席「待选择」规则由 view-projections 统一
+// 禁用/选用槽位、队伍标识与空席队名占位规则由 view-projections 统一
 // 派生（与实时展示页共用同一份投影语义）；视图未到达时以空投影占位。
 const banSlots = computed(() =>
   view.value === null ? EMPTY_BAN_SLOTS : banSlotsOfView(view.value, catalogModel.value),

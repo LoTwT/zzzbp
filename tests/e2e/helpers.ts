@@ -483,7 +483,7 @@ export async function assertConfirmNotCovered(page: Page, label: string): Promis
 /**
  * 队伍标识位置：队名紧邻各自禁用区靠近中间的一侧（A 在禁用格右侧、
  * B 在禁用格左侧，两队名称分列赛事信息两旁），同处顶部区域且与禁用区
- * 同一行；文本与期望一致（空席为「待选择」）。
+ * 同一行；文本与期望一致（空席为「待设置」）。
  */
 export async function assertTeamNameBesideBans(
   page: Page,

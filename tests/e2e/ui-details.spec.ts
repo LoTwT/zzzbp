@@ -26,17 +26,20 @@ import {
   submitStep,
   waitForStatus,
 } from "./helpers";
+import type { RoomContext } from "./helpers";
 
 /**
- * 实时房间 UI 细节端到端验收：本人身份提示、两轮分隔、移除槽位数字与
- * 控制面板的关闭语义。
+ * 实时房间 UI 细节端到端验收：本人身份提示、两轮分隔、移除槽位数字、
+ * 控制面板的关闭语义，以及控制面板的固定底栏与成员列表滚动。
  *
  * 身份提示只依赖成员视图的 self 字段（昵称、是否房主、当前席位），因此
  * 覆盖房主、房主兼任选手、选手、观众与换人后的更新；面板关闭覆盖入口
  * 再点、外部首次点击（只收起面板、不触发底层预选）、Esc、关闭按钮与
  * 子视图，并断言焦点回到入口；分隔线与数字角标按槽位几何与可见文本
  * 判定（展示页/记录页的对应断言在 display-record.spec.ts，三页共用同一
- * 判定）。视口取最小支持宽度 1024×768，检查身份提示不遮挡中央确认按钮
+ * 判定）。面板结构按几何与可见文本判定：「显示与分享」固定在面板底部、
+ * 中间内容滚动不带动它，其他成员列表滚动时标题、列头与底部人数栏不动。
+ * 视口取最小支持宽度 1024×768，检查身份提示不遮挡中央确认按钮
  * 与右侧面板入口。
  */
 
@@ -274,8 +277,8 @@ test("实时房间：两轮分隔、槽位数字移除与队名/同高/背景一
     const roomUrl = await createRoomViaUi(host, "首版验收·分隔赛", "主办小鱼");
     await joinRoomViaUi(playerB, roomUrl, "选手乙");
 
-    // 待开始：空席队名在顶部禁用区旁显示「待选择」，选用区与中央池同高。
-    await assertTeamNameBesideBans(host.page, "实时房间 待开始", { A: "待选择", B: "待选择" });
+    // 待开始：空席队名在顶部禁用区旁显示「待设置」，选用区与中央池同高。
+    await assertTeamNameBesideBans(host.page, "实时房间 待开始", { A: "待设置", B: "待设置" });
     await assertPickColumnsMatchPool(host.page, "实时房间 待开始");
 
     await openPanel(host.page);
@@ -379,6 +382,228 @@ test("长队名 + 窄窗口：中央赛事信息不被挤压（1024×1080 连接
 
     assertNoPageErrors(host);
     assertNoPageErrors(player);
+  } finally {
+    await browser.close();
+  }
+}, 240_000);
+
+/**
+ * 主面板固定底栏探针：底部动作完整落在面板与视口内、中心点命中自身
+ * （未被其他元素遮挡），面板本体不滚动；同时把中间内容区滚到底，检查
+ * 底部动作与面板位置不随内容滚动移动。
+ */
+async function panelFooterProbe(page: Page): Promise<{
+  readonly openUsable: boolean;
+  readonly copyUsable: boolean;
+  readonly panelScrolls: boolean;
+  readonly regionScrollable: boolean;
+  readonly scrolledTo: number;
+  readonly footerFixed: boolean;
+}> {
+  return page.evaluate(() => {
+    const dialog = document.querySelector('[role="dialog"][aria-label="控制面板"]');
+    if (!(dialog instanceof HTMLElement)) throw new Error("未找到控制面板");
+    const panelBox = dialog.getBoundingClientRect();
+    const usable = (name: string) => {
+      const element = [...dialog.querySelectorAll("a, button")].find(
+        (candidate) => (candidate.textContent ?? "").trim() === name,
+      );
+      if (!(element instanceof HTMLElement)) throw new Error(`未找到「${name}」`);
+      const box = element.getBoundingClientRect();
+      const hit = document.elementFromPoint((box.left + box.right) / 2, (box.top + box.bottom) / 2);
+      return (
+        box.top >= panelBox.top - 0.5 &&
+        box.bottom <= panelBox.bottom + 0.5 &&
+        box.top >= 0 &&
+        box.bottom <= window.innerHeight &&
+        (hit === element || element.contains(hit))
+      );
+    };
+    // 中间内容区：比赛控制所在的最近一层纵向滚动容器。
+    const region = (() => {
+      const section = dialog.querySelector('section[aria-label="比赛控制"]');
+      let node: Element | null = section?.parentElement ?? null;
+      while (node !== null && node !== dialog) {
+        if (getComputedStyle(node).overflowY === "auto") return node;
+        node = node.parentElement;
+      }
+      return null;
+    })();
+    if (!(region instanceof HTMLElement)) throw new Error("未找到主面板中间内容区");
+    const footer = dialog.querySelector('section[aria-label="显示与分享"]');
+    if (!(footer instanceof HTMLElement)) throw new Error("未找到显示与分享");
+    const footerTopBefore = footer.getBoundingClientRect().top;
+    const panelTopBefore = panelBox.top;
+    region.scrollTop = 100_000;
+    const scrolledTo = region.scrollTop;
+    const footerFixed =
+      Math.abs(footer.getBoundingClientRect().top - footerTopBefore) <= 0.5 &&
+      Math.abs(dialog.getBoundingClientRect().top - panelTopBefore) <= 0.5;
+    region.scrollTop = 0;
+    return {
+      openUsable: usable("打开展示页"),
+      copyUsable: usable("复制房间链接"),
+      panelScrolls: dialog.scrollHeight > dialog.clientHeight + 1,
+      regionScrollable: region.scrollHeight > region.clientHeight + 1,
+      scrolledTo,
+      footerFixed,
+    };
+  });
+}
+
+/**
+ * 其他成员列表探针：标题、列头与人数栏在名单滚动前后位置不变，人数与
+ * 名单行数一致，人数栏位于名单下方且以上方横线分隔。
+ */
+async function membersListProbe(page: Page): Promise<{
+  readonly countText: string;
+  readonly rows: number;
+  readonly scrollable: boolean;
+  readonly scrolledTo: number;
+  readonly fixedChrome: boolean;
+  readonly separator: string;
+  readonly countBelowList: boolean;
+}> {
+  return page.evaluate(() => {
+    const dialog = document.querySelector('[role="dialog"][aria-label="控制面板"]');
+    if (!(dialog instanceof HTMLElement)) throw new Error("未找到控制面板");
+    const find = (selector: string, text: string) =>
+      [...dialog.querySelectorAll(selector)].find(
+        (node) => (node.textContent ?? "").trim() === text,
+      );
+    const heading = find("h2", "其他成员");
+    const countBar = [...dialog.querySelectorAll("p")].find((node) =>
+      /^共 \d+ 人$/.test((node.textContent ?? "").trim()),
+    );
+    const columnHeader = find("span", "昵称")?.parentElement ?? null;
+    const list = dialog.querySelector("ul");
+    const scroller = list?.parentElement ?? null;
+    if (
+      !(heading instanceof HTMLElement) ||
+      !(countBar instanceof HTMLElement) ||
+      !(columnHeader instanceof HTMLElement) ||
+      !(list instanceof HTMLElement) ||
+      !(scroller instanceof HTMLElement)
+    ) {
+      throw new Error("未找到其他成员视图的标题、列头、名单或人数栏");
+    }
+    const topOf = (element: HTMLElement) => element.getBoundingClientRect().top;
+    const before = [topOf(heading), topOf(columnHeader), topOf(countBar)];
+    scroller.scrollTop = 100_000;
+    const scrolledTo = scroller.scrollTop;
+    const after = [topOf(heading), topOf(columnHeader), topOf(countBar)];
+    const countBelowList =
+      countBar.getBoundingClientRect().top >= scroller.getBoundingClientRect().bottom - 0.5;
+    scroller.scrollTop = 0;
+    return {
+      countText: (countBar.textContent ?? "").trim(),
+      rows: list.querySelectorAll("li").length,
+      scrollable: scroller.scrollHeight > scroller.clientHeight + 1,
+      scrolledTo,
+      fixedChrome: before.every((value, index) => Math.abs(value - (after[index] ?? 0)) <= 0.5),
+      separator: getComputedStyle(countBar).borderTopWidth,
+      countBelowList,
+    };
+  });
+}
+
+/** 同一浏览器上下文换一个昵称重新入房：铺满成员列表用，避免开大量上下文。 */
+async function joinSpectator(ctx: RoomContext, roomUrl: string, nickname: string): Promise<void> {
+  await ctx.context.clearCookies();
+  await ctx.page.goto(roomUrl);
+  await ctx.page.getByRole("heading", { name: "进入房间" }).waitFor();
+  await ctx.page.fill("#join-nickname", nickname);
+  await ctx.page.getByRole("button", { name: "进入房间", exact: true }).click();
+  await ctx.page.getByText(`${nickname} · 观众`, { exact: true }).waitFor();
+}
+
+/** 打开/退出「其他成员」子视图。 */
+async function openMembers(page: Page): Promise<void> {
+  await panel(page)
+    .getByRole("button", { name: /其他成员/ })
+    .click();
+  await expectVisible(panel(page).getByText("昵称", { exact: true }));
+}
+
+async function backToMain(page: Page): Promise<void> {
+  await panel(page).getByRole("button", { name: "返回", exact: true }).click();
+  await expectVisible(panel(page).getByText("显示与分享", { exact: true }));
+}
+
+test("实时房间：控制面板底部动作固定与成员列表滚动（零/一/多成员）", async () => {
+  const browser = await chromium.launch();
+  try {
+    const host = await newRoomContext(browser, "host", { width: 1024, height: 768 });
+    const playerA = await newRoomContext(browser, "playerA", { width: 1024, height: 768 });
+    const guest = await newRoomContext(browser, "guest", { width: 1024, height: 768 });
+    const roomUrl = await createRoomViaUi(host, "首版验收·面板布局", "主办小鱼");
+    await joinRoomViaUi(playerA, roomUrl, "选手甲");
+
+    // 零人：两名成员都在席，双方选手以外没有其他成员。
+    await openPanel(host.page);
+    await assignSeatViaUi(host.page, "A", "选手甲");
+    await assignSeatViaUi(host.page, "B", "主办小鱼");
+
+    // ---- 1024×768（最小支持尺寸）：底部动作完整可见、可点击，内容区独立滚动 ----
+    const tight = await panelFooterProbe(host.page);
+    expect(tight.openUsable).toBe(true);
+    expect(tight.copyUsable).toBe(true);
+    expect(tight.panelScrolls).toBe(false);
+    expect(tight.regionScrollable).toBe(true);
+    expect(tight.scrolledTo).toBeGreaterThan(0);
+    expect(tight.footerFixed).toBe(true);
+    // 复制链接在最小尺寸下仍可操作（真实点击后按钮给出已复制反馈）。
+    await panel(host.page).getByRole("button", { name: "复制房间链接", exact: true }).click();
+    await expectVisible(panel(host.page).getByRole("button", { name: "已复制", exact: true }));
+
+    await openMembers(host.page);
+    const zero = await membersListProbe(host.page);
+    expect(zero.countText).toBe("共 0 人");
+    expect(zero.rows).toBe(0);
+    expect(zero.separator).toBe("1px");
+    expect(zero.countBelowList).toBe(true);
+    await backToMain(host.page);
+
+    // ---- 一人与多人：名单超出可用高度后仍只有名单滚动 ----
+    let oneChecked = false;
+    let manyChecked = false;
+    for (let index = 1; index <= 20 && !manyChecked; index += 1) {
+      await joinSpectator(guest, roomUrl, `观众${index}`);
+      await openMembers(host.page);
+      const state = await membersListProbe(host.page);
+      expect(state.countText).toBe(`共 ${index} 人`);
+      expect(state.rows).toBe(index);
+      expect(state.separator).toBe("1px");
+      expect(state.countBelowList).toBe(true);
+      expect(state.fixedChrome).toBe(true);
+      if (index === 1) {
+        expect(state.scrollable).toBe(false);
+        oneChecked = true;
+      }
+      if (state.scrollable) {
+        expect(state.scrolledTo).toBeGreaterThan(0);
+        manyChecked = true;
+      }
+      await backToMain(host.page);
+    }
+    expect(oneChecked).toBe(true);
+    expect(manyChecked).toBe(true);
+
+    // ---- 1536×864 与常规桌面：底部动作同样完整可见且可点击 ----
+    for (const size of [
+      { width: 1536, height: 864 },
+      { width: 1920, height: 1080 },
+    ]) {
+      await host.page.setViewportSize(size);
+      const state = await panelFooterProbe(host.page);
+      expect(state.openUsable, `${size.width}×${size.height} 打开展示页不可用`).toBe(true);
+      expect(state.copyUsable, `${size.width}×${size.height} 复制房间链接不可用`).toBe(true);
+      expect(state.panelScrolls).toBe(false);
+      expect(state.footerFixed).toBe(true);
+    }
+
+    assertNoPageErrors(host);
+    assertNoPageErrors(guest);
   } finally {
     await browser.close();
   }

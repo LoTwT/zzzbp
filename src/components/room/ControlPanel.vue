@@ -6,7 +6,6 @@ import {
   ChevronRight,
   ExternalLink,
   Link2,
-  Pencil,
   RotateCcw,
   Undo2,
   Users,
@@ -36,8 +35,13 @@ import {
 // desktop-host-panel-v3 / desktop-host-members-v2 / 更换选手 v3）。
 // 按角色展示内容：显示与分享为公共分组；比赛控制与队伍与成员仅房主。
 // 面板内子视图：主面板、其他成员、席位选择（待开始分配与暂停换人共用）。
-// 子列表的固定区（返回/关闭、目标队伍与当前选手、列头）不随列表滚动，
-// 只有列表本身在剩余区域滚动；换人列表按成员加入顺序以 memberId 认人，
+// 主面板固定面板标题与底部的「显示与分享」动作区（打开展示页与复制房间
+// 链接始终完整可见），只有「比赛控制」与「队伍与成员」两组在标题与底栏
+// 之间的剩余区域内滚动（docs/specs/room-layout.md「控制面板」）。
+// 成员与换人子列表的固定区各自不同（同上「成员列表与换人」）：「其他成员」
+// 固定返回/关闭、列头与底部「共 N 人」栏，只有名单在列头与人数栏之间滚动；
+// 席位选择固定返回/关闭、目标队伍与当前选手、列头与列表底部说明，只有名单
+// 在剩余区域内滚动，不展示人数。换人列表按成员加入顺序以 memberId 认人，
 // 换人成功后各行保持原位，仅原位更新角色、按钮与顶部当前选手。
 
 const props = defineProps<{
@@ -58,6 +62,28 @@ type Subview = "main" | "members" | "seat";
 /** 列表行/列头共用网格：圆点 + 昵称 + 角色 + 状态（+ 操作）。 */
 const MEMBER_GRID_CLASS = "grid grid-cols-[auto_minmax(0,1fr)_4rem_2rem] items-center gap-2";
 const SEAT_GRID_CLASS = "grid grid-cols-[auto_minmax(0,1fr)_4rem_2rem_4.5rem] items-center gap-2";
+/**
+ * 队伍与成员共用网格：左侧可见标签 + 输入/选手信息 + 右侧操作。
+ * 队名与选手两行同列，输入、信息和操作按同一右边界对齐。标签列收到
+ * 4rem（「左方队名」四字完整），操作列固定 5rem（容纳「更换选手」并让
+ * 保存/选择/更换三个按钮同宽），输入与选手信息取得剩余宽度。
+ */
+const TEAM_MEMBER_GRID_CLASS = "grid grid-cols-[4rem_minmax(0,1fr)_5rem] items-center gap-2";
+/** 标签列之后的缩进（4rem 标签列 + 0.5rem 列间距）：错误与提示与输入列左对齐。 */
+const TEAM_MEMBER_INDENT_CLASS = "pl-18";
+/**
+ * 队伍与成员四行的左侧字段标签：与输入内容同为 14px、20px 行高、单行
+ * 不折行；四字 14px 约 56px，在 4rem 标签列内完整展示。
+ */
+const TEAM_MEMBER_LABEL_CLASS = "text-sm font-medium whitespace-nowrap text-(--text-secondary)";
+/**
+ * 队名行与选手行的控件统一 36px 高：输入框 h-9（含边框）与操作按钮 h-9
+ * 同高，按钮文字用 flex 垂直居中，因此不再依赖各自的内边距。
+ */
+const TEAM_MEMBER_CONTROL_CLASS = "h-9";
+/** 操作按钮与输入内容同字号（text-sm），字重沿用 font-medium。 */
+const TEAM_MEMBER_ACTION_CLASS =
+  "flex h-9 w-full items-center justify-center rounded-lg border border-(--border-default) px-2 text-center text-sm font-medium focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50";
 
 const subview = ref<Subview>("main");
 const seatTeam = ref<BpTeam>("A");
@@ -394,244 +420,279 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
       </button>
     </header>
 
-    <!-- 主面板：整体滚动。 -->
-    <div v-if="subview === 'main'" class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
-      <!-- 比赛控制（仅房主） -->
-      <section v-if="isHost && hostView !== null" class="flex flex-col gap-2" aria-label="比赛控制">
-        <h3 class="text-xs font-semibold tracking-wide text-(--text-muted)">比赛控制</h3>
+    <!-- 主面板：标题固定；比赛控制与队伍成员在中间区域滚动；
+         「显示与分享」固定在面板底部，按钮不随内容滚动被裁切。 -->
+    <div v-if="subview === 'main'" class="flex min-h-0 flex-1 flex-col">
+      <div
+        v-if="isHost && hostView !== null"
+        class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 py-4"
+      >
+        <!-- 比赛控制（仅房主） -->
+        <section
+          v-if="isHost && hostView !== null"
+          class="flex flex-col gap-2"
+          aria-label="比赛控制"
+        >
+          <h3 class="text-xs font-semibold tracking-wide text-(--text-muted)">比赛控制</h3>
 
-        <template v-if="hostView.bpStatus === 'waiting'">
+          <template v-if="hostView.bpStatus === 'waiting'">
+            <button
+              type="button"
+              class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="commandButtonState('startBp', blockers.length > 0).disabled"
+              @click="session.sendCommand({ type: 'startBp' })"
+            >
+              {{ commandLabel("startBp", "开始中…", "开始 BP") }}
+            </button>
+            <ul
+              v-if="blockers.length > 0"
+              class="flex flex-col gap-0.5 text-xs text-(--text-muted)"
+            >
+              <li v-for="blocker in blockers" :key="blocker">· {{ blocker }}</li>
+            </ul>
+          </template>
           <button
+            v-else-if="hostView.bpStatus === 'running'"
             type="button"
             class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="commandButtonState('startBp', blockers.length > 0).disabled"
-            @click="session.sendCommand({ type: 'startBp' })"
+            :disabled="commandButtonState('pauseBp', false).disabled"
+            @click="session.sendCommand({ type: 'pauseBp' })"
           >
-            {{ commandLabel("startBp", "开始中…", "开始 BP") }}
+            {{ commandLabel("pauseBp", "暂停中…", "暂停 BP") }}
           </button>
-          <ul v-if="blockers.length > 0" class="flex flex-col gap-0.5 text-xs text-(--text-muted)">
-            <li v-for="blocker in blockers" :key="blocker">· {{ blocker }}</li>
-          </ul>
-        </template>
-        <button
-          v-else-if="hostView.bpStatus === 'running'"
-          type="button"
-          class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="commandButtonState('pauseBp', false).disabled"
-          @click="session.sendCommand({ type: 'pauseBp' })"
-        >
-          {{ commandLabel("pauseBp", "暂停中…", "暂停 BP") }}
-        </button>
-        <button
-          v-else-if="hostView.bpStatus === 'paused'"
-          type="button"
-          class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="commandButtonState('resumeBp', false).disabled"
-          @click="session.sendCommand({ type: 'resumeBp' })"
-        >
-          {{ commandLabel("resumeBp", "继续中…", "继续 BP") }}
-        </button>
-        <p
-          v-if="
-            scopeErrorText('startBp') ?? scopeErrorText('pauseBp') ?? scopeErrorText('resumeBp')
-          "
-          class="text-xs text-(--status-danger-fg)"
-          role="alert"
-        >
-          {{ scopeErrorText("startBp") ?? scopeErrorText("pauseBp") ?? scopeErrorText("resumeBp") }}
-        </p>
-        <!-- 按钮因状态切换消失时，原命令的挂起/核对状态由此提示承接。 -->
-        <p
-          v-if="controlFeedbackText !== null"
-          class="text-xs text-(--status-warning-fg)"
-          role="status"
-        >
-          {{ controlFeedbackText }}
-        </p>
-
-        <div class="flex flex-col gap-1">
           <button
+            v-else-if="hostView.bpStatus === 'paused'"
             type="button"
-            class="flex items-center justify-center gap-1.5 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="commandButtonState('undoBpStep', undoDescription === null).disabled"
-            @click="session.sendCommand({ type: 'undoBpStep' })"
+            class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="commandButtonState('resumeBp', false).disabled"
+            @click="session.sendCommand({ type: 'resumeBp' })"
           >
-            <Undo2 class="size-4" aria-hidden="true" />
-            {{ commandLabel("undoBpStep", "撤回中…", "撤回上一步") }}
+            {{ commandLabel("resumeBp", "继续中…", "继续 BP") }}
           </button>
-          <p v-if="undoDescription !== null" class="text-xs text-(--text-muted)">
-            可撤回：{{ undoDescription }}
-          </p>
           <p
-            v-if="scopeErrorText('undoBpStep')"
+            v-if="
+              scopeErrorText('startBp') ?? scopeErrorText('pauseBp') ?? scopeErrorText('resumeBp')
+            "
             class="text-xs text-(--status-danger-fg)"
             role="alert"
           >
-            {{ scopeErrorText("undoBpStep") }}
+            {{
+              scopeErrorText("startBp") ?? scopeErrorText("pauseBp") ?? scopeErrorText("resumeBp")
+            }}
           </p>
-        </div>
+          <!-- 按钮因状态切换消失时，原命令的挂起/核对状态由此提示承接。 -->
+          <p
+            v-if="controlFeedbackText !== null"
+            class="text-xs text-(--status-warning-fg)"
+            role="status"
+          >
+            {{ controlFeedbackText }}
+          </p>
 
-        <!-- 重开：独立一行 + 明确二次确认。 -->
-        <div class="mt-1 flex flex-col gap-1.5 border-t border-(--border-default) pt-3">
-          <button
-            v-if="!restartConfirming"
-            type="button"
-            class="flex items-center justify-center gap-1.5 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="commandButtonState('restartBp', false).disabled"
-            @click="restartConfirming = true"
-          >
-            <RotateCcw class="size-4" aria-hidden="true" />
-            重开本局
-          </button>
-          <div
-            v-else
-            class="flex flex-col gap-2 rounded-lg border border-(--status-warning-border) bg-(--status-warning-bg) p-3"
-          >
-            <p class="text-xs leading-5 text-(--status-warning-fg)">
-              重开将清空本局全部禁选结果与未提交预选；保留房间、成员、席位与队伍名，并返回待开始。
+          <div class="flex flex-col gap-1">
+            <button
+              type="button"
+              class="flex items-center justify-center gap-1.5 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="commandButtonState('undoBpStep', undoDescription === null).disabled"
+              @click="session.sendCommand({ type: 'undoBpStep' })"
+            >
+              <Undo2 class="size-4" aria-hidden="true" />
+              {{ commandLabel("undoBpStep", "撤回中…", "撤回上一步") }}
+            </button>
+            <p v-if="undoDescription !== null" class="text-xs text-(--text-muted)">
+              可撤回：{{ undoDescription }}
             </p>
-            <div class="flex gap-2">
-              <button
-                type="button"
-                class="flex-1 rounded-lg bg-(--status-danger) px-3 py-1.5 text-sm font-semibold text-(--text-inverse) focus-ring hover:bg-(--status-danger-fg) disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="commandButtonState('restartBp', false).disabled"
-                @click="session.sendCommand({ type: 'restartBp' })"
-              >
-                {{ commandLabel("restartBp", "重开中…", "确认重开") }}
-              </button>
-              <button
-                type="button"
-                class="flex-1 rounded-lg border border-(--border-default) bg-(--surface-elevated) px-3 py-1.5 text-sm font-medium focus-ring hover:bg-(--surface-subtle)"
-                @click="restartConfirming = false"
-              >
-                取消
-              </button>
-            </div>
             <p
-              v-if="scopeErrorText('restartBp')"
+              v-if="scopeErrorText('undoBpStep')"
               class="text-xs text-(--status-danger-fg)"
               role="alert"
             >
-              {{ scopeErrorText("restartBp") }}
+              {{ scopeErrorText("undoBpStep") }}
             </p>
           </div>
-        </div>
-      </section>
 
-      <!-- 队伍与成员（仅房主） -->
-      <section
-        v-if="isHost && hostView !== null"
-        class="mt-6 flex flex-col gap-3"
-        aria-label="队伍与成员"
-      >
-        <h3 class="text-xs font-semibold tracking-wide text-(--text-muted)">队伍与成员</h3>
-        <div v-for="team in ['A', 'B'] as const" :key="team" class="flex flex-col gap-2">
-          <div class="flex items-center gap-2">
-            <Pencil class="size-3.5 shrink-0 text-(--text-muted)" aria-hidden="true" />
-            <label class="sr-only" :for="`team-name-${team}`">
-              {{
-                hostView.teamNames[team] === "" ? sideLabel(team) : hostView.teamNames[team]
-              }}队伍名
-            </label>
-            <input
-              :id="`team-name-${team}`"
-              :value="teamDrafts[team].draft"
-              class="min-w-0 flex-1 rounded-lg border border-(--border-default) bg-(--surface-elevated) px-2.5 py-1.5 text-sm focus-ring"
-              :class="{ 'border-(--status-danger)': teamNameErrors[team] !== null }"
-              type="text"
-              :placeholder="`${sideLabel(team)}队伍名`"
-              @input="onTeamNameInput(team, ($event.target as HTMLInputElement).value)"
-            />
+          <!-- 重开：独立一行 + 明确二次确认。 -->
+          <div class="mt-1 flex flex-col gap-1.5 border-t border-(--border-default) pt-3">
             <button
+              v-if="!restartConfirming"
               type="button"
-              class="shrink-0 rounded-lg border border-(--border-default) px-2.5 py-1.5 text-xs font-medium focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="
-                commandButtonState(
-                  `setTeamName:${team}`,
-                  teamDrafts[team].draft.trim() === '' || !teamDrafts[team].dirty,
-                ).disabled
-              "
-              @click="saveTeamName(team)"
+              class="flex items-center justify-center gap-1.5 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="commandButtonState('restartBp', false).disabled"
+              @click="restartConfirming = true"
             >
-              {{ commandLabel(`setTeamName:${team}`, "保存中…", "保存") }}
+              <RotateCcw class="size-4" aria-hidden="true" />
+              重开本局
             </button>
-          </div>
-          <p
-            v-if="teamNameErrors[team] !== null || scopeErrorText(`setTeamName:${team}`) !== null"
-            class="text-xs text-(--status-danger-fg)"
-            role="alert"
-          >
-            {{ teamNameErrors[team] ?? scopeErrorText(`setTeamName:${team}`) }}
-          </p>
-
-          <div class="flex items-center gap-2">
-            <template v-if="hostView.seatOccupancy[team]">
-              <!-- 选手行：昵称 + 在线状态 + 更换入口（按状态开放）。 -->
-              <span
-                class="size-2 shrink-0 rounded-full"
-                :class="
-                  seatedMemberOf(hostView, team)?.online
-                    ? 'bg-(--status-success)'
-                    : 'bg-(--surface-muted)'
-                "
-                aria-hidden="true"
-              />
-              <span class="min-w-0 flex-1 truncate text-sm text-(--text-secondary)">
-                {{ seatedMemberOf(hostView, team)?.nickname ?? "待选择" }}
-                <span
-                  class="ml-1 text-xs"
-                  :class="
-                    seatedMemberOf(hostView, team)?.online
-                      ? 'text-(--status-success-fg)'
-                      : 'text-(--text-muted)'
-                  "
+            <div
+              v-else
+              class="flex flex-col gap-2 rounded-lg border border-(--status-warning-border) bg-(--status-warning-bg) p-3"
+            >
+              <p class="text-xs leading-5 text-(--status-warning-fg)">
+                重开将清空本局全部禁选结果与未提交预选；保留房间、成员、席位与队伍名，并返回待开始。
+              </p>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="flex-1 rounded-lg bg-(--status-danger) px-3 py-1.5 text-sm font-semibold text-(--text-inverse) focus-ring hover:bg-(--status-danger-fg) disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="commandButtonState('restartBp', false).disabled"
+                  @click="session.sendCommand({ type: 'restartBp' })"
                 >
-                  {{ seatedMemberOf(hostView, team)?.online ? "在线" : "离线" }}
-                </span>
-              </span>
-              <button
-                type="button"
-                class="shrink-0 rounded-lg border border-(--border-default) px-2.5 py-1.5 text-xs font-medium focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="
-                  hostView.bpStatus === 'running' || hostView.bpStatus === 'completed' || !connected
-                "
-                :title="hostView.bpStatus === 'running' ? '暂停后可更换选手' : undefined"
-                @click="openSeat(team)"
+                  {{ commandLabel("restartBp", "重开中…", "确认重开") }}
+                </button>
+                <button
+                  type="button"
+                  class="flex-1 rounded-lg border border-(--border-default) bg-(--surface-elevated) px-3 py-1.5 text-sm font-medium focus-ring hover:bg-(--surface-subtle)"
+                  @click="restartConfirming = false"
+                >
+                  取消
+                </button>
+              </div>
+              <p
+                v-if="scopeErrorText('restartBp')"
+                class="text-xs text-(--status-danger-fg)"
+                role="alert"
               >
-                更换选手
-              </button>
-            </template>
-            <template v-else>
-              <span class="min-w-0 flex-1 text-sm text-(--text-muted)">待选择</span>
-              <button
-                type="button"
-                class="shrink-0 rounded-lg border border-(--border-default) px-2.5 py-1.5 text-xs font-medium focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="hostView.bpStatus === 'completed' || !connected"
-                @click="openSeat(team)"
-              >
-                选择选手
-              </button>
-            </template>
+                {{ scopeErrorText("restartBp") }}
+              </p>
+            </div>
           </div>
-          <p v-if="hostView.bpStatus === 'running'" class="text-xs text-(--text-muted)">
-            暂停后可更换选手
-          </p>
-        </div>
+        </section>
 
-        <!-- 其他成员：单行入口，主面板不铺开名单。 -->
-        <button
-          type="button"
-          class="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-(--text-secondary) focus-ring hover:bg-(--surface-subtle)"
-          @click="subview = 'members'"
+        <!-- 队伍与成员（仅房主） -->
+        <section
+          v-if="isHost && hostView !== null"
+          class="flex flex-col gap-3"
+          aria-label="队伍与成员"
         >
-          <Users class="size-4 text-(--text-muted)" aria-hidden="true" />
-          其他成员（{{ otherRows.length }}）
-          <ChevronRight class="ml-auto size-4 text-(--text-muted)" aria-hidden="true" />
-        </button>
-      </section>
+          <h3 class="text-xs font-semibold tracking-wide text-(--text-muted)">队伍与成员</h3>
+          <!-- 两队各自成组：组内行距 8px，队与队之间 20px，分组界线清楚。 -->
+          <div class="flex flex-col gap-5">
+            <div v-for="team in ['A', 'B'] as const" :key="team" class="flex flex-col gap-2">
+              <!-- 队名行：左侧可见标签说明方位与内容，标签与输入框正确关联。 -->
+              <div :class="TEAM_MEMBER_GRID_CLASS">
+                <label :class="TEAM_MEMBER_LABEL_CLASS" :for="`team-name-${team}`">
+                  {{ sideLabel(team) }}队名
+                </label>
+                <input
+                  :id="`team-name-${team}`"
+                  :value="teamDrafts[team].draft"
+                  :class="[
+                    TEAM_MEMBER_CONTROL_CLASS,
+                    { 'border-(--status-danger)': teamNameErrors[team] !== null },
+                  ]"
+                  class="min-w-0 rounded-lg border border-(--border-default) bg-(--surface-elevated) px-2.5 text-sm focus-ring"
+                  type="text"
+                  :placeholder="`${sideLabel(team)}队伍名`"
+                  @input="onTeamNameInput(team, ($event.target as HTMLInputElement).value)"
+                />
+                <button
+                  type="button"
+                  :class="TEAM_MEMBER_ACTION_CLASS"
+                  :disabled="
+                    commandButtonState(
+                      `setTeamName:${team}`,
+                      teamDrafts[team].draft.trim() === '' || !teamDrafts[team].dirty,
+                    ).disabled
+                  "
+                  @click="saveTeamName(team)"
+                >
+                  {{ commandLabel(`setTeamName:${team}`, "保存中…", "保存") }}
+                </button>
+              </div>
+              <p
+                v-if="
+                  teamNameErrors[team] !== null || scopeErrorText(`setTeamName:${team}`) !== null
+                "
+                :class="TEAM_MEMBER_INDENT_CLASS"
+                class="text-xs text-(--status-danger-fg)"
+                role="alert"
+              >
+                {{ teamNameErrors[team] ?? scopeErrorText(`setTeamName:${team}`) }}
+              </p>
 
-      <!-- 显示与分享（所有角色；选用区固定九格竖排，无可切换项） -->
-      <section class="mt-6 flex flex-col gap-2" aria-label="显示与分享">
+              <!-- 选手行：与队名行同列，昵称、在线状态与席位操作按列对齐。 -->
+              <div :class="TEAM_MEMBER_GRID_CLASS">
+                <span :class="TEAM_MEMBER_LABEL_CLASS">{{ sideLabel(team) }}选手</span>
+                <template v-if="hostView.seatOccupancy[team]">
+                  <span class="flex min-w-0 items-center gap-2">
+                    <span
+                      class="size-2 shrink-0 rounded-full"
+                      :class="
+                        seatedMemberOf(hostView, team)?.online
+                          ? 'bg-(--status-success)'
+                          : 'bg-(--surface-muted)'
+                      "
+                      aria-hidden="true"
+                    />
+                    <span class="min-w-0 flex-1 truncate text-sm text-(--text-secondary)">
+                      {{ seatedMemberOf(hostView, team)?.nickname ?? "待选择" }}
+                      <span
+                        class="ml-1 text-xs"
+                        :class="
+                          seatedMemberOf(hostView, team)?.online
+                            ? 'text-(--status-success-fg)'
+                            : 'text-(--text-muted)'
+                        "
+                      >
+                        {{ seatedMemberOf(hostView, team)?.online ? "在线" : "离线" }}
+                      </span>
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    :class="TEAM_MEMBER_ACTION_CLASS"
+                    :disabled="
+                      hostView.bpStatus === 'running' ||
+                      hostView.bpStatus === 'completed' ||
+                      !connected
+                    "
+                    :title="hostView.bpStatus === 'running' ? '暂停后可更换选手' : undefined"
+                    @click="openSeat(team)"
+                  >
+                    更换选手
+                  </button>
+                </template>
+                <template v-else>
+                  <span class="min-w-0 text-sm text-(--text-muted)">待选择</span>
+                  <button
+                    type="button"
+                    :class="TEAM_MEMBER_ACTION_CLASS"
+                    :disabled="hostView.bpStatus === 'completed' || !connected"
+                    @click="openSeat(team)"
+                  >
+                    选择选手
+                  </button>
+                </template>
+              </div>
+              <p
+                v-if="hostView.bpStatus === 'running'"
+                :class="TEAM_MEMBER_INDENT_CLASS"
+                class="text-xs text-(--text-muted)"
+              >
+                暂停后可更换选手
+              </p>
+            </div>
+          </div>
+
+          <!-- 其他成员：单行入口，主面板不铺开名单。 -->
+          <button
+            type="button"
+            class="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-(--text-secondary) focus-ring hover:bg-(--surface-subtle)"
+            @click="subview = 'members'"
+          >
+            <Users class="size-4 text-(--text-muted)" aria-hidden="true" />
+            其他成员（{{ otherRows.length }}）
+            <ChevronRight class="ml-auto size-4 text-(--text-muted)" aria-hidden="true" />
+          </button>
+        </section>
+      </div>
+
+      <!-- 显示与分享（所有角色；固定底栏，不随上方内容滚动） -->
+      <section
+        class="flex shrink-0 flex-col gap-2 px-4 py-4"
+        :class="isHost && hostView !== null ? 'border-t border-(--border-default)' : ''"
+        aria-label="显示与分享"
+      >
         <h3 class="text-xs font-semibold tracking-wide text-(--text-muted)">显示与分享</h3>
         <a
           :href="displayHref"
@@ -653,10 +714,10 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
       </section>
     </div>
 
-    <!-- 其他成员列表：固定人数与列头，仅列表滚动。 -->
-    <div v-else-if="subview === 'members'" class="flex min-h-0 flex-1 flex-col px-4 py-4">
-      <div class="shrink-0 pb-2">
-        <p class="text-xs text-(--text-muted)">共 {{ otherRows.length }} 人</p>
+    <!-- 其他成员列表：标题与列头固定，名单在剩余区域内滚动；
+         「共 N 人」置于固定底栏，以上方横线与列表分隔。 -->
+    <div v-else-if="subview === 'members'" class="flex min-h-0 flex-1 flex-col">
+      <div class="shrink-0 px-4 pt-4">
         <div
           :class="MEMBER_GRID_CLASS"
           class="border-b border-(--border-subtle) pb-1 text-xs text-(--text-muted)"
@@ -667,7 +728,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           <span>状态</span>
         </div>
       </div>
-      <div class="min-h-0 flex-1 overflow-y-auto">
+      <div class="min-h-0 flex-1 overflow-y-auto px-4">
         <ul class="flex flex-col">
           <li
             v-for="member in otherRows"
@@ -695,6 +756,11 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           </li>
         </ul>
       </div>
+      <p
+        class="shrink-0 border-t border-(--border-default) px-4 py-2.5 text-xs text-(--text-muted)"
+      >
+        共 {{ otherRows.length }} 人
+      </p>
     </div>
 
     <!-- 席位选择：待开始分配与暂停换人共用同一列表；目标队伍与当前选手固定。 -->
