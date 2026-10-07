@@ -8,7 +8,7 @@ import { banStepsOfTeam, pickSlotRows } from "./pick-layout";
  * 公开预选的派生。
  *
  * 房间工作区、实时展示页与只读记录页共用同一份派生（单一事实来源）：
- * active 判定、空席「待选择」、公开预选展示与队伍名规则在各场景保持
+ * active 判定、空席队名占位、公开预选展示与队伍名规则在各场景保持
  * 一致，行结构一律由权威顺序（BP_STEPS）经 pick-layout 推导。输入是
  * 公开视图（RoomMemberView / DisplayView 同形），不含成员专属字段的
  * 依赖。只读记录页的快照投影见 record-view.ts（同一套行结构）。
@@ -39,14 +39,22 @@ export interface TeamPickColumnView {
 }
 
 /**
+ * 空席时顶部队伍标识的占位文案（本轮仅替换文案，不改判定）。是否使用它
+ * 仍只由席位占用决定：已保存队名但席位为空时同样显示该占位，席位有人但
+ * 队名未填写时仍可能为空；队名继续独立保留。选手空席的「待选择」是另一
+ * 处文案（由房主面板单独维护），不随本次调整变化。
+ */
+export const EMPTY_TEAM_LABEL = "待设置";
+
+/**
  * 双方队伍标识（顶部禁用区旁的队名）：以席位占用为准
- * （room-layout.md「双方队伍信息」）——空席一律显示「待选择」，队名
+ * （room-layout.md「双方队伍信息」）——空席一律显示「待设置」，队名
  * 独立保留；落座后显示队名（未命名时为空）。
  */
 export function teamLabelsOfView(view: BpPublicView): Record<BpTeam, string> {
   return {
-    A: view.seatOccupancy.A ? view.teamNames.A : "待选择",
-    B: view.seatOccupancy.B ? view.teamNames.B : "待选择",
+    A: view.seatOccupancy.A ? view.teamNames.A : EMPTY_TEAM_LABEL,
+    B: view.seatOccupancy.B ? view.teamNames.B : EMPTY_TEAM_LABEL,
   };
 }
 
@@ -108,7 +116,10 @@ export function pickColumnsOfView(
 /** 视图尚未到达时的空投影：首个权威视图到达前保持界面结构稳定。 */
 export const EMPTY_BAN_SLOTS: Record<BpTeam, ReadonlyArray<BanSlotView>> = { A: [], B: [] };
 
-export const EMPTY_TEAM_LABELS: Record<BpTeam, string> = { A: "待选择", B: "待选择" };
+export const EMPTY_TEAM_LABELS: Record<BpTeam, string> = {
+  A: EMPTY_TEAM_LABEL,
+  B: EMPTY_TEAM_LABEL,
+};
 
 export const EMPTY_PICK_COLUMNS: Record<BpTeam, TeamPickColumnView> = {
   A: { rows: [] },

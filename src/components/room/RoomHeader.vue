@@ -4,7 +4,7 @@ import type { BpSlotId, BpTeam } from "../../../shared/bp/steps";
 import type { AgentDisplayBase } from "../../room/room-catalog";
 import BanSlotRow from "./BanSlotRow.vue";
 
-// 顶部区域：两侧禁用区对称排列，队伍标识（队名，空席「待选择」）紧邻
+// 顶部区域：两侧禁用区对称排列，队伍标识（队名，空席「待设置」）紧邻
 // 各自禁用区靠近中间的一侧——A 方队名在禁用格右侧、B 方队名在禁用格
 // 左侧，两队名称分列赛事信息两旁；中间为房间名（赛事名）、房间状态与
 // 本机连接提示（docs/specs/room-layout.md「整体结构」「双方队伍信息」，

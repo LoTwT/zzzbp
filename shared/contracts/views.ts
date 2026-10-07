@@ -17,7 +17,7 @@ import { versionInfoSchema, type VersionInfo } from "./versions";
 
 /**
  * 席位占用：仅以匿名布尔表达 A/B 席是否有选手，支持「席位为空时显示
- * 待选择」的公开展示，不泄漏成员身份。
+ * 待设置」的公开展示，不泄漏成员身份。
  */
 export const seatOccupancySchema = z.object({
   A: z.boolean(),
