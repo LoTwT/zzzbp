@@ -7,6 +7,7 @@ import JoinRoomForm from "../components/room/JoinRoomForm.vue";
 import RecordView from "../components/room/RecordView.vue";
 import RoomWorkspace from "../components/room/RoomWorkspace.vue";
 import { fetchRoomEntry } from "../room/api";
+import { roomHistory } from "../room/room-history";
 
 // 房间入口（/rooms/:roomId）：按生命周期与身份分流。
 // - 不存在/已过期（真正 404）：提示并提供「创建新房间」入口；
@@ -16,6 +17,10 @@ import { fetchRoomEntry } from "../room/api";
 //   一致）；记录经普通 HTTP 快照读取，不建立成员/展示实时连接；
 // - 会话内身份失效（AUTH_FAILED）：回到首次入房表单重新加入。
 // 网络/服务端故障可重试，不误报「房间不存在」。
+//
+// 「最近参与」本机清单按服务端成功响应记录参与：有效身份恢复与以昵称
+// 加入都算参与（含普通观众）；仅停留在昵称表单、匿名展示页与归档页都
+// 不新增或更新记录（docs/specs/room-roles.md「本机参与记录」）。
 
 type Phase = "loading" | "not-found" | "join" | "room" | "record";
 
@@ -29,6 +34,12 @@ const snapshot = shallowRef<ArchiveSnapshot | null>(null);
 const loadFailed = ref(false);
 /** 回到首次入房时的原因提示（如 WS AUTH_FAILED：原身份已失效）。 */
 const joinNotice = ref<string | null>(null);
+
+/** 记录本机参与（房间名以服务端确认为准）；写入失败只影响本机清单提示。 */
+function rememberParticipation(name: string): void {
+  const token = roomHistory.begin(roomId);
+  roomHistory.commit(token, { roomName: name });
+}
 
 async function loadEntry(): Promise<void> {
   phase.value = "loading";
@@ -44,6 +55,10 @@ async function loadEntry(): Promise<void> {
     snapshot.value = null;
     roomName.value = result.value.roomName;
     memberView.value = result.value.memberView;
+    if (result.value.memberView !== null) {
+      // 主动打开活动房间并成功恢复有效身份：算一次参与。
+      rememberParticipation(result.value.roomName);
+    }
     phase.value = result.value.memberView === null ? "join" : "room";
     return;
   }
@@ -61,6 +76,8 @@ function onJoined(view: RoomMemberView): void {
   memberView.value = view;
   roomName.value = view.roomName;
   joinNotice.value = null;
+  // 以昵称成功加入（服务端成功响应）：算一次参与。
+  rememberParticipation(view.roomName);
   phase.value = "room";
 }
 

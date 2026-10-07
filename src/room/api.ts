@@ -78,10 +78,26 @@ async function failureOfResponse(response: Response): Promise<RoomHttpFailure> {
   return "server";
 }
 
-/** 网络层异常（连接失败、中断、超时）统一折叠为 network。 */
-async function requestJson(input: string, init: RequestInit): Promise<RoomHttpResult<unknown>> {
+/**
+ * 网络层异常（连接失败、中断、超时）统一折叠为 network。
+ *
+ * `anonymous: true` 显式不携带同源身份 Cookie（用于只读的匿名公开读取，
+ * 如首页清单的状态查询）；其余请求沿用浏览器默认的同源 Cookie 携带规则，
+ * 页面恢复身份与入房仍依赖 HttpOnly Cookie。请求初始化不直接写成
+ * `RequestInit` 字面量：本模块同时按浏览器与 Workers（测试环境）类型检查，
+ * 后者没有 `credentials` 字段。
+ */
+async function requestJson(
+  input: string,
+  init: RequestInit,
+  options: { readonly anonymous?: boolean } = {},
+): Promise<RoomHttpResult<unknown>> {
+  // credentials 取字面量类型（"omit"），既满足浏览器 RequestInit 的
+  // RequestCredentials 联合，也在 Workers 类型下作为多余字段被接受。
+  const anonymousInit = { ...init, credentials: "omit" as const };
+  const requestInit = options.anonymous === true ? anonymousInit : init;
   try {
-    const response = await fetch(input, init);
+    const response = await fetch(input, requestInit);
     if (!response.ok) {
       return { ok: false, reason: await failureOfResponse(response) };
     }
@@ -91,11 +107,16 @@ async function requestJson(input: string, init: RequestInit): Promise<RoomHttpRe
   }
 }
 
-/** `POST /api/rooms`：建房并直接成为房主；成功返回房间 ID。 */
+/**
+ * `POST /api/rooms`：建房并直接成为房主；成功返回房间 ID 与房间名。
+ *
+ * 房间名取服务端确认的成员视图字段（规范化与长度约束以服务端为准），
+ * 首页「最近参与」记录本机清单时据此保存，避免保存未规范化的输入。
+ */
 export async function createRoom(input: {
   readonly roomName: string;
   readonly nickname: string;
-}): Promise<RoomHttpResult<{ readonly roomId: string }>> {
+}): Promise<RoomHttpResult<{ readonly roomId: string; readonly roomName: string }>> {
   const body = createRoomRequestSchema.safeParse(input);
   if (!body.success) return { ok: false, reason: "invalid" };
   const response = await requestJson("/api/rooms", {
@@ -106,7 +127,10 @@ export async function createRoom(input: {
   if (!response.ok) return response;
   const parsed = createRoomResponseSchema.safeParse(response.value);
   return parsed.success
-    ? { ok: true, value: { roomId: parsed.data.roomId } }
+    ? {
+        ok: true,
+        value: { roomId: parsed.data.roomId, roomName: parsed.data.memberView.roomName },
+      }
     : { ok: false, reason: "network" };
 }
 
@@ -141,6 +165,43 @@ export async function fetchRoomEntry(roomId: string): Promise<
     ok: true,
     value: { kind: "live", roomName: parsed.data.roomName, memberView: parsed.data.memberView },
   };
+}
+
+/** 清单状态读取的成功结果：只表达生命周期与展示所需字段。 */
+export type RoomStatusView =
+  | { readonly kind: "live"; readonly roomName: string }
+  | { readonly kind: "archived"; readonly roomName: string; readonly expiresAt: string };
+
+/**
+ * `GET /api/rooms/:roomId` 的匿名公开读取：首页「最近参与」清单查询状态。
+ *
+ * 明确匿名读取（`anonymous: true` → `credentials: "omit"`）：不携带身份
+ * Cookie，因此不恢复身份、不创建成员、不建立成员或展示实时连接，也不会
+ * 因为刷新清单而延长保留期限（读取路径仍会执行已到期的归档/清理裁决，
+ * 这是既有的生命周期规则，见 docs/architecture.md「生命周期与归档记录」）。
+ * 房间不存在返回 not-found，网络/服务端故障返回可重试的失败，由界面区分
+ * 「不存在」与「暂时无法确认」。
+ */
+export async function fetchRoomStatus(roomId: string): Promise<RoomHttpResult<RoomStatusView>> {
+  const response = await requestJson(
+    `/api/rooms/${encodeURIComponent(roomId)}`,
+    { method: "GET" },
+    { anonymous: true },
+  );
+  if (!response.ok) return response;
+  const parsed = roomEntryResponseSchema.safeParse(response.value);
+  if (!parsed.success) return { ok: false, reason: "network" };
+  if (parsed.data.kind === "archived") {
+    return {
+      ok: true,
+      value: {
+        kind: "archived",
+        roomName: parsed.data.record.roomName,
+        expiresAt: parsed.data.record.expiresAt,
+      },
+    };
+  }
+  return { ok: true, value: { kind: "live", roomName: parsed.data.roomName } };
 }
 
 /** `POST /api/rooms/:roomId/members`：首次入房（新观众身份）。 */

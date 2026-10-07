@@ -18,7 +18,7 @@
 | `tests/rules/` | 纯规则与合同测试（Node 环境）。 | — |
 | `tests/web/` | 浏览器端纯逻辑回归（Node 环境，注入假传输）。 | — |
 | `tests/workers/` | Worker 与房间对象集成测试（真实 workerd）：HTTP/身份/Cookie（`rooms.test.ts`）、SQLite 持久化与实例重建（`room-storage.test.ts`）、WS 通道边界（`room-websocket.test.ts`）、命令管线与去重回执（`room-commands.test.ts`）、在线计数与休眠恢复（`room-presence.test.ts`）、生命周期裁决/归档快照/Alarm 调度与 90 天清理（`room-lifecycle.test.ts`），共享辅助 `ws-helpers.ts`。 | — |
-| `tests/e2e/` | 真实浏览器验收（PR10）：Vitest Node 项目 + Playwright 驱动真实 `cf dev`；`global-setup.ts` 管理服务与临时持久化目录，覆盖主线 26 步、断线/换人/核对、展示页与记录页。 | — |
+| `tests/e2e/` | 真实浏览器验收（PR10）：Vitest Node 项目 + Playwright 驱动真实 `cf dev`；`global-setup.ts` 管理服务与临时持久化目录，覆盖主线 26 步、断线/换人/核对、展示页与记录页，以及首页「最近参与」清单（`home-history.spec.ts`：记录时机、状态分流、清空确认、键盘与滚动）。 | — |
 | `tests/measure/` | 本地资源基准（PR10，按需运行）：真实 workerd + SQLite 的消息量、表行数、SQLite 分配与本地耗时测量。 | — |
 
 `shared/` 不依赖前端与服务端实现；服务端把 `shared/` 的纯函数作为唯一状态
@@ -45,6 +45,17 @@
 - 昵称仅用于展示，不用于身份查找；房间与成员 ID 由服务端生成（随机
   UUID），代理人 ID 来自构建时固定的数据目录；路由参数与各类 ID 均
   由服务端校验。
+- 浏览器本机另存一份「最近参与」房间清单（`localStorage`，一房一键、
+  按格式版本命名，实现见 `src/room/room-history.ts`）：只含房间 ID、
+  服务端确认的房间名与最近参与时间，不含身份 Cookie、成员凭据、成员
+  名单或 BP 快照，跳转路径由合法 roomId 生成。清单与身份互相独立：
+  删除条目或清空清单不改变 Cookie 与成员身份，清单内容也不构成身份或
+  权限来源（进入房间仍只由 Cookie 恢复角色）。存储被禁用、配额不足或
+  个别记录损坏只降级本功能：读取跳过损坏记录，写入失败返回原因，并由
+  首页清单提示未保存（提示是 `sessionStorage` 里的一个失败原因枚举，
+  只保留同标签页的会话状态，不含房间数据）。产品规则见
+  [本机参与记录](specs/room-roles.md#本机参与记录)，界面见
+  [最近参与](specs/room-layout.md#最近参与)。
 - 命令入口只接收服务端凭据解析出的 `RoomActor`；客户端载荷中的自报字段
   被 Zod 剥离，`targetMemberId` 只是席位的被安排对象，不是操作者身份。
 
@@ -56,7 +67,7 @@
 | 路径 | 行为 |
 |---|---|
 | `POST /api/rooms` | 建房（房名 + 首次昵称），创建者成为房主；响应房间 ID 与其成员视图，并经 Set-Cookie 下发房主身份。 |
-| `GET /api/rooms/:roomId` | 按生命周期分流：live 返回房名（携带有效身份时附成员视图以恢复角色，匿名为 null 供首次入房）；archived 返回只读快照（原房主、成员与匿名取得同一份，读取不建立实时连接、不刷新期限）；不存在或已清理返回 404 错误体。 |
+| `GET /api/rooms/:roomId` | 按生命周期分流：live 返回房名（携带有效身份时附成员视图以恢复角色，匿名为 null 供首次入房）；archived 返回只读快照（原房主、成员与匿名取得同一份，读取不建立实时连接、不刷新期限）；不存在或已清理返回 404 错误体。首页「最近参与」清单的状态读取以 `credentials: "omit"` 走同一入口的匿名响应，不恢复身份、不创建成员、不建立任何实时连接，也不延长保留期限；读取路径仍会执行已到期的归档/清理裁决（见[生命周期与归档记录](#生命周期与归档记录)）。 |
 | `POST /api/rooms/:roomId/members` | 新成员以昵称作为观众加入并取得新身份；携带有效身份时恢复原身份（昵称被忽略、凭据不轮换、不重复建成员）。新成员写入成功后向已连接的成员/展示连接广播最新视图。归档房间返回 410 `ROOM_ARCHIVED`（读取记录走 GET 房间入口，不需要加入成员）。 |
 | `GET /api/rooms/:roomId/catalog` | live 房间返回建房时固定的代理人目录快照（含来源版本）；只读，无需身份，不含成员或凭据数据，不计在线、不影响保留计时。归档房间返回 410（目录行随操作期数据清理，记录展示信息全部固定在快照内）。 |
 | `GET /api/rooms/:roomId/ws` | 成员实时连接升级（详见[WebSocket 通道](#websocket-通道)）。非 GET 返回 405；缺少 `Upgrade: websocket` 头返回 426；第三方 Origin 返回 403。 |
