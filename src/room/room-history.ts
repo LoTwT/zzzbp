@@ -20,9 +20,10 @@ import { roomNameSchema } from "../../shared/room";
  * - 存储被禁用、配额不足或个别记录损坏时只降级本功能：读取跳过损坏记录，
  *   写入返回失败结果供界面提示；任何情况都不抛出异常，也不阻断建房、入房
  *   与 BP。
- * - 写入前先 begin()，记录在写入落地前被移除（本页移除或经 storage 事件
- *   感知的其他标签页操作）则 commit() 放弃，避免「移除后到达的延迟响应」
- *   把记录复活；用户再次主动进入房间会开启新的写入，可以重新记录。
+ * - 写入前先 begin()（本页移除直接作废；其他标签页的移除/清空经安装的
+ *   storage 观察者作废），并调用方在动作发起时捕获令牌：记录在写入落地前
+ *   被移除则 commit() 放弃，避免「移除后到达的延迟响应」把记录复活；
+ *   用户再次主动进入房间会开启新的写入，可以重新记录。
  */
 
 /** 记录格式版本：键名与载荷同时带版本，避免旧格式被误读。 */
@@ -96,7 +97,11 @@ export interface RoomHistoryStorage {
 export interface RoomHistory {
   /** 读取全部记录（按最近参与时间倒序）；每次读取都从存储取最新状态。 */
   list(): RoomHistoryList;
-  /** 开始一次参与写入；用于让可能在途的延迟响应在记录被移除后放弃。 */
+  /**
+   * 开始一次参与写入；用于让可能在途的延迟响应在记录被移除后放弃。
+   * 首次调用安装其他标签页变化的观察者：请求在途期间发生的移除或清空
+   * 同样作废这次写入，不依赖界面组件是否订阅。
+   */
   begin(roomId: string): RoomHistoryToken;
   /** 以服务端确认的房间名写入记录；失败返回原因，供界面提示。 */
   commit(token: RoomHistoryToken, input: { readonly roomName: string }): RoomHistoryWriteResult;
@@ -104,7 +109,7 @@ export interface RoomHistory {
   remove(roomId: string): RoomHistoryWriteResult;
   /** 清空本功能记录（不回退删除其他键，也不触碰任何 Cookie）。 */
   clear(): RoomHistoryWriteResult;
-  /** 订阅其他标签页的存储变化；返回取消订阅函数。 */
+  /** 订阅其他标签页的存储变化以同步界面；返回取消订阅函数。 */
   subscribe(listener: () => void): () => void;
   /**
    * 处理存储变化（storage 事件或测试注入）：删除记录会作废对应的
@@ -189,17 +194,30 @@ export function createRoomHistory(options: RoomHistoryOptions = {}): RoomHistory
   /** 清空代次：清空历史后自增，作废所有在先的未提交写入。 */
   let clearGeneration = 0;
   let pendingWriteFailure: Exclude<RoomHistoryWriteFailure, "stale"> | null = null;
+  /** 其他标签页变化的界面监听器（由 subscribe 登记）；失效判定由内部观察者负责。 */
+  const externalListeners = new Set<() => void>();
+  /** 其他标签页变化的观察者只安装一次。 */
+  let externalObserverInstalled = false;
 
   function storage(): RoomHistoryStorage | null {
     return injectedStorage === undefined ? browserStorage() : injectedStorage;
   }
 
-  /** 失败提示的会话级存储端点；不可用时只保留本次页面会话内的内存提示。 */
+  /**
+   * 失败提示的会话级存储端点；不可用时只保留本次页面会话内的内存提示。
+   * 禁用存储时访问端点本身也可能抛错（如 SecurityError），与 `localStorage`
+   * 的读取一致地按不可用降级：提示不是记录，任何情况都不能让
+   * fail()/succeed()/takeWriteFailure() 抛出而影响建房、入房与 BP。
+   */
   function sessionStore(): RoomHistoryStorage | null {
     if (injectedSessionStorage !== undefined) return injectedSessionStorage;
-    const candidate = (globalThis as { sessionStorage?: unknown }).sessionStorage;
-    if (candidate === undefined || candidate === null) return null;
-    return candidate as RoomHistoryStorage;
+    try {
+      const candidate = (globalThis as { sessionStorage?: unknown }).sessionStorage;
+      if (candidate === undefined || candidate === null) return null;
+      return candidate as RoomHistoryStorage;
+    } catch {
+      return null;
+    }
   }
 
   function clearSessionFailure(): void {
@@ -304,6 +322,9 @@ export function createRoomHistory(options: RoomHistoryOptions = {}): RoomHistory
   }
 
   function begin(roomId: string): RoomHistoryToken {
+    // 发起写入的页面必须能感知其他标签页的移除/清空：观察者在此安装，因此
+    // 请求在途期间发生的移除同样会作废这次写入（不依赖界面组件是否订阅）。
+    ensureExternalObserver();
     return {
       roomId,
       removalGeneration: removalGenerationOf(roomId),
@@ -379,15 +400,28 @@ export function createRoomHistory(options: RoomHistoryOptions = {}): RoomHistory
     invalidate(change.key.slice(ROOM_HISTORY_KEY_PREFIX.length));
   }
 
-  function subscribe(listener: () => void): () => void {
+  /**
+   * 安装其他标签页变化的观察者：删除与清空经 storage 事件作废本页未提交
+   * 写入，随后通知界面监听器。非浏览器环境没有窗口端点，只作本页内的
+   * 失效判定。
+   */
+  function ensureExternalObserver(): void {
+    if (externalObserverInstalled) return;
     const target = storageWindow();
-    if (target === null) return () => {};
-    const handler = (event: StorageChangeEvent): void => {
+    if (target === null) return;
+    externalObserverInstalled = true;
+    target.addEventListener("storage", (event) => {
       handleExternalChange({ key: event.key, newValue: event.newValue });
-      listener();
+      for (const listener of externalListeners) listener();
+    });
+  }
+
+  function subscribe(listener: () => void): () => void {
+    ensureExternalObserver();
+    externalListeners.add(listener);
+    return () => {
+      externalListeners.delete(listener);
     };
-    target.addEventListener("storage", handler);
-    return () => target.removeEventListener("storage", handler);
   }
 
   function takeWriteFailure(): Exclude<RoomHistoryWriteFailure, "stale"> | null {

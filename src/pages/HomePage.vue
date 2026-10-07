@@ -44,6 +44,8 @@ async function submit(): Promise<void> {
   if (result.ok) {
     // 以服务端成功响应为准记录参与（房间名取服务端确认值）。写入失败只
     // 影响本机清单，由清单在下次展示时提示，不阻断进入房间。
+    // 令牌在此捕获：建房前房间 ID 尚不存在，没有可被移除的在途记录；用户
+    // 随即进入该房间，属于「再次主动进入可重新记录」。
     const token = roomHistory.begin(result.value.roomId);
     roomHistory.commit(token, { roomName: result.value.roomName });
     await router.push({ name: "room", params: { roomId: result.value.roomId } });

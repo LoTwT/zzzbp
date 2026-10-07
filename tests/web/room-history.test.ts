@@ -265,6 +265,84 @@ test("写入失败提示在同标签页整页刷新后仍可见，取出即清�
   expect(storage.has(roomHistoryKey("room-a"))).toBe(false);
 });
 
+test("会话存储端点本身抛错（禁用存储的访问器）时，写入与提示都不抛出", () => {
+  const storage = new FakeStorage();
+  const history = createRoomHistory({
+    storage,
+    now: () => new Date("2026-10-07T02:00:00.000Z"),
+  });
+  // 浏览器禁用存储时，访问 `window.sessionStorage` 属性本身可能抛 SecurityError
+  // （不是读写端点抛错）：只能降级提示的跨刷新可见性，不得让写入失败返回变成异常。
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    get() {
+      const error = new Error("access denied") as Error & { name: string };
+      error.name = "SecurityError";
+      throw error;
+    },
+  });
+  try {
+    // 成功路径同样会写会话标记（清除失败提示）：不得因为端点抛错而失败。
+    expect(history.commit(history.begin("room-a"), { roomName: "甲" })).toEqual({ ok: true });
+    expect(history.remove("room-a")).toEqual({ ok: true });
+    expect(history.clear()).toEqual({ ok: true });
+
+    storage.failWrite = "quota";
+    expect(history.commit(history.begin("room-b"), { roomName: "乙" })).toEqual({
+      ok: false,
+      reason: "quota",
+    });
+    // 会话端点不可用时提示仍保留在本次页面会话内（内存），取出即清除。
+    expect(history.takeWriteFailure()).toBe("quota");
+    expect(history.takeWriteFailure()).toBeNull();
+  } finally {
+    if (descriptor === undefined)
+      delete (globalThis as { sessionStorage?: unknown }).sessionStorage;
+    else Object.defineProperty(globalThis, "sessionStorage", descriptor);
+  }
+});
+
+test("begin 安装其他标签页变化的观察者：在途写入能被其他标签页的移除与清空作废", () => {
+  const storage = new FakeStorage();
+  type ChangeEvent = { key: string | null; newValue: string | null };
+  const listeners = new Set<(event: ChangeEvent) => void>();
+  // 页面必须在发起写入时就能感知其他标签页的移除/清空，而不是依赖界面组件的订阅。
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      addEventListener: (type: string, listener: (event: ChangeEvent) => void): void => {
+        if (type === "storage") listeners.add(listener);
+      },
+      removeEventListener: (type: string, listener: (event: ChangeEvent) => void): void => {
+        if (type === "storage") listeners.delete(listener);
+      },
+    },
+  });
+  try {
+    const history = createRoomHistory({ storage });
+    const removed = history.begin("room-a");
+    const cleared = history.begin("room-b");
+    expect(listeners.size).toBe(1);
+
+    for (const listener of listeners) {
+      listener({ key: roomHistoryKey("room-a"), newValue: null });
+      listener({ key: null, newValue: null });
+    }
+    expect(history.commit(removed, { roomName: "甲" })).toEqual({ ok: false, reason: "stale" });
+    expect(history.commit(cleared, { roomName: "乙" })).toEqual({ ok: false, reason: "stale" });
+    expect(history.list().entries).toEqual([]);
+
+    // 再次主动参与可重新记录；观察者只安装一次。
+    expect(history.commit(history.begin("room-a"), { roomName: "甲" })).toEqual({ ok: true });
+    expect(listeners.size).toBe(1);
+  } finally {
+    if (descriptor === undefined) delete (globalThis as { window?: unknown }).window;
+    else Object.defineProperty(globalThis, "window", descriptor);
+  }
+});
+
 test("写入恢复后清除失败提示；会话存储不可用时只保留内存提示", () => {
   const storage = new FakeStorage();
   const session = new FakeStorage();
