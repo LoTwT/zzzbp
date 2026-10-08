@@ -9,7 +9,7 @@ import {
   type AgentPoolQuery,
 } from "../../../shared/agents/filter";
 import type { AgentClassification } from "../../../shared/agents/schema";
-import { SlidersHorizontal } from "@lucide/vue";
+import { ArrowLeft, SlidersHorizontal } from "@lucide/vue";
 import AgentCard from "./AgentCard.vue";
 import AgentPoolToolbar from "./AgentPoolToolbar.vue";
 import ControlPanel from "./ControlPanel.vue";
@@ -432,9 +432,11 @@ const selfIdentityText = computed(() =>
         </p>
 
         <!--
-          底部操作区（固定，不被面板覆盖）：确认按钮相对整个池区几何居中，
-          控制面板入口固定右下，二者始终可见可达；左侧为本人身份常驻提示
-          （昵称 + 当前身份，长昵称截断，不遮挡中央确认按钮与右侧入口）。
+          底部操作区（固定，不被面板覆盖）：返回首页入口在各角色底栏的最
+          左侧（房主/选手/观众一致），其后为本人身份常驻提示（昵称 + 当前
+          身份）；确认按钮相对整个池区几何居中，控制面板入口固定右下。
+          左侧一组限宽为「池区半宽减确认按钮半宽」，窄窗口先截断身份提示
+          （保留完整名称的悬停提示），不遮挡居中确认按钮与右侧入口。
         -->
         <div class="shrink-0 border-t border-(--border-default) px-3 py-2.5">
           <!-- 挂起操作提示：与确认按钮可见性解耦（轮到对方/完成/被换下仍可见）。 -->
@@ -465,17 +467,28 @@ const selfIdentityText = computed(() =>
             {{ confirmErrorText }}
           </p>
           <div class="relative flex min-h-10 items-center gap-3">
-            <p
-              class="max-w-[calc(50%-6rem)] min-w-0 truncate text-xs text-(--text-muted)"
-              :title="selfIdentityText"
-              aria-live="polite"
-            >
-              {{ selfIdentityText }}
-            </p>
+            <!-- 返回首页：明确走首页路由（不用浏览器返回）；离开页面沿用既有
+                 WS 卸载与离线暂停规则，不删除身份凭据、不清除本机参与记录。 -->
+            <div class="flex max-w-[calc(50%-4.75rem)] min-w-0 items-center gap-3">
+              <RouterLink
+                to="/"
+                class="flex shrink-0 items-center gap-1 rounded px-1.5 py-1 text-xs font-medium text-(--text-muted) focus-ring hover:bg-(--surface-subtle) hover:text-(--text-secondary)"
+              >
+                <ArrowLeft class="size-4" aria-hidden="true" />
+                返回首页
+              </RouterLink>
+              <p
+                class="min-w-0 truncate text-xs text-(--text-muted)"
+                :title="selfIdentityText"
+                aria-live="polite"
+              >
+                {{ selfIdentityText }}
+              </p>
+            </div>
             <button
               v-if="confirmVisible"
               type="button"
-              class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-(--accent-primary) px-10 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
+              class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-(--accent-primary) px-10 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring enabled:hover:bg-(--accent-primary-hover) enabled:hover:text-(--accent-contrast-hover) enabled:active:bg-(--accent-primary-active) enabled:active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="confirmDisabled"
               @click="sendConfirm"
             >

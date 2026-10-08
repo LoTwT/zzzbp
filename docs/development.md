@@ -138,6 +138,11 @@ socket 并 `accept()`（与 Worker 代理 DO 的官方模式一致）；当前�
   `neutral`/`lavender` 等固定色阶（图像遮罩、禁选状态遮罩按实际用途处理）。
   主题入口、密度变量与槽位动效见 `src/assets/main.css`；本轮不引入主题切换、
   深色（`.dark`）或 Neo-Brutalism 方案。
+- 可禁用的原生按钮（首页创建、首次入房、禁选确认、控制面板与清单操作等）用
+  Tailwind 的 `enabled:` 变体限定 `hover:`／`active:` 反馈：禁用时保留禁用外观
+  与 `disabled:cursor-not-allowed`，背景与文字不随悬停或按压改变，也不提交；
+  启用后悬停与按压反馈照常。代理人池卡片的悬停高亮已在模板中按可用性条件
+  渲染，同一约定不重复实现。
 - 提交钩子由 simple-git-hooks + lint-staged 组成：pre-commit 对暂存文件先执行
   `oxlint --fix` 再执行 `oxfmt`（同一批文件顺序执行，避免并发写入），并保留
   lint-staged 默认的部分暂存保护。`pnpm install` 时自动安装钩子。

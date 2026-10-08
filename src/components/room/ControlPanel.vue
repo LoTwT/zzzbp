@@ -83,7 +83,7 @@ const TEAM_MEMBER_LABEL_CLASS = "text-sm font-medium whitespace-nowrap text-(--t
 const TEAM_MEMBER_CONTROL_CLASS = "h-9";
 /** 操作按钮与输入内容同字号（text-sm），字重沿用 font-medium。 */
 const TEAM_MEMBER_ACTION_CLASS =
-  "flex h-9 w-full items-center justify-center rounded-lg border border-(--border-default) px-2 text-center text-sm font-medium focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50";
+  "flex h-9 w-full items-center justify-center rounded-lg border border-(--border-default) px-2 text-center text-sm font-medium focus-ring enabled:hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50";
 
 const subview = ref<Subview>("main");
 const seatTeam = ref<BpTeam>("A");
@@ -438,7 +438,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           <template v-if="hostView.bpStatus === 'waiting'">
             <button
               type="button"
-              class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
+              class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring enabled:hover:bg-(--accent-primary-hover) enabled:hover:text-(--accent-contrast-hover) enabled:active:bg-(--accent-primary-active) enabled:active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="commandButtonState('startBp', blockers.length > 0).disabled"
               @click="session.sendCommand({ type: 'startBp' })"
             >
@@ -454,7 +454,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           <button
             v-else-if="hostView.bpStatus === 'running'"
             type="button"
-            class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
+            class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring enabled:hover:bg-(--accent-primary-hover) enabled:hover:text-(--accent-contrast-hover) enabled:active:bg-(--accent-primary-active) enabled:active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="commandButtonState('pauseBp', false).disabled"
             @click="session.sendCommand({ type: 'pauseBp' })"
           >
@@ -463,7 +463,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           <button
             v-else-if="hostView.bpStatus === 'paused'"
             type="button"
-            class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
+            class="rounded-lg bg-(--accent-primary) px-3 py-2 text-sm font-semibold text-(--accent-contrast) focus-ring enabled:hover:bg-(--accent-primary-hover) enabled:hover:text-(--accent-contrast-hover) enabled:active:bg-(--accent-primary-active) enabled:active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="commandButtonState('resumeBp', false).disabled"
             @click="session.sendCommand({ type: 'resumeBp' })"
           >
@@ -492,7 +492,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           <div class="flex flex-col gap-1">
             <button
               type="button"
-              class="flex items-center justify-center gap-1.5 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
+              class="flex items-center justify-center gap-1.5 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring enabled:hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="commandButtonState('undoBpStep', undoDescription === null).disabled"
               @click="session.sendCommand({ type: 'undoBpStep' })"
             >
@@ -516,7 +516,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
             <button
               v-if="!restartConfirming"
               type="button"
-              class="flex items-center justify-center gap-1.5 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
+              class="flex items-center justify-center gap-1.5 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring enabled:hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="commandButtonState('restartBp', false).disabled"
               @click="restartConfirming = true"
             >
@@ -533,7 +533,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
               <div class="flex gap-2">
                 <button
                   type="button"
-                  class="flex-1 rounded-lg bg-(--status-danger) px-3 py-1.5 text-sm font-semibold text-(--text-inverse) focus-ring hover:bg-(--status-danger-fg) disabled:cursor-not-allowed disabled:opacity-50"
+                  class="flex-1 rounded-lg bg-(--status-danger) px-3 py-1.5 text-sm font-semibold text-(--text-inverse) focus-ring enabled:hover:bg-(--status-danger-fg) disabled:cursor-not-allowed disabled:opacity-50"
                   :disabled="commandButtonState('restartBp', false).disabled"
                   @click="session.sendCommand({ type: 'restartBp' })"
                 >
@@ -837,7 +837,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
               class="justify-self-end rounded-lg border px-2.5 py-1 text-xs font-medium focus-ring disabled:cursor-not-allowed disabled:opacity-50"
               :class="
                 row.eligible
-                  ? 'border-(--accent-primary) text-(--text-accent) hover:bg-(--accent-soft)'
+                  ? 'border-(--accent-primary) text-(--text-accent) enabled:hover:bg-(--accent-soft)'
                   : 'border-(--border-default) text-(--text-muted)'
               "
               :disabled="

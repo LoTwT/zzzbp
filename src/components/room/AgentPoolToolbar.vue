@@ -135,7 +135,7 @@ watch(
             <TooltipTrigger as-child>
               <button
                 type="button"
-                class="flex size-6 items-center justify-center rounded border border-(--border-default) text-(--text-muted) focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-40"
+                class="flex size-6 items-center justify-center rounded border border-(--border-default) text-(--text-muted) focus-ring enabled:hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-40"
                 :disabled="query.elementIds.length === 0"
                 aria-label="清除属性筛选"
                 @click="clearElements"
@@ -175,7 +175,7 @@ watch(
             <TooltipTrigger as-child>
               <button
                 type="button"
-                class="flex size-6 items-center justify-center rounded border border-(--border-default) text-(--text-muted) focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-40"
+                class="flex size-6 items-center justify-center rounded border border-(--border-default) text-(--text-muted) focus-ring enabled:hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-40"
                 :disabled="query.specialtyIds.length === 0"
                 aria-label="清除特性筛选"
                 @click="clearSpecialties"

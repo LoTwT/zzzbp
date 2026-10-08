@@ -172,7 +172,7 @@ onBeforeUnmount(() => {
       <div v-if="showList" class="flex shrink-0 items-center gap-5">
         <button
           type="button"
-          class="rounded-lg border border-(--border-default) px-3 py-1.5 text-xs font-medium focus-ring hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-(--border-default) px-3 py-1.5 text-xs font-medium focus-ring enabled:hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="refreshing"
           @click="refresh"
         >

@@ -131,7 +131,7 @@ async function submit(): Promise<void> {
 
         <button
           type="submit"
-          class="w-full rounded-lg bg-(--accent-primary) px-4 py-2.5 text-sm font-semibold text-(--accent-contrast) focus-ring hover:bg-(--accent-primary-hover) hover:text-(--accent-contrast-hover) active:bg-(--accent-primary-active) active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
+          class="w-full rounded-lg bg-(--accent-primary) px-4 py-2.5 text-sm font-semibold text-(--accent-contrast) focus-ring enabled:hover:bg-(--accent-primary-hover) enabled:hover:text-(--accent-contrast-hover) enabled:active:bg-(--accent-primary-active) enabled:active:text-(--accent-contrast-active) disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="!canSubmit"
         >
           {{ submitting ? "进入中…" : "进入房间" }}

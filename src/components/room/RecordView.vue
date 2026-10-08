@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useClipboard } from "@vueuse/core";
-import { Link2, SlidersHorizontal, X } from "@lucide/vue";
+import { ArrowLeft, Link2, SlidersHorizontal, X } from "@lucide/vue";
 import type { ArchiveSnapshot } from "../../../shared/contracts/records";
 import AgentStatusAvatar from "./AgentStatusAvatar.vue";
 import PickColumn from "./PickColumn.vue";
@@ -229,8 +229,18 @@ async function copyRecordLink(): Promise<void> {
           </aside>
         </div>
 
-        <!-- 底部固定入口：控制面板按钮（无确认按钮，无实时状态）。 -->
-        <div class="flex shrink-0 justify-end border-t border-(--border-default) px-3 py-2.5">
+        <!-- 底部固定入口：左侧「返回首页」（与实时房间底栏同一位置与样式，
+             明确走首页路由），右侧控制面板按钮（无确认按钮，无实时状态）。 -->
+        <div
+          class="flex shrink-0 items-center justify-between border-t border-(--border-default) px-3 py-2.5"
+        >
+          <RouterLink
+            to="/"
+            class="flex items-center gap-1 rounded px-1.5 py-1 text-xs font-medium text-(--text-muted) focus-ring hover:bg-(--surface-subtle) hover:text-(--text-secondary)"
+          >
+            <ArrowLeft class="size-4" aria-hidden="true" />
+            返回首页
+          </RouterLink>
           <button
             ref="panelEntryEl"
             type="button"
