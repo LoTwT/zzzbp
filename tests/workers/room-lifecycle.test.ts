@@ -692,6 +692,258 @@ describe("Alarm 调度与竞态收敛", () => {
   });
 });
 
+describe("接纳连接的二次裁决（时钟跨过截止点）", () => {
+  // 固定未来截止点：平台真实 Alarm 时钟不会在测试期间触发它，受控时钟
+  // （fake Date）只影响业务代码对 Date.now 的比较。
+  const DEADLINE = Date.parse("2030-01-02T12:00:00.000Z");
+  const LEFT_AT = new Date(DEADLINE - RETENTION_MS).toISOString();
+
+  /** 测试前置：把空房计时起点与期限 Alarm 放到固定截止点上。 */
+  async function stageAtDeadline(roomId: string): Promise<void> {
+    await execInRoom(roomId, `UPDATE room_meta SET last_member_left_at = '${LEFT_AT}'`);
+    await runInDurableObject(exports.Room.get(exports.Room.idFromName(roomId)), (_room, state) => {
+      state.storage.setAlarm(DEADLINE);
+    });
+  }
+
+  interface UpgradeObservation {
+    readonly frame: { readonly kind: string; readonly code: string | null };
+    readonly closeCode: number | null;
+    /** 注册表中计入在线的成员连接数（被拒连接不计）。 */
+    readonly memberSockets: number;
+    readonly lifecycle: string | null;
+    readonly lastMemberLeftAt: string | null;
+    readonly alarm: number | null;
+    readonly submissions: number | null;
+    readonly snapshots: number | null;
+    readonly businessTables: number;
+    /** 接纳成功时经真实中断回调驱动 restartBp 的结果。 */
+    readonly commandOk: boolean | null;
+  }
+
+  /**
+   * 受控时钟下的成员通道升级：`atFirstAdjudication` 是首次同步裁决的
+   * 时刻，升级路径内部的真实 await（生命周期收口里的 Alarm 读取）把
+   * 时钟推进到 `atAwait`——两次裁决因此落在截止点两侧。除时钟外不改动
+   * 任何代码路径；接纳成功时再经真实中断回调（webSocketMessage）驱动
+   * 一条 restartBp，证明该连接确实拿回了写权限。
+   */
+  async function upgradeAcrossDeadline(input: {
+    readonly roomId: string;
+    readonly secret: string;
+    readonly atFirstAdjudication: number;
+    readonly atAwait: number;
+  }): Promise<UpgradeObservation> {
+    const stub = exports.Room.get(exports.Room.idFromName(input.roomId));
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      return await runInDurableObject(stub, async (instance, state) => {
+        vi.setSystemTime(input.atFirstAdjudication);
+        const storage = state.storage as { getAlarm: typeof state.storage.getAlarm };
+        const originalGetAlarm = storage.getAlarm.bind(state.storage);
+        storage.getAlarm = async (...arguments_) => {
+          const current = await originalGetAlarm(...arguments_);
+          vi.setSystemTime(input.atAwait);
+          return current;
+        };
+        let client: WebSocket | null = null;
+        try {
+          const response = await (
+            instance as unknown as { fetch(request: Request): Promise<Response> }
+          ).fetch(
+            new Request(`${BASE_URL}/api/rooms/${input.roomId}/ws`, {
+              headers: {
+                Upgrade: "websocket",
+                Cookie: `zzzbp_room_${input.roomId}=${input.secret}`,
+              },
+            }),
+          );
+          client = response.webSocket;
+          if (client === null) throw new Error("升级响应缺少客户端连接");
+          const close: { code: number | null } = { code: null };
+          client.addEventListener("close", (event) => {
+            close.code = event.code;
+          });
+          const firstFrame = new Promise<string>((resolve) => {
+            client!.addEventListener("message", (event) => resolve(String(event.data)), {
+              once: true,
+            });
+          });
+          client.accept();
+          const frame = JSON.parse(await firstFrame) as { kind: string; code?: string };
+
+          let commandOk: boolean | null = null;
+          if (frame.kind === "hostView") {
+            const server = state
+              .getWebSockets()
+              .find(
+                (socket) =>
+                  (socket.deserializeAttachment() as { kind?: string } | null)?.kind === "member",
+              );
+            if (server === undefined) throw new Error("接纳后缺少成员服务端连接");
+            const receipt = new Promise<string>((resolve) => {
+              client!.addEventListener("message", (event) => {
+                const message = JSON.parse(String(event.data)) as { kind?: string };
+                if (message.kind === "commandResult") resolve(String(event.data));
+              });
+            });
+            await (
+              instance as unknown as {
+                webSocketMessage(socket: WebSocket, message: string): Promise<void>;
+              }
+            ).webSocketMessage(
+              server,
+              JSON.stringify({
+                type: "restartBp",
+                operationId: "recheck-restart",
+                expectedBpVersion: Number(
+                  state.storage.sql.exec("SELECT bp_version FROM room_meta").toArray()[0]
+                    ?.bp_version ?? 0,
+                ),
+              }),
+            );
+            commandOk = (JSON.parse(await receipt) as { ok: boolean }).ok;
+          }
+
+          const businessTables = Number(
+            state.storage.sql
+              .exec(
+                "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'",
+              )
+              .toArray()[0]?.n ?? 0,
+          );
+          const meta =
+            businessTables === 0
+              ? undefined
+              : state.storage.sql
+                  .exec("SELECT lifecycle, last_member_left_at FROM room_meta")
+                  .toArray()[0];
+          const count = (table: string): number | null =>
+            businessTables === 0
+              ? null
+              : Number(
+                  state.storage.sql.exec(`SELECT COUNT(*) AS n FROM ${table}`).toArray()[0]?.n ?? 0,
+                );
+          // 接纳成功后的 Alarm 收敛是异步收口：在受控时钟内做有界等待，
+          // 只用于观察最终值（真实计时器不受 fake Date 影响）。
+          let alarm = await originalGetAlarm();
+          for (
+            let attempt = 0;
+            attempt < 200 && frame.kind === "hostView" && alarm !== null;
+            attempt += 1
+          ) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            alarm = await originalGetAlarm();
+          }
+          // 被拒连接在通知之后关闭：关闭事件异步到达，同样有界等待。
+          for (
+            let attempt = 0;
+            attempt < 200 && frame.kind !== "hostView" && close.code === null;
+            attempt += 1
+          ) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          return {
+            frame: { kind: frame.kind, code: frame.code ?? null },
+            closeCode: close.code,
+            memberSockets: state
+              .getWebSockets()
+              .filter(
+                (socket) =>
+                  (socket.deserializeAttachment() as { kind?: string } | null)?.kind === "member",
+              ).length,
+            lifecycle: typeof meta?.lifecycle === "string" ? meta.lifecycle : null,
+            lastMemberLeftAt:
+              typeof meta?.last_member_left_at === "string" ? meta.last_member_left_at : null,
+            alarm,
+            submissions: count("bp_submissions"),
+            snapshots: count("archive_snapshot"),
+            businessTables,
+            commandOk,
+          };
+        } finally {
+          storage.getAlarm = originalGetAlarm;
+          client?.close(1000);
+        }
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  it("截止点前的跨 await 升级：正常接纳、取消计时且写权限可用", async () => {
+    const room = await startedRoom("跨期接纳赛", 1);
+    await closeAll(room);
+    await stageAtDeadline(room.roomId);
+
+    const observation = await upgradeAcrossDeadline({
+      roomId: room.roomId,
+      secret: room.host.secret,
+      atFirstAdjudication: DEADLINE - 2,
+      atAwait: DEADLINE - 1,
+    });
+
+    expect(observation.frame.kind).toBe("hostView");
+    expect(observation.memberSockets).toBe(1);
+    expect(observation.lifecycle).toBe("live");
+    // 成员回归取消空房计时与期限 Alarm（期限本身未被清除成归档）。
+    expect(observation.lastMemberLeftAt).toBeNull();
+    expect(observation.alarm).toBeNull();
+    // 写权限可用：重开成功、提交清空、没有生成归档快照。
+    expect(observation.commandOk).toBe(true);
+    expect(observation.submissions).toBe(0);
+    expect(observation.snapshots).toBe(0);
+  }, 20000);
+
+  it("有效提交的跨期升级：归档并拒绝接纳，不恢复写权限", async () => {
+    const room = await startedRoom("跨期归档赛", 1);
+    await closeAll(room);
+    await stageAtDeadline(room.roomId);
+
+    const observation = await upgradeAcrossDeadline({
+      roomId: room.roomId,
+      secret: room.host.secret,
+      atFirstAdjudication: DEADLINE - 1,
+      atAwait: DEADLINE + 1,
+    });
+
+    expect(observation.frame.kind).toBe("notice");
+    expect(observation.frame.code).toBe("ROOM_ARCHIVED");
+    expect(observation.closeCode).toBe(1008);
+    // 没有成员连接被接纳：跨期后不恢复任何写权限。
+    expect(observation.memberSockets).toBe(0);
+    expect(observation.commandOk).toBeNull();
+    expect(observation.lifecycle).toBe("archived");
+    expect(observation.snapshots).toBe(1);
+    expect(observation.submissions).toBe(0);
+
+    // 归档在真实时钟下同样成立：后续升级按终态拒绝。
+    const retry = await TestWsClient.connectMember(room.roomId, room.host.secret);
+    expect((await retry.next("notice")).code).toBe("ROOM_ARCHIVED");
+    expect((await retry.waitForClose("归档后拒绝")).code).toBe(1008);
+  }, 20000);
+
+  it("无有效提交的跨期升级：清理并按不存在拒绝", async () => {
+    const host = await createRoomViaHttp("跨期清理赛", "主持人");
+    await stageAtDeadline(host.roomId);
+
+    const observation = await upgradeAcrossDeadline({
+      roomId: host.roomId,
+      secret: host.secret,
+      atFirstAdjudication: DEADLINE - 1,
+      atAwait: DEADLINE + 1,
+    });
+
+    expect(observation.frame.kind).toBe("notice");
+    expect(observation.frame.code).toBe("ROOM_NOT_FOUND");
+    expect(observation.memberSockets).toBe(0);
+    expect(observation.commandOk).toBeNull();
+    // 无有效提交：不生成空快照，业务表被原子回收。
+    expect(observation.businessTables).toBe(0);
+    expect(observation.snapshots).toBeNull();
+  }, 20000);
+});
+
 describe("归档失败与恢复", () => {
   it("归档 SQL 故障整体回滚：读取 500、房间仍 live，恢复后读取重试成功", async () => {
     const room = await startedRoom("归档故障赛", 2);

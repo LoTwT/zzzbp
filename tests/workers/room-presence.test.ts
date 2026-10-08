@@ -3,6 +3,8 @@ import { exports } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
 import { agentCatalogData } from "../../shared/agents/catalog";
 import { BP_STEPS } from "../../shared/bp/steps";
+import { roomEntryResponseSchema } from "../../shared/contracts/http";
+import { EMPTY_ROOM_RETENTION_MS } from "../../shared/contracts/records";
 import {
   currentAlarm,
   createRoomViaHttp,
@@ -47,6 +49,13 @@ async function lastMemberLeftAt(roomId: string): Promise<string | null> {
   });
   if (entry.kind !== "live") throw new Error("房间不存在");
   return entry.lastMemberLeftAt;
+}
+
+/** 直接读取持久计时起点（SQL 观察，不经读取入口，不触发在线协调）。 */
+async function storedLeftAt(roomId: string): Promise<string | null> {
+  const rows = await queryRoomRows(roomId, "SELECT last_member_left_at FROM room_meta");
+  const value = rows[0]?.last_member_left_at;
+  return typeof value === "string" ? value : null;
 }
 
 /** 已安装「关闭中连接仍被枚举」包装的房间 → 原 ctx（供恢复）。 */
@@ -719,7 +728,9 @@ describe("在线协调与故障恢复（以实际连接为权威）", () => {
     expect(await queryRoomRows(roomId, "SELECT bp_status FROM room_meta")).toEqual([
       { bp_status: "running" },
     ]);
-    expect(await lastMemberLeftAt(roomId)).toBeNull();
+    // 故障未恢复时读取入口无法确认在线状态（读取会先协调，协调写入失败即
+    // 闭口为 500，不对外返回已知分叉的投影），因此这里直接读持久计时起点。
+    expect(await storedLeftAt(roomId)).toBeNull();
 
     // 存储恢复（移除故障）：重试链在下一次退避点补齐全部状态。
     await execInRoom(roomId, "DROP TRIGGER test_presence_fault");
@@ -894,6 +905,383 @@ describe("在线协调与故障恢复（以实际连接为权威）", () => {
     room.bWs.close();
     recovered.close();
   });
+});
+
+describe("重试链用尽后的持久分叉与补偿", () => {
+  // 生产重试链的退避序列（server/room.ts PRESENCE_RETRY_DELAYS_MS）与
+  // 受控日期起点：起点取未来固定时刻，平台真实 Alarm 时钟不会误触发。
+  const RETRY_DELAYS = [250, 1000, 4000, 16000, 60000, 300000] as const;
+  const RETRY_SPAN_MS = RETRY_DELAYS.reduce((total, delay) => total + delay, 0);
+  const RETRY_EPOCH = Date.parse("2030-01-01T00:00:00.000Z");
+
+  /**
+   * 注册表中仍处于 OPEN 的**成员**连接数（观察真实注册表，不经业务入口）。
+   *
+   * 只数成员：展示连接同样 OPEN 但不计成员在线，夹具在有展示连接的场景
+   * 必须按成员连接判定「实际在线集合」。
+   */
+  async function openSocketCount(roomId: string): Promise<number> {
+    return runInDurableObject(
+      exports.Room.get(exports.Room.idFromName(roomId)),
+      (_room, state) =>
+        state
+          .getWebSockets()
+          .filter(
+            (socket) =>
+              socket.readyState === WebSocket.OPEN &&
+              (socket.deserializeAttachment() as { kind?: string } | null)?.kind === "member",
+          ).length,
+    );
+  }
+
+  /**
+   * 真实执行一次「最后断开写入失败且重试链用尽」：注入 offline 写入失败
+   * 触发器后关闭全部成员连接，让生产重试逻辑实际走完全部六次退避。
+   *
+   * 只把重试等待压缩为 1ms 并同步推进受控日期（`toFake: ["Date"]`），
+   * 逻辑上经过约 6.3 分钟；不手写 online / last_member_left_at / Alarm，
+   * 也不调用私有业务方法。返回时故障仍保留，由调用方在恢复存储后观察
+   * 补偿路径（读取或补设的唤醒）。
+   */
+  async function exhaustPresenceRetry(
+    room: Awaited<ReturnType<typeof runningRoom>>,
+  ): Promise<{ readonly exhausted: boolean; readonly wakeAt: number | null }> {
+    await execInRoom(
+      room.host.roomId,
+      "CREATE TRIGGER test_offline_exhaust_fault BEFORE UPDATE OF online ON members WHEN NEW.online = 0 BEGIN SELECT RAISE(ABORT, 'test injected offline failure'); END",
+    );
+    const delays: number[] = [];
+    const fired: number[] = [];
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(RETRY_EPOCH);
+    const realSetTimeout = globalThis.setTimeout.bind(globalThis);
+    const timerSpy = vi
+      .spyOn(globalThis, "setTimeout")
+      .mockImplementation((callback, delay, ...arguments_) => {
+        if (
+          typeof callback === "function" &&
+          callback.name === "attempt" &&
+          (RETRY_DELAYS as readonly number[]).includes(Number(delay))
+        ) {
+          const duration = Number(delay);
+          delays.push(duration);
+          return realSetTimeout(() => {
+            vi.setSystemTime(Date.now() + duration);
+            fired.push(duration);
+            callback(...arguments_);
+          }, 1);
+        }
+        return realSetTimeout(callback, delay, ...arguments_);
+      });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const sleep = (ms: number): Promise<void> =>
+      new Promise<void>((resolve) => realSetTimeout(resolve, ms));
+    try {
+      room.hostWs.close();
+      room.aWs.close();
+      room.bWs.close();
+
+      // 屏障一：三次断开都已被服务端观测（每次失败都留下 close 失败诊断，
+      // 且注册表里不再有 OPEN 的成员连接）。断开事件晚于补齐被观测时，
+      // 补齐会漏掉尚未观测的连接，断言随之不稳定。
+      const closeFailures = (): number =>
+        errorSpy.mock.calls.filter(([entry]) => String(entry).includes('"phase":"close"')).length;
+      let closed = false;
+      for (let attempt = 0; attempt < 400 && !closed; attempt += 1) {
+        closed = closeFailures() >= 3 && (await openSocketCount(room.host.roomId)) === 0;
+        if (!closed) await sleep(5);
+      }
+      expect(closed, "成员断开没有被完整观测").toBe(true);
+
+      // 屏障二：重试链全部排空（最后一次断开的失败链也已用尽）。
+      let pending = true;
+      for (let attempt = 0; attempt < 400 && pending; attempt += 1) {
+        await sleep(5);
+        pending = await runInDurableObject(
+          exports.Room.get(exports.Room.idFromName(room.host.roomId)),
+          (instance) =>
+            (instance as unknown as { presenceRetryScheduled: boolean }).presenceRetryScheduled,
+        );
+      }
+      expect(pending, "重试链没有在预期时间内用尽").toBe(false);
+
+      // 生产退避序列真实执行过一轮（断开被观测得晚时可能再起一条链，
+      // 全部触发值仍应落在该序列内）。
+      expect(delays.slice(0, RETRY_DELAYS.length)).toEqual([...RETRY_DELAYS]);
+      expect(delays.every((delay) => (RETRY_DELAYS as readonly number[]).includes(delay))).toBe(
+        true,
+      );
+      expect(fired.length).toBeGreaterThanOrEqual(RETRY_DELAYS.length);
+      const exhausted = errorSpy.mock.calls.some(([entry]) =>
+        String(entry).includes('"phase":"presence-retry"'),
+      );
+
+      // 故障期间补设的持久唤醒（异步收口）：有界等待其落地，只做观察。
+      let wakeAt = await currentAlarm(room.host.roomId);
+      for (let attempt = 0; attempt < 200 && wakeAt === null; attempt += 1) {
+        await sleep(5);
+        wakeAt = await currentAlarm(room.host.roomId);
+      }
+      return { exhausted, wakeAt };
+    } finally {
+      timerSpy.mockRestore();
+      errorSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  }
+
+  it("用尽后展示与被拒升级：保留待补偿唤醒，真正修复后收敛为保留期限", async () => {
+    const room = await runningRoom("唤醒保留赛");
+    const roomId = room.host.roomId;
+    const injected = await exhaustPresenceRetry(room);
+    expect(injected.exhausted).toBe(true);
+    const wakeAt = injected.wakeAt;
+    expect(wakeAt).not.toBeNull();
+
+    // 真实匿名展示升级：拿到展示视图，但不修复分叉，也不得吞掉唤醒。
+    const display = await TestWsClient.connectDisplay(roomId);
+    try {
+      await display.next("displayView");
+      const afterDisplay = await currentAlarm(roomId);
+      // 补偿信号存活且未被推迟：受控时钟把首个唤醒点放在 2030，真实时钟下
+      // 补设只会更早（只提前、不推迟），绝不能被删除。
+      expect(afterDisplay).not.toBeNull();
+      expect((afterDisplay ?? 0) <= (wakeAt ?? 0)).toBe(true);
+      // 分叉原样：成员仍幽灵在线、计时未开始、没有成员连接（展示不计）。
+      expect(await openSocketCount(roomId)).toBe(0);
+      expect(await memberOnline(roomId, room.host.memberId)).toBe(1);
+      expect(await storedLeftAt(roomId)).toBeNull();
+
+      // 被拒的成员升级（凭据无效）同样不得吞掉唤醒，也不制造重复改写。
+      const refused = await TestWsClient.connectMember(roomId, "invalid-secret");
+      expect((await refused.next("notice")).code).toBe("AUTH_FAILED");
+      await refused.waitForClose("无效凭据拒绝");
+      expect(await currentAlarm(roomId)).toBe(afterDisplay);
+      expect(await storedLeftAt(roomId)).toBeNull();
+      expect(await memberOnline(roomId, room.host.memberId)).toBe(1);
+
+      // 存储恢复后由真实 Alarm 修复：唤醒被真正的保留期限取代。
+      await execInRoom(roomId, "DROP TRIGGER test_offline_exhaust_fault");
+      await runInDurableObject(
+        exports.Room.get(exports.Room.idFromName(roomId)),
+        (_room, state) => {
+          state.storage.setAlarm(Date.now() - 1);
+        },
+      );
+      expect(
+        await waitForRoomQuery(
+          roomId,
+          `SELECT online FROM members WHERE member_id = '${room.host.memberId}'`,
+          "online",
+          0,
+          8000,
+        ),
+      ).toBe(true);
+      const leftAt = await storedLeftAt(roomId);
+      expect(leftAt).not.toBeNull();
+      expect(await currentAlarm(roomId)).toBe(Date.parse(String(leftAt)) + EMPTY_ROOM_RETENTION_MS);
+    } finally {
+      display.close();
+    }
+  }, 20000);
+
+  it("用尽且无人访问：Alarm 唤醒修复后向现存展示连接广播最新视图", async () => {
+    const room = await runningRoom("唤醒广播赛");
+    const roomId = room.host.roomId;
+    const display = await TestWsClient.connectDisplay(roomId);
+    await display.next("displayView");
+    try {
+      const injected = await exhaustPresenceRetry(room);
+      expect(injected.exhausted).toBe(true);
+      expect(injected.wakeAt).not.toBeNull();
+
+      await execInRoom(roomId, "DROP TRIGGER test_offline_exhaust_fault");
+      await runInDurableObject(
+        exports.Room.get(exports.Room.idFromName(roomId)),
+        (_room, state) => {
+          state.storage.setAlarm(Date.now() - 1);
+        },
+      );
+
+      // 修复成功且仍 live：现存展示连接必须收到最新视图——展示客户端没有
+      // 心跳，没有这次推送就会永远停在 running 的旧画面。
+      expect(
+        await display.waitFor((message) => {
+          try {
+            const parsed = JSON.parse(message ?? "") as {
+              kind?: string;
+              view?: { bpStatus?: string };
+            };
+            return parsed.kind === "displayView" && parsed.view?.bpStatus === "paused";
+          } catch {
+            return false;
+          }
+        }, "Alarm 修复后的 displayView"),
+      ).not.toBeNull();
+      expect(await queryRoomRows(roomId, "SELECT bp_status FROM room_meta")).toEqual([
+        { bp_status: "paused" },
+      ]);
+      // 同一次唤醒把补偿信号收敛成真正的保留期限。
+      const leftAt = await storedLeftAt(roomId);
+      expect(leftAt).not.toBeNull();
+      expect(await currentAlarm(roomId)).toBe(Date.parse(String(leftAt)) + EMPTY_ROOM_RETENTION_MS);
+    } finally {
+      display.close();
+    }
+  }, 20000);
+
+  it("无分叉的匿名展示升级不改期限与 Alarm；成员正常回归仍清除 Alarm", async () => {
+    const host = await createRoomViaHttp("展示不改期限赛", "主持人");
+    const roomId = host.roomId;
+    // 成员真实连接后离开：计时与期限 Alarm 由真实断开路径写入。
+    const client = await TestWsClient.connectMember(roomId, host.secret);
+    await client.next("hostView");
+    client.close();
+    expect(await waitMemberOnline(roomId, host.memberId, 0)).toBe(true);
+    const leftAt = await storedLeftAt(roomId);
+    expect(leftAt).not.toBeNull();
+    const deadline = await waitForAlarm(roomId);
+    expect(deadline).toBe(Date.parse(String(leftAt)) + EMPTY_ROOM_RETENTION_MS);
+
+    // 无分叉的匿名展示升级：不建立成员连接、不重置期限、Alarm 原样保持。
+    const display = await TestWsClient.connectDisplay(roomId);
+    try {
+      await display.next("displayView");
+      expect(await openSocketCount(roomId)).toBe(0);
+      expect(await memberOnline(roomId, host.memberId)).toBe(0);
+      expect(await storedLeftAt(roomId)).toBe(leftAt);
+      expect(await currentAlarm(roomId)).toBe(deadline);
+    } finally {
+      display.close();
+    }
+
+    // 成员正常回归：取消本次计时与旧 Alarm。
+    const reconnected = await TestWsClient.connectMember(roomId, host.secret);
+    await reconnected.next("hostView");
+    expect(
+      await waitForRoomQuery(
+        roomId,
+        "SELECT last_member_left_at FROM room_meta",
+        "last_member_left_at",
+        null,
+      ),
+    ).toBe(true);
+    expect(await currentAlarm(roomId)).toBeNull();
+    reconnected.close();
+  }, 20000);
+
+  it("用尽且无人访问：补设的唤醒 Alarm 在存储恢复后补齐离线与保留计时", async () => {
+    const room = await runningRoom("读取补偿赛");
+    const roomId = room.host.roomId;
+    const injected = await exhaustPresenceRetry(room);
+    expect(injected.exhausted).toBe(true);
+
+    // 故障期间的持久分叉：注册表已无连接，但存储仍是幽灵在线、BP 仍在
+    // 进行中、计时未开始。
+    expect(await openSocketCount(roomId)).toBe(0);
+    expect(await memberOnline(roomId, room.host.memberId)).toBe(1);
+    expect(await memberOnline(roomId, room.playerA.memberId)).toBe(1);
+    expect(await memberOnline(roomId, room.playerB.memberId)).toBe(1);
+    expect(await queryRoomRows(roomId, "SELECT bp_status FROM room_meta")).toEqual([
+      { bp_status: "running" },
+    ]);
+    expect(await queryRoomRows(roomId, "SELECT last_member_left_at FROM room_meta")).toEqual([
+      { last_member_left_at: null },
+    ]);
+    // 无人访问时的补偿入口：故障时补设的有界唤醒，不晚于链应结束的时刻。
+    expect(injected.wakeAt).not.toBeNull();
+    expect((injected.wakeAt ?? 0) - RETRY_EPOCH).toBeGreaterThan(0);
+    expect((injected.wakeAt ?? 0) - RETRY_EPOCH).toBeLessThanOrEqual(RETRY_SPAN_MS);
+
+    // 存储恢复后由真实 Alarm 唤醒（设为过去时间立即触发，真实时钟）。
+    await execInRoom(roomId, "DROP TRIGGER test_offline_exhaust_fault");
+    await runInDurableObject(exports.Room.get(exports.Room.idFromName(roomId)), (_room, state) => {
+      state.storage.setAlarm(Date.now() - 1);
+    });
+    expect(
+      await waitForRoomQuery(
+        roomId,
+        `SELECT online FROM members WHERE member_id = '${room.host.memberId}'`,
+        "online",
+        0,
+        8000,
+      ),
+    ).toBe(true);
+
+    // 唤醒同样只按实际连接补齐：真实离线、掉线暂停、计时起点与期限 Alarm。
+    expect(await memberOnline(roomId, room.playerA.memberId)).toBe(0);
+    expect(await memberOnline(roomId, room.playerB.memberId)).toBe(0);
+    expect(await queryRoomRows(roomId, "SELECT bp_status FROM room_meta")).toEqual([
+      { bp_status: "paused" },
+    ]);
+    const leftAt = await storedLeftAt(roomId);
+    expect(leftAt).not.toBeNull();
+    expect(await currentAlarm(roomId)).toBe(Date.parse(String(leftAt)) + EMPTY_ROOM_RETENTION_MS);
+  }, 20000);
+
+  it("用尽后匿名入口读取：补齐离线投影与保留计时，且不凭空记参与", async () => {
+    const room = await runningRoom("入口读取补偿赛");
+    const roomId = room.host.roomId;
+    const injected = await exhaustPresenceRetry(room);
+    expect(injected.exhausted).toBe(true);
+    expect(await memberOnline(roomId, room.host.memberId)).toBe(1);
+    expect(await storedLeftAt(roomId)).toBeNull();
+
+    // 故障未恢复：读取入口自身无法完成协调，按统一错误边界闭口为 500，
+    // 不返回已知分叉（注册表无连接、存储仍在线）的投影。
+    expect((await exports.default.fetch(`http://localhost/api/rooms/${roomId}`)).status).toBe(500);
+    expect(await memberOnline(roomId, room.host.memberId)).toBe(1);
+    expect(await storedLeftAt(roomId)).toBeNull();
+
+    // 存储恢复：匿名房间入口读取（首页状态刷新走同一入口）。
+    await execInRoom(roomId, "DROP TRIGGER test_offline_exhaust_fault");
+    const response = await exports.default.fetch(`http://localhost/api/rooms/${roomId}`);
+    expect(response.status).toBe(200);
+    expect(roomEntryResponseSchema.parse(await response.json()).kind).toBe("live");
+
+    // 读取修复的是真实离线投影：没人因为这次访问被记为在线。
+    expect(await openSocketCount(roomId)).toBe(0);
+    expect(await memberOnline(roomId, room.host.memberId)).toBe(0);
+    expect(await memberOnline(roomId, room.playerA.memberId)).toBe(0);
+    expect(await memberOnline(roomId, room.playerB.memberId)).toBe(0);
+    expect(await queryRoomRows(roomId, "SELECT bp_status FROM room_meta")).toEqual([
+      { bp_status: "paused" },
+    ]);
+    const leftAt = await storedLeftAt(roomId);
+    expect(leftAt).not.toBeNull();
+    expect(await currentAlarm(roomId)).toBe(Date.parse(String(leftAt)) + EMPTY_ROOM_RETENTION_MS);
+    // 不凭空记参与：成员仍是原三人。
+    expect(await queryRoomRows(roomId, "SELECT COUNT(*) AS n FROM members")).toEqual([{ n: 3 }]);
+
+    // 再次读取不重置已记录的离开时间（幂等，不重新开始计时）。
+    await exports.default.fetch(`http://localhost/api/rooms/${roomId}`);
+    expect(await storedLeftAt(roomId)).toBe(leftAt);
+    expect(await currentAlarm(roomId)).toBe(Date.parse(String(leftAt)) + EMPTY_ROOM_RETENTION_MS);
+  }, 20000);
+
+  it("用尽后目录读取：同源补齐，且不建立成员连接", async () => {
+    const room = await runningRoom("目录读取补偿赛");
+    const roomId = room.host.roomId;
+    const injected = await exhaustPresenceRetry(room);
+    expect(injected.exhausted).toBe(true);
+    expect(await memberOnline(roomId, room.host.memberId)).toBe(1);
+    expect(await storedLeftAt(roomId)).toBeNull();
+    // 目录读取走同一协调：故障未恢复时同样闭口，不返回分叉投影。
+    expect(
+      (await exports.default.fetch(`http://localhost/api/rooms/${roomId}/catalog`)).status,
+    ).toBe(500);
+
+    await execInRoom(roomId, "DROP TRIGGER test_offline_exhaust_fault");
+    const response = await exports.default.fetch(`http://localhost/api/rooms/${roomId}/catalog`);
+    expect(response.status).toBe(200);
+
+    expect(await openSocketCount(roomId)).toBe(0);
+    expect(await memberOnline(roomId, room.host.memberId)).toBe(0);
+    expect(await memberOnline(roomId, room.playerA.memberId)).toBe(0);
+    const leftAt = await storedLeftAt(roomId);
+    expect(leftAt).not.toBeNull();
+    expect(await currentAlarm(roomId)).toBe(Date.parse(String(leftAt)) + EMPTY_ROOM_RETENTION_MS);
+  }, 20000);
 });
 
 describe("关闭回调的注册表边界（线上观测复现）", () => {

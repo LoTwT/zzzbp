@@ -237,6 +237,15 @@ interface PresenceOutcome {
  */
 const PRESENCE_RETRY_DELAYS_MS = [250, 1000, 4000, 16000, 60000, 300000] as const;
 
+/**
+ * 在线协调失败时补设的持久唤醒点（相对故障时刻，毫秒）：取重试链应
+ * 结束的时刻，即「链用尽或随实例驱逐丢失」之后的第一次自愈机会。
+ */
+const PRESENCE_WAKEUP_DELAY_MS = PRESENCE_RETRY_DELAYS_MS.reduce(
+  (total, delay) => total + delay,
+  0,
+);
+
 export class Room extends DurableObject {
   /** 是否已有在途的在线协调重试链（单实例内去重；实例重建后自然复位）。 */
   private presenceRetryScheduled = false;
@@ -342,13 +351,18 @@ export class Room extends DurableObject {
    *
    * 读取同样先做生命周期裁决：到期房间在读路径上完成归档或清理（不能
    * 等 Alarm），未到期时按当前状态收敛 Alarm（含既有 v2 房间迁移后的
-   * 首次补设）。普通读取不改变在线状态与保留计时。从未建房的实例不做
-   * 任何写入（不建表、不动 Alarm），直接按 not_found 返回。
+   * 首次补设）。裁决前先做在线协调（与入房、命令、断开同一协调）：把
+   * 存储的在线投影对齐到实际连接注册表，使「最后断开写入失败且重试链
+   * 已用尽」的持久分叉在故障恢复后的第一次读取就补齐离线、掉线暂停与
+   * 全员离开时间（保留计时随之恢复）。读取本身不建立连接、不计在线、
+   * 不重置已记录的离开时间；状态一致时不产生任何写入。从未建房的实例
+   * 不做任何写入（不建表、不动 Alarm），直接按 not_found 返回。
    */
   async getRoomEntry(input: RoomCredentialInput): Promise<RoomEntryResult> {
     const outcome = this.ctx.storage.transactionSync(
       (): {
         adjudication: LifecycleAdjudication;
+        presenceChanged: boolean;
         live: {
           readonly roomName: string;
           readonly memberView: RoomMemberView | null;
@@ -357,11 +371,20 @@ export class Room extends DurableObject {
         } | null;
       } => {
         if (!hasRoomSchema(this.sql)) {
-          return { adjudication: { kind: "not_found", alarm: null }, live: null };
+          return {
+            adjudication: { kind: "not_found", alarm: null },
+            presenceChanged: false,
+            live: null,
+          };
         }
         ensureRoomSchema(this.sql);
+        // 裁决前先协调在线投影：读取是「最后断开写入失败且重试链用尽」
+        // 之后最常见的恢复入口，协调修复的计时起点由本次裁决收敛 Alarm。
+        const presence = this.reconcilePresenceInTransaction();
         const adjudication = this.adjudicateLifecycleInTransaction(this.connectedMemberIds());
-        if (adjudication.kind !== "live") return { adjudication, live: null };
+        if (adjudication.kind !== "live") {
+          return { adjudication, presenceChanged: presence.changed, live: null };
+        }
 
         const meta = readRoomMeta(this.sql);
         if (meta === null) {
@@ -372,6 +395,7 @@ export class Room extends DurableObject {
         const memberView = viewerMemberId === null ? null : this.projectMemberView(viewerMemberId);
         return {
           adjudication,
+          presenceChanged: presence.changed,
           live: {
             roomName: meta.name,
             memberView,
@@ -389,6 +413,9 @@ export class Room extends DurableObject {
       // settleLifecycle 的 live 结果只能来自 live 裁决，此处不可达（防御）。
       throw new Error("live 裁决后缺少入口数据，存储状态异常");
     }
+    // 协调修复了持久分叉时，已连接的成员/展示连接需要拿到最新视图
+    // （与入房、断开后的广播一致）；无分叉的普通读取不广播。
+    if (outcome.presenceChanged) this.broadcastCurrentViews();
     return { kind: "live", ...outcome.live };
   }
 
@@ -529,21 +556,29 @@ export class Room extends DurableObject {
    * 且不写入存储。归档房间不再提供实时目录（归档时目录行已随操作期
    * 数据清理，只读记录的一切展示信息固定在快照内）——返回 archived
    * 由 HTTP 层转为 410，展示页据此按「已归档」而非「不存在」收口。
-   * 目录读取同样先做生命周期裁决并收敛 Alarm，但不改变保留计时。
+   * 目录读取同样先做在线协调与生命周期裁决并收敛 Alarm，但不建立成员
+   * 连接、不计在线：协调只在投影与实际连接分叉时补齐离线与计时起点
+   * （见 getRoomEntry），不重置已记录的离开时间。
    */
   async getRoomCatalog(): Promise<RoomCatalogResult> {
     const outcome = this.ctx.storage.transactionSync(
       (): {
         adjudication: LifecycleAdjudication;
+        presenceChanged: boolean;
         catalog: AgentCatalogData | null;
       } => {
         if (!hasRoomSchema(this.sql)) {
-          return { adjudication: { kind: "not_found", alarm: null }, catalog: null };
+          return {
+            adjudication: { kind: "not_found", alarm: null },
+            presenceChanged: false,
+            catalog: null,
+          };
         }
         ensureRoomSchema(this.sql);
+        const presence = this.reconcilePresenceInTransaction();
         const adjudication = this.adjudicateLifecycleInTransaction(this.connectedMemberIds());
         const catalog = adjudication.kind === "live" ? loadRoomCatalog(this.sql) : null;
-        return { adjudication, catalog };
+        return { adjudication, presenceChanged: presence.changed, catalog };
       },
     );
 
@@ -553,6 +588,7 @@ export class Room extends DurableObject {
     if (outcome.catalog === null) {
       throw new Error("live 房间目录快照缺失，存储状态异常");
     }
+    if (outcome.presenceChanged) this.broadcastCurrentViews();
     return { kind: "catalog", data: outcome.catalog };
   }
 
@@ -653,9 +689,38 @@ export class Room extends DurableObject {
   }
 
   /**
+   * 是否存在待补偿的在线分叉：live 房间已无实际成员连接、但保留计时
+   * 尚未开始（last_member_left_at 为 null）。
+   *
+   * 正常流程不会出现该状态——建房即写入创建时刻，最后一名成员离开时写入
+   * 离开时间——只有「最后断开写入失败且重试链与唤醒都尚未完成」才会留下
+   * 它：存储仍把成员投影为在线，保留期限无从推导。故障补偿的有界唤醒
+   * 必须保留到真正修复为止；展示通道与被拒升级不做在线协调，但它们的
+   * 生命周期收敛不得吞掉这一无人访问时唯一的恢复入口。
+   */
+  private presenceRepairPending(): boolean {
+    try {
+      const meta = readRoomMeta(this.sql);
+      if (meta === null || meta.lifecycle !== "live" || meta.lastMemberLeftAt !== null) {
+        return false;
+      }
+      return this.connectedMemberIds().size === 0;
+    } catch {
+      // 状态不可读时无法判定分叉：按「无分叉」保持既有的清理语义，
+      // 不把一次读取故障放大成 Alarm 收敛故障。
+      return false;
+    }
+  }
+
+  /**
    * 把 Alarm 收敛到期望状态（事务提交后调用；Alarm 是异步存储操作，不能
    * 进入 transactionSync）。
    *
+   * - 期望 null 且待补偿的在线分叉仍在（见 presenceRepairPending）：该状态
+   *   没有可表达的期限，删除 Alarm 会连故障补偿的唤醒一起丢掉，因此保留
+   *   现有唤醒（只提前不推迟），缺失时补设一次有界唤醒；真正修复（读取/
+   *   入房/命令/成员接纳/唤醒）或成员正常回归后，期望值不再是「分叉未修
+   *   复」的 null，届时按下面两条正常收敛；
    * - 期望 null（成员在线/房间已删）：残留的旧 Alarm 触发时会按当前状态
    *   重判并自清，删除失败不阻塞业务（读取不应因清理残留失败而 500），
    *   交给下一事件收敛；
@@ -666,6 +731,10 @@ export class Room extends DurableObject {
    */
   private async applyLifecycleAlarm(desired: number | null): Promise<void> {
     if (desired === null) {
+      if (this.presenceRepairPending()) {
+        this.armPresenceWakeup();
+        return;
+      }
       try {
         if ((await this.ctx.storage.getAlarm()) !== null) {
           await this.ctx.storage.deleteAlarm();
@@ -756,25 +825,42 @@ export class Room extends DurableObject {
   /**
    * 生命周期 Alarm 处理器：平台按存储的 Alarm 时间唤醒实例。
    *
-   * Alarm 只是唤醒信号，不是期限本身：每次触发都按当前持久状态与实际
-   * 连接重新裁决（与读取/入房/命令共用同一裁决），重复、过早或延迟的
-   * 触发都收敛到当前应设的下一期限——不重复归档、不提早清理、不覆盖
-   * 已设的下一期限、不靠延迟触发延长可操作时间（期限由各入口的裁决
-   * 强制，Alarm 只负责无人访问时的推进）。终态连接收口同样幂等：即使
-   * 上一次执行的归档已提交而 Alarm 写入失败，本次重试（或任何入口）
-   * 仍会对现存连接完成终态通知。
+   * Alarm 只是唤醒信号，不是期限本身：每次触发都先做在线协调、再按当前
+   * 持久状态与实际连接重新裁决（与读取/入房/命令共用同一协调与裁决），
+   * 重复、过早或延迟的触发都收敛到当前应设的下一期限——不重复归档、
+   * 不提早清理、不覆盖已设的下一期限、不靠延迟触发延长可操作时间
+   * （期限由各入口的裁决强制，Alarm 只负责无人访问时的推进）。协调让
+   * 「在线协调重试链随实例丢失」留下的持久分叉也能由唤醒补齐（离线与
+   * 保留计时随本次裁决收敛 Alarm），这是无人访问时唯一的补偿入口。
+   * 终态连接收口同样幂等：即使上一次执行的归档已提交而 Alarm 写入
+   * 失败，本次重试（或任何入口）仍会对现存连接完成终态通知。
    *
    * SQL 裁决在 transactionSync 内原子完成；其后的 Alarm 收敛或收口失败
    * 时抛出，由平台 at-least-once 语义重试（2 秒起指数退避，最多 6 次），
    * 进程崩溃时在另一实例上从头重跑（见官方 Alarms API）。
    */
   async alarm(): Promise<void> {
-    const adjudication = this.ctx.storage.transactionSync((): LifecycleAdjudication => {
-      if (!hasRoomSchema(this.sql)) return { kind: "not_found", alarm: null };
-      ensureRoomSchema(this.sql);
-      return this.adjudicateLifecycleInTransaction(this.connectedMemberIds());
-    });
-    await this.settleLifecycle(adjudication);
+    const outcome = this.ctx.storage.transactionSync(
+      (): { adjudication: LifecycleAdjudication; presenceChanged: boolean } => {
+        if (!hasRoomSchema(this.sql)) {
+          return { adjudication: { kind: "not_found", alarm: null }, presenceChanged: false };
+        }
+        ensureRoomSchema(this.sql);
+        const presence = this.reconcilePresenceInTransaction();
+        return {
+          adjudication: this.adjudicateLifecycleInTransaction(this.connectedMemberIds()),
+          presenceChanged: presence.changed,
+        };
+      },
+    );
+    const effective = await this.settleLifecycle(outcome.adjudication);
+    // 本次唤醒补齐了持久投影且房间仍 live 时，向现存连接推送最新视图：
+    // 展示客户端没有心跳，不推就会永远停在与实际不一致的旧画面（成员与
+    // 展示都是视图订阅者，与断开/入房后的广播一致）。终态不广播——终态
+    // 通知与关闭由 settleLifecycle 的收口负责，不发假成功或旧视图。
+    if (effective.kind === "live" && outcome.presenceChanged) {
+      this.broadcastCurrentViews();
+    }
   }
 
   /** 生命周期路径内部故障的结构化诊断（白名单字段，不含错误内容）。 */
@@ -801,8 +887,11 @@ export class Room extends DurableObject {
    *
    * 升级前先做生命周期裁决（此时新连接尚未计入注册表）：到期房间在
    * 接纳前完成归档或清理，归档按 ROOM_ARCHIVED 拒绝——注册新连接不能
-   * 清掉已过期期限。未到期时按当前状态收敛 Alarm；展示通道不计成员、
-   * 不影响保留计时。
+   * 清掉已过期期限。裁决后的异步收口（Alarm 应用、终态收口都是异步
+   * 存储操作）会经历 await，期间时钟可能越过期限，因此接纳前必须再
+   * 按当前时刻同步重判一次：重判与注册之间不再让出事件循环（两个
+   * accept 路径都在同步段内完成注册），否则会重复打开同一窗口。未到
+   * 期时按当前状态收敛 Alarm；展示通道不计成员、不影响保留计时。
    */
   async fetch(request: Request): Promise<Response> {
     const ownRoomId = this.ctx.id.name;
@@ -865,6 +954,24 @@ export class Room extends DurableObject {
     }
     if (effective.kind === "archived") {
       return this.acceptRejectedConnection("ROOM_ARCHIVED", "房间已归档");
+    }
+
+    // 接纳前的二次同步裁决：上面的异步收口让出过事件循环，沿用旧的 live
+    // 结论会把跨过期限的房间连同写权限一起恢复。重判为终态时按同一收口
+    // 路径完成归档/清理与终态通知后拒绝；live 时立即进入下面的同步注册
+    // （accept 路径内不再 await），不再产生第二个窗口。
+    const rechecked = this.ctx.storage.transactionSync((): LifecycleAdjudication => {
+      if (!hasRoomSchema(this.sql)) return { kind: "not_found", alarm: null };
+      ensureRoomSchema(this.sql);
+      return this.adjudicateLifecycleInTransaction(this.connectedMemberIds());
+    });
+    if (rechecked.kind !== "live") {
+      // settleLifecycle 的结果只会是 not_found 或 archived（cleanup 折叠为
+      // not_found），与裁决一致。
+      const terminal = await this.settleLifecycle(rechecked);
+      return terminal.kind === "archived"
+        ? this.acceptRejectedConnection("ROOM_ARCHIVED", "房间已归档")
+        : this.acceptRejectedConnection("ROOM_NOT_FOUND", "房间不存在");
     }
 
     switch (resolved.resolution.kind) {
@@ -1076,16 +1183,46 @@ export class Room extends DurableObject {
   }
 
   /**
+   * 补设一次持久唤醒信号（Alarm）：在线协调失败时启动补偿，生命周期
+   * 收敛发现待补偿分叉仍存在时保留同一信号（见 presenceRepairPending）。
+   *
+   * 重试链只存在于实例内存：链用尽或随实例驱逐丢失后，如果无人访问，
+   * 分叉的在线投影（幽灵在线、保留计时未记录）不会被任何事件修复，
+   * 房间既不开始 12 小时计时也不会归档。Alarm 是唯一的无人访问补偿
+   * 入口（见 alarm()：触发时先协调再裁决），因此这里在故障发生时补设
+   * 一次有界唤醒，覆盖「存储恢复后仍无人访问」的场景：唤醒触发时若
+   * 故障已恢复即补齐离线与计时起点，仍失败则交给平台 at-least-once
+   * 重试收口——不做轮询、不重建链、不改动期限判断。只提前、不推迟
+   * 已存在的更早 Alarm（期限由各入口的裁决强制，早触发按当前状态重判
+   * 并收敛）；已有唤醒在时是无操作，重复调用不会顺延唤醒点。补设本身
+   * 失败只记诊断：故障期间 Alarm 存储可能同样不可用，恢复后的下一次
+   * 事件仍是最终防线。
+   */
+  private armPresenceWakeup(): void {
+    void (async () => {
+      try {
+        const wakeAt = Date.now() + PRESENCE_WAKEUP_DELAY_MS;
+        const current = await this.ctx.storage.getAlarm();
+        if (current !== null && current <= wakeAt) return;
+        await this.ctx.storage.setAlarm(wakeAt);
+      } catch {
+        this.logRealtimeInternalError("presence-wakeup");
+      }
+    })();
+  }
+
+  /**
    * 在线协调失败后的有界重试链：按固定退避序列重试「协调 + 生命周期
    * Alarm 收敛」，覆盖短暂存储故障；链结束（成功或用尽）后不再占用任何
    * timer，休眠行为不受影响，这不是常驻轮询。重试成功会把暂停/离线/
-   * 全员离开时间与空房期限 Alarm 一次性补齐；重试链随实例驱逐丢失时，
-   * 下一次连接/断开/命令/入房/读取事件的协调与裁决仍是最终防线
-   * （Alarm 处理器只负责无人访问时的推进）。
+   * 全员离开时间与空房期限 Alarm 一次性补齐；链随实例驱逐丢失或全部
+   * 失败时由启动时补设的持久唤醒（armPresenceWakeup）与恢复后的下一次
+   * 连接/断开/命令/入房/读取事件兜底，Alarm 处理器负责无人访问时的推进。
    */
   private schedulePresenceRetry(): void {
     if (this.presenceRetryScheduled) return;
     this.presenceRetryScheduled = true;
+    this.armPresenceWakeup();
     const delays = [...PRESENCE_RETRY_DELAYS_MS];
     const attempt = (): void => {
       void (async () => {

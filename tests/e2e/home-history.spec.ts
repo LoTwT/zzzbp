@@ -24,6 +24,9 @@ import { E2E_BASE_URL } from "./server";
  *   POST、不建立业务 WS（credentials: omit 的匿名公开读）。
  * - 生命周期状态用浏览器侧注入固定响应覆盖已归档与暂时无法确认，
  *   真实 404 不注入、走随机 roomId 验证「不存在或已过期」。
+ * - 迟到响应保护：首次状态查询在途时点「刷新状态」，后到达的旧响应
+ *   不得覆盖较新的生命周期状态、入口与到期信息（同身份在途写被移除
+ *   作废的两个用例见下）。
  * - 界面结构性验证：默认 10 条、显示更多、四种状态与操作入口、
  *   长房间名截断（完整名称可读）、清空历史的二次确认与删除边界、
  *   键盘可达、整页纵向滚动且卡片内不滚动。
@@ -787,6 +790,94 @@ test("入房请求在途期间清空历史：迟到响应不复活记录，也�
     expect(await readStoredHistory(guest.page)).toEqual({});
 
     assertNoPageErrors(guest);
+    assertNoPageErrors(host);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("状态查询迟到：旧响应不覆盖较新的状态、入口与到期信息", async () => {
+  const browser = await chromium.launch();
+  try {
+    const host = await newRoomContext(browser, "host", { width: 1440, height: 900 });
+    const roomId = "66666666-6666-4666-8666-666666666666";
+    const roomName = "最近参与·迟到状态赛";
+    await seedHistory(host.page, [{ roomId, roomName, lastVisitedAt: "2026-10-07T06:00:00.000Z" }]);
+
+    // 真实用户路径制造并发：页面加载的首次查询保持在途，在途期间点
+    // 「刷新状态」；新请求先返回较新的「已归档」，随后才放行旧响应
+    // （旧响应是「未归档」）。只拦截这一条记录的匿名状态读取。
+    const inFlight: Array<() => void> = [];
+    let queries = 0;
+    const liveBody = { kind: "live", roomName, memberView: null };
+    const archivedBody = {
+      kind: "archived",
+      record: {
+        roomId,
+        roomName,
+        teamNames: { A: "甲队", B: "乙队" },
+        bpCompleted: false,
+        operations: [
+          {
+            slotId: "AB1",
+            team: "A",
+            action: "ban",
+            agentId: "9001",
+            agentName: "代理人甲",
+            agentAvatarUrl: null,
+          },
+        ],
+        versions: { ruleVersion: "rules-e2e", agentDataVersion: AGENT_DATA_VERSION },
+        archivedAt: ARCHIVED_AT,
+        expiresAt: EXPIRES_AT,
+      },
+    };
+    await host.context.route(new RegExp("/api/rooms/" + roomId + "$"), async (route) => {
+      queries += 1;
+      if (queries === 1) {
+        await new Promise<void>((resolve) => inFlight.push(resolve));
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(liveBody),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(archivedBody),
+      });
+    });
+
+    await host.page.goto(`${E2E_BASE_URL}/`);
+    const list = card(host.page);
+    const target = row(list, roomName);
+    await waitFor(() => inFlight.length === 1, "首次状态查询没有进入在途状态");
+    await expectVisible(target.getByText("正在确认…", { exact: true }));
+
+    await list.getByRole("button", { name: "刷新状态", exact: true }).click();
+    await waitFor(() => queries >= 2, "刷新状态没有发出新的状态查询");
+    await expectVisible(target.getByText("已归档", { exact: true }));
+    await expectVisible(target.getByText(`记录保留至 ${localDate(EXPIRES_AT)}`));
+    await expectVisible(target.getByRole("button", { name: "查看记录" }));
+    expect(await target.getByRole("button", { name: "进入房间" }).count()).toBe(0);
+
+    // 放行迟到的旧响应，再留一个稳定观察窗口：最新状态、入口与到期信息
+    // 都不得被覆盖回「未归档 / 进入房间」，也不重新回到「正在确认…」。
+    const late = host.page.waitForResponse(
+      (response) => response.url() === `${E2E_BASE_URL}/api/rooms/${roomId}`,
+    );
+    inFlight.splice(0).forEach((release) => release());
+    await late;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await expectVisible(target.getByText("已归档", { exact: true }));
+    await expectVisible(target.getByText(`记录保留至 ${localDate(EXPIRES_AT)}`));
+    await expectVisible(target.getByRole("button", { name: "查看记录" }));
+    expect(await target.getByRole("button", { name: "进入房间" }).count()).toBe(0);
+    expect(await target.getByText("正在确认…", { exact: true }).count()).toBe(0);
+    expect(queries).toBe(2);
+
     assertNoPageErrors(host);
   } finally {
     await browser.close();
