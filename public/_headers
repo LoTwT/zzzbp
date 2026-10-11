@@ -1,0 +1,15 @@
+# 图片资源的浏览器缓存策略（Workers Static Assets 读取本文件并应用于静态
+# 资源响应，文件本身不会被对外提供；约定正文见 docs/specs/agent-data.md
+# 「图片资源与公开路径」的浏览器缓存策略段落）。
+#
+# 为什么不用长 max-age / immutable：未命中静态资产的路径（缺失文件、尚未
+# 发布的未来修订）会按 single-page-application 回退返回 index.html，且该
+# 回退响应同样命中本文件的 URL 规则——长缓存指令会把这类“图片地址上的
+# HTML”在浏览器里缓存一年，资源补齐后仍持续破图（2026-10 本地实测确认
+# 回退响应确实被规则覆盖）。图片与回退共用一套保守头：
+#
+# max-age=0 让响应立即过期；支持 stale-while-revalidate 的浏览器可在七天
+# 窗口内先用旧缓存、后台重验证，窗口外或不支持时需先重验证。缺失资源补齐
+# 后，当前加载仍可能使用旧 HTML 而失败，成功重验证后的后续加载才能恢复。
+/images/*
+  Cache-Control: public, max-age=0, stale-while-revalidate=604800

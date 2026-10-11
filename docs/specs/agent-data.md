@@ -63,6 +63,17 @@
 
 新归档中，带图片资源引用的条目经 `toAgentDisplayLookup`（`shared/agents/catalog.ts`）保存稳定的方图母图路径与宽幅裁切（归档操作的 `agentAvatarUrl`/`agentAvatarCrop` 字段）。旧目录条目由 `avatarPath` 派生地址，按上述收录规则映射本地副本或保留原 URL；缺路径时保存 null。旧归档快照按其保存的地址解释，仅已收录的远程圆图映射到本地副本。
 
+### 浏览器缓存策略
+
+Workers Static Assets 对静态资源的默认响应头是 `Cache-Control: public, max-age=0, must-revalidate`：浏览器可缓存，但每次使用前都要逐张条件请求重验证，重访时图片展示要等待这些往返。仓库根的 `public/_headers` 对 `/images/*` 覆盖为 `Cache-Control: public, max-age=0, stale-while-revalidate=604800`：
+
+- `max-age=0` 让响应立即过期：未命中静态资产的路径（缺失文件、尚未发布的未来修订）按 `single-page-application` 回退返回 `index.html`，且回退响应同样命中 `_headers` 的 URL 规则。不能用长 max-age 把这类「图片地址上的 HTML」长期视为新鲜响应，即使真实图片路径按不可变修订管理。
+- `stale-while-revalidate=604800` 允许支持该指令的浏览器在过期后的七天内先用旧缓存、后台重验证，减少重访等待；超过窗口或不支持该指令时需先重验证。后台请求仍然存在，收益是减少展示等待，不是消除请求。缺失资源补齐后，当前加载仍可能收到旧 HTML 而显示占位，需等一次成功的后台重验证后，后续加载才会恢复；不保证第一次重访立即恢复（[指令语义](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control#stale-while-revalidate)）。
+
+`_headers` 随构建复制进静态资产目录、由平台应用于静态资源响应，文件本身不对外提供（本地 preview 实测与[官方文档](https://developers.cloudflare.com/workers/static-assets/headers/)一致）；`/images/*` 之外的页面 HTML、`/api/*`（`no-store`）与 Vite 哈希产物 `/assets/*` 不在覆盖范围内，沿用各自既有行为。
+
+图片加载的已知边界：操作页与展示页的池内方图使用母图，记录页使用选用区母图与禁用区/列表行缩略图；同一代理人的池内方图与选用区裁切共用母图地址。原生懒加载可能提前请求视口附近的图片，不能将图片请求数等同于视口内图片数。此缓存策略只改善重访等待，不减少冷加载体积；冷加载优化可通过新修订评估更小尺寸档等方案，仍须保留旧资源路径与图片清晰度。
+
 ## 图片资源导入流程
 
 导入脚本 `pnpm run import:image-assets`（`scripts/import-image-assets.ts`）只在显式资源更新时运行：
