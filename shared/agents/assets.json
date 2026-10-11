@@ -1,0 +1,2094 @@
+{
+  "revision": "2026-10-09",
+  "agents": {
+    "IconRoleCrop01": {
+      "agentIds": [
+        "1011"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop01.webp",
+      "crop": {
+        "x": 50,
+        "y": 41
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop01.webp",
+        "bytes": 133672,
+        "sha256": "4aa59625482b5744bd210fc90a75ff791ff6aa0d39c7c9fd4cc582f4625be277",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop01-128.webp",
+        "bytes": 6414,
+        "sha256": "100834c422ab7e2a373340da5955ccbe2cd6f2d8bc7f8edb6d1913d43a1a4194",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop05": {
+      "agentIds": [
+        "1041"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop05.webp",
+      "crop": {
+        "x": 50,
+        "y": 41
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop05.webp",
+        "bytes": 148322,
+        "sha256": "d734ec6de2081e0f6eefc531ffb42ebef1804795a8fb8398ec0e077ef6fabd0a",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop05-128.webp",
+        "bytes": 5542,
+        "sha256": "bfe6fb606bc69ddfe8d25b7acc7980881c07a927204e2a866e8f24d01b1ce97c",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop09": {
+      "agentIds": [
+        "1061"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop09.webp",
+      "crop": {
+        "x": 50,
+        "y": 51
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop09.webp",
+        "bytes": 173958,
+        "sha256": "27267ffb66540491217e04903152aa307c44303092c6b58459134ba6a340ce11",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop09-128.webp",
+        "bytes": 5980,
+        "sha256": "616c3cd2eaacbaf0876604f0b5e4e83b15f037c94ac5d1c130df3b6ab74578cb",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop10": {
+      "agentIds": [
+        "1081"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop10.webp",
+      "crop": {
+        "x": 32,
+        "y": 42
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop10.webp",
+        "bytes": 190266,
+        "sha256": "777353951743ed1e6640b87e249ddb7f4ab4e69c898e41e416718e6c684c7659",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop10-128.webp",
+        "bytes": 5780,
+        "sha256": "4138c8443c20620c4f032bb6b99b359fd7ef94806b4909c6affa6caef5e00d97",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop11": {
+      "agentIds": [
+        "1021"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop11.webp",
+      "crop": {
+        "x": 50,
+        "y": 42
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop11.webp",
+        "bytes": 165278,
+        "sha256": "6b65706d7a4cda4bbcb586508efb7fadad564c0fe8ffe37007dcf62675701e6e",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop11-128.webp",
+        "bytes": 5998,
+        "sha256": "1213b5b29d533bb666528acec8965afdd01f52a724d19486c030f50f6d660795",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop12": {
+      "agentIds": [
+        "1031"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop12.webp",
+      "crop": {
+        "x": 50,
+        "y": 34
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop12.webp",
+        "bytes": 165766,
+        "sha256": "c08ad17ffff78cbae087ef87478cfa594b784ad884130d77c7ffcb29f45a64a5",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop12-128.webp",
+        "bytes": 6044,
+        "sha256": "ff96117d0ba7d717a1f7b1ddc03632f0abcd791637fef0cb9103251b90058861",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop13": {
+      "agentIds": [
+        "1091"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop13.webp",
+      "crop": {
+        "x": 68,
+        "y": 49
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop13.webp",
+        "bytes": 132658,
+        "sha256": "500ebaa217db5d83ce0ae671625c592c82c61fbfd39b5c88f35661b3396834b0",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop13-128.webp",
+        "bytes": 4658,
+        "sha256": "6d07e11083593c22298fa25467bc84694e9dff3f56b6f564630f1249c90b7305",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop14": {
+      "agentIds": [
+        "1101"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop14.webp",
+      "crop": {
+        "x": 50,
+        "y": 54
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop14.webp",
+        "bytes": 168062,
+        "sha256": "16fbb59fcc4a39855f3ff1c5801e30262119333ed15cdc2b4aa0e100a7192495",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop14-128.webp",
+        "bytes": 5896,
+        "sha256": "a0eb837d7ccd0b570e3fbb82e608be19e0dc3d2a98471055929d4a88e4215d4e",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop15": {
+      "agentIds": [
+        "1111"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop15.webp",
+      "crop": {
+        "x": 50,
+        "y": 49
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop15.webp",
+        "bytes": 164302,
+        "sha256": "54a3207afcf9c35afe9e30f46904e0df0a83186eeb0e2a53942b6e8d695d1ea0",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop15-128.webp",
+        "bytes": 4996,
+        "sha256": "371bc2abd547b5555874f29e4ddf7e816948b6f3f07693f9dabd7e93c54a033f",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop16": {
+      "agentIds": [
+        "1121"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop16.webp",
+      "crop": {
+        "x": 50,
+        "y": 34
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop16.webp",
+        "bytes": 145956,
+        "sha256": "709fb509d44ad622fe10265a713f067b9342182b48181a8c9cb45375e9143d8a",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop16-128.webp",
+        "bytes": 3200,
+        "sha256": "28fcfab5eb38a7f4e9bdc1004225c1c53c3021de8f45b13187c5770afa8ecd27",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop17": {
+      "agentIds": [
+        "1131"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop17.webp",
+      "crop": {
+        "x": 50,
+        "y": 51
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop17.webp",
+        "bytes": 160164,
+        "sha256": "df777c4a9c93605ca7d9010f7d8b26c96d6e198fdc7b6c3a109d98b0e9864bfa",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop17-128.webp",
+        "bytes": 6834,
+        "sha256": "6f0a732c78e158a7b22dc21ef1bba3d7d7ee6c28c62255813abc79abff035002",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop18": {
+      "agentIds": [
+        "1141"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop18.webp",
+      "crop": {
+        "x": 50,
+        "y": 55
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop18.webp",
+        "bytes": 137608,
+        "sha256": "d1f283966535e60939d25f177a17edd9982cd84f260e1796fa7939c71e8a1630",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop18-128.webp",
+        "bytes": 5822,
+        "sha256": "29f1d4dd960af217dd9f55d02dc5cc429c649adbb9f031895bde18ddb903de53",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop20": {
+      "agentIds": [
+        "1181"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop20.webp",
+      "crop": {
+        "x": 50,
+        "y": 55
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop20.webp",
+        "bytes": 153660,
+        "sha256": "a57997ece817ada81932687a7f2fcc2148fac37df8da05c6af9406e560cb5551",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop20-128.webp",
+        "bytes": 5488,
+        "sha256": "bcabc204bb70417e0d00ae36a3fe827dcab0f9176305081db55d29c050d58112",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop21": {
+      "agentIds": [
+        "1191"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop21.webp",
+      "crop": {
+        "x": 71,
+        "y": 51
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop21.webp",
+        "bytes": 133592,
+        "sha256": "578e1696e77d20e5997e8022c435af04413b1fb0f0d14e06a56f258e650fba26",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop21-128.webp",
+        "bytes": 5124,
+        "sha256": "2f060e167b2e2d23c62dff0e88e2588c73d1e19c5975269bba7df3e9856a6883",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop22": {
+      "agentIds": [
+        "1211"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop22.webp",
+      "crop": {
+        "x": 50,
+        "y": 49
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop22.webp",
+        "bytes": 141558,
+        "sha256": "e42fbf4e6be0b2cfd733e52c6c99eba977117f8bce41e5fc803729b2b069c77d",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop22-128.webp",
+        "bytes": 5826,
+        "sha256": "938245ccd48668bd91dad6aeb08f10b8330160477e6991358a5f08a25659d210",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop23": {
+      "agentIds": [
+        "1241"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop23.webp",
+      "crop": {
+        "x": 50,
+        "y": 55
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop23.webp",
+        "bytes": 172630,
+        "sha256": "ea35c5777ab6c11df3fd5099f1a8d9d9da9ad38672dd99cf0cf569fe1442114b",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop23-128.webp",
+        "bytes": 5916,
+        "sha256": "689933cf6dbb5b8a3e4d99c126fe599471c9818615ec737526ecbb045b594273",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop24": {
+      "agentIds": [
+        "1261"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop24.webp",
+      "crop": {
+        "x": 28,
+        "y": 49
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop24.webp",
+        "bytes": 134476,
+        "sha256": "02c359522435e5c963107cd8ce6847f0928ae68a744295b8cea4920fa0222f7e",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop24-128.webp",
+        "bytes": 4808,
+        "sha256": "144b7ef6198c3cc09fe66ff8dbdc6bffec1b5168cb3c06d3da21523d08ceb045",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop25": {
+      "agentIds": [
+        "1071"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop25.webp",
+      "crop": {
+        "x": 50,
+        "y": 58
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop25.webp",
+        "bytes": 145482,
+        "sha256": "2648c01142931055d1e9b2333cf622b2d723973e9daeb0b447697c40c916d0e6",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop25-128.webp",
+        "bytes": 5944,
+        "sha256": "eef677f7ecfbaa7f17b72c1a003e30d7a720a768c72f91158ffb94c100f951ed",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop26": {
+      "agentIds": [
+        "1161"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop26.webp",
+      "crop": {
+        "x": 50,
+        "y": 59
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop26.webp",
+        "bytes": 138358,
+        "sha256": "6c64a22099c492eebd05e2abd53df7881165f57b6057132bd9cb703ba6fbacc0",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop26-128.webp",
+        "bytes": 4822,
+        "sha256": "65f2df2d813998e813c0e81d6157794e9d4bea7f4b26c25e4ab2a7dd4205f44e",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop27": {
+      "agentIds": [
+        "1151"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop27.webp",
+      "crop": {
+        "x": 69,
+        "y": 54
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop27.webp",
+        "bytes": 155552,
+        "sha256": "feafaaba6bb39e294c7b35b11811b7eec12ae0824b2673bb8e1cb73f16758dab",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop27-128.webp",
+        "bytes": 6200,
+        "sha256": "d9939b2a187415d56f9a4c6cfb7d0b1dce34b719b9adcad3a9e0a20276b69e47",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop28": {
+      "agentIds": [
+        "1281"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop28.webp",
+      "crop": {
+        "x": 68,
+        "y": 49
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop28.webp",
+        "bytes": 140550,
+        "sha256": "ee514e11eee87a2303d95fd7fedf94d02343c30abc3ed5c6f66f486696d87b6c",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop28-128.webp",
+        "bytes": 5544,
+        "sha256": "bfde34f693e14feb34ccea5ef4b610a7f043d1b8a3a64a4e9942a9288dba7c68",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop29": {
+      "agentIds": [
+        "1251"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop29.webp",
+      "crop": {
+        "x": 50,
+        "y": 46
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop29.webp",
+        "bytes": 146398,
+        "sha256": "6283b047bc1bb231468e1c22079cc8793c676c4c15c9022087db436585bc1404",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop29-128.webp",
+        "bytes": 5582,
+        "sha256": "e365a431dbb91e45ef02d75753ea534f3f162437c85c291b8760f71aee7455eb",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop30": {
+      "agentIds": [
+        "1271"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop30.webp",
+      "crop": {
+        "x": 50,
+        "y": 52
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop30.webp",
+        "bytes": 128444,
+        "sha256": "44dea69ea5a36a2a14553f10e61ac7c7819e437581ffb73a91b2ce4d99fc76ee",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop30-128.webp",
+        "bytes": 5614,
+        "sha256": "3dcfdb400baa4ab88dc892d86dd5fec9cb7b57e483ff1a5993ba61d11a1c6b7b",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop31": {
+      "agentIds": [
+        "1221"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop31.webp",
+      "crop": {
+        "x": 30,
+        "y": 52
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop31.webp",
+        "bytes": 128950,
+        "sha256": "2cdeae32a90ec20c59af9534d9a6c4bd33c1b0bbf6d8a2a6eb9c7692bba2feef",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop31-128.webp",
+        "bytes": 5124,
+        "sha256": "ec6711eb80f5d71dae1bf6e2393f19092c1ca5bd174b574f5b3922bd66978bed",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop32": {
+      "agentIds": [
+        "1171"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop32.webp",
+      "crop": {
+        "x": 50,
+        "y": 49
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop32.webp",
+        "bytes": 165418,
+        "sha256": "1f8b43ee5ed8ee2100fbecac82cc1a45eb48b853786977cfde28d913b4985dc1",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop32-128.webp",
+        "bytes": 6810,
+        "sha256": "b68a3d2d3b377adb2b6aa297fbeafdb63338cd06bfc1544cedb17c12f45d705b",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop35": {
+      "agentIds": [
+        "1201"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop35.webp",
+      "crop": {
+        "x": 50,
+        "y": 54
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop35.webp",
+        "bytes": 111922,
+        "sha256": "657e77fec720126296a82691f352843746a07c000299cc52993fad9cee4b4a37",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop35-128.webp",
+        "bytes": 5204,
+        "sha256": "1eb3ec59c46d2cffa171b5bf052d12b599c557050c1efe77c2299a2fea70d297",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop36": {
+      "agentIds": [
+        "1311"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop36.webp",
+      "crop": {
+        "x": 66,
+        "y": 49
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop36.webp",
+        "bytes": 136286,
+        "sha256": "cb3eac22a092810fcb02efcf31886a0cf5f4f8bbe3b0684a73089fc8b0d9ab50",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop36-128.webp",
+        "bytes": 5396,
+        "sha256": "f8a7f828af029ea457bc3bbeb3ef50a65ec3b72852b2ddd28b58e3c40687f4d1",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop37": {
+      "agentIds": [
+        "1321"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop37.webp",
+      "crop": {
+        "x": 50,
+        "y": 37
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop37.webp",
+        "bytes": 137070,
+        "sha256": "84ae391674f0d90e559baddebe8831b26a855e369ef0e87b68436970a989b9f8",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop37-128.webp",
+        "bytes": 6442,
+        "sha256": "00d3bab6f355e8d65434e1155f935eef2c4742eb1723e4c41ecdf20c8cde5785",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop38": {
+      "agentIds": [
+        "1351"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop38.webp",
+      "crop": {
+        "x": 50,
+        "y": 31
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop38.webp",
+        "bytes": 145984,
+        "sha256": "5ab19873544628588e0f1fc936b7a10ee7cc734f410e9e73bde01a865b964977",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop38-128.webp",
+        "bytes": 6970,
+        "sha256": "4cf7ce462588b834b1c51aa29ab337247371d55d99e1dcf2af357707589fcd9e",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop39": {
+      "agentIds": [
+        "1361"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop39.webp",
+      "crop": {
+        "x": 50,
+        "y": 40
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop39.webp",
+        "bytes": 149172,
+        "sha256": "d5f50c119447f6343254b035fef1e90d651b513b086865f71116ce28870328ab",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop39-128.webp",
+        "bytes": 6244,
+        "sha256": "6aadd6d2618974b5d7903f94537ba7e4e267f0ecd837b7082c78aa4491ba74d4",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop40": {
+      "agentIds": [
+        "1381"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop40.webp",
+      "crop": {
+        "x": 50,
+        "y": 34
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop40.webp",
+        "bytes": 154120,
+        "sha256": "8e00061c1cddbe72674774e4ba596ff0e6cde655e900ac8c3d64119a9e825a07",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop40-128.webp",
+        "bytes": 7222,
+        "sha256": "21a5ece7d2b4d00b1ae957810a2162b98e638a8f8af456dfa0c8bd5d555e0123",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop41": {
+      "agentIds": [
+        "1331"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop41.webp",
+      "crop": {
+        "x": 50,
+        "y": 34
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop41.webp",
+        "bytes": 158192,
+        "sha256": "7bbc0edd99d78cc095803c441e013e12fb8f50e44bf3a034d35caae7a433679b",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop41-128.webp",
+        "bytes": 5616,
+        "sha256": "ef74b2d0445d77f8d505e4d8f4a76083a565c74754d5748afd8968dde18d8698",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop42": {
+      "agentIds": [
+        "1291"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop42.webp",
+      "crop": {
+        "x": 50,
+        "y": 52
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop42.webp",
+        "bytes": 147580,
+        "sha256": "0060814a911b0326e26667cad82104603a1c6d9199dee2c014d50b1b39222662",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop42-128.webp",
+        "bytes": 6286,
+        "sha256": "89b9cbfb342898f5a74b60747cfe9ec6af0f98977f0867496a38122755ecfcfd",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop43": {
+      "agentIds": [
+        "1391"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop43.webp",
+      "crop": {
+        "x": 50,
+        "y": 46
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop43.webp",
+        "bytes": 178720,
+        "sha256": "7dbd956a823b66eab8434964230a19e989ced4a64ca0ec9383a15e55dab9052f",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop43-128.webp",
+        "bytes": 7244,
+        "sha256": "a90f02d9e50b2588b5e2890a855863d0d1fea678bf5321e35c22da6cbb8b4720",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop44": {
+      "agentIds": [
+        "1371"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop44.webp",
+      "crop": {
+        "x": 50,
+        "y": 37
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop44.webp",
+        "bytes": 176132,
+        "sha256": "18eefbfcd3f20f51e8a777bd1dafd2208d91cbc85cc53f9b1c3b1d09f5cb6da4",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop44-128.webp",
+        "bytes": 6912,
+        "sha256": "49c5bce3c6f451f377734dcba788761e6e809c0e84060fd3890f6cda7d8b188c",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop45": {
+      "agentIds": [
+        "1421"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop45.webp",
+      "crop": {
+        "x": 50,
+        "y": 28
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop45.webp",
+        "bytes": 136312,
+        "sha256": "82af57aaad31ead701fa78f4a7248e6aaa66a935311ceeac24e7ad36c96bfa87",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop45-128.webp",
+        "bytes": 5034,
+        "sha256": "1071eb182ce7fc45e5b7e0fb5e27806a50d8355ddef5633b0b41269956699973",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop46": {
+      "agentIds": [
+        "1401"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop46.webp",
+      "crop": {
+        "x": 50,
+        "y": 40
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop46.webp",
+        "bytes": 124992,
+        "sha256": "6d2361319ae29d644da1295be0c152075053d5d5f157856c9859e3b475573fdd",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop46-128.webp",
+        "bytes": 5886,
+        "sha256": "a14cb101cbc95147eaa1faf42f3a89e77e01c69c8f8d28232a16cab5f6c9c6cf",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop47": {
+      "agentIds": [
+        "1411"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop47.webp",
+      "crop": {
+        "x": 50,
+        "y": 41
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop47.webp",
+        "bytes": 176106,
+        "sha256": "2d0af4cad0520de308ff7585f294bd467bb04a10a40119b3c3beb1c6abac28db",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop47-128.webp",
+        "bytes": 5670,
+        "sha256": "a6ccad504a5565412ad0f74cb0d4e49f7525bbeaa2921cc8244da885ad919188",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop48": {
+      "agentIds": [
+        "1461"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop48.webp",
+      "crop": {
+        "x": 50,
+        "y": 40
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop48.webp",
+        "bytes": 130862,
+        "sha256": "ed61a5f931dee29eab420c526f737dc38f4e11970ae23f313e8ed3aa3f0bb8fd",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop48-128.webp",
+        "bytes": 6062,
+        "sha256": "b0961bb80662bbb9adf6634d09f1e94854142bd21fb534a575f6d155e8b2333b",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop49": {
+      "agentIds": [
+        "1301"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop49.webp",
+      "crop": {
+        "x": 50,
+        "y": 52
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop49.webp",
+        "bytes": 174666,
+        "sha256": "640e70ed426fcdea4fa54888929d6fbc88d9d25cd4f23d4974061a99bdb74482",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop49-128.webp",
+        "bytes": 6556,
+        "sha256": "d5ccb65e82db3c92995c751c808639bf2416505a112b921825c5394b712d6046",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop50": {
+      "agentIds": [
+        "1451"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop50.webp",
+      "crop": {
+        "x": 29,
+        "y": 37
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop50.webp",
+        "bytes": 160318,
+        "sha256": "665eefa7fed516fa12bb491f7a997401ca4b602aa7288dcaff6f00cd9aa12767",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop50-128.webp",
+        "bytes": 6310,
+        "sha256": "4d5361e3587095b32d78ad00ada5e59038c0d84cbbf19265a408c619df79feb0",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop51": {
+      "agentIds": [
+        "1441"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop51.webp",
+      "crop": {
+        "x": 50,
+        "y": 37
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop51.webp",
+        "bytes": 150328,
+        "sha256": "c49403e024f727122423f6ce6af318807dddabbda7431518806f4458100411a8",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop51-128.webp",
+        "bytes": 5534,
+        "sha256": "d764b3948ff5959fc42c95eff6eefa8ba1eace041539a9c4d17bbe4045e895ac",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop52": {
+      "agentIds": [
+        "1051"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop52.webp",
+      "crop": {
+        "x": 50,
+        "y": 43
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop52.webp",
+        "bytes": 138734,
+        "sha256": "0f84b7ad2d8f75d3c8c3bd8d7857954fee5591701bc43240b1dd8f31a7723bbd",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop52-128.webp",
+        "bytes": 5728,
+        "sha256": "1f15582570f10eb16abcc61ce596a47d3217110b26f140dbef735660423d7522",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop53": {
+      "agentIds": [
+        "1471"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop53.webp",
+      "crop": {
+        "x": 50,
+        "y": 37
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop53.webp",
+        "bytes": 148554,
+        "sha256": "8142ea1eeb6408d4fdc38a7915bbeb236153a21cfdbbf9c6019234249fdb4d49",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop53-128.webp",
+        "bytes": 6402,
+        "sha256": "e9e106fa175a4c4482329ddb0f45054ac5823d574d7fa0fbe0b1f53f47d633cd",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop54": {
+      "agentIds": [
+        "1481"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop54.webp",
+      "crop": {
+        "x": 50,
+        "y": 43
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop54.webp",
+        "bytes": 148120,
+        "sha256": "d5254a8a8cb7e8820bd1ae0103a3ca51c294c6393824a6b0443b8564435f756b",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop54-128.webp",
+        "bytes": 6576,
+        "sha256": "7e0fec57abc184295436797183f398d06cb26b9a596cd946561c6932c71537e0",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop55": {
+      "agentIds": [
+        "1431"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop55.webp",
+      "crop": {
+        "x": 50,
+        "y": 37
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop55.webp",
+        "bytes": 165780,
+        "sha256": "8de4fa900103c18db067693173a3eb06d862114714609ad7aef9dcc19f4a6b50",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop55-128.webp",
+        "bytes": 6242,
+        "sha256": "5355cc49bd58f484bcbf8080f15bfd2b971e523a2d6074c8c107cd2a54a7fdab",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop56": {
+      "agentIds": [
+        "1341"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop56.webp",
+      "crop": {
+        "x": 50,
+        "y": 46
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop56.webp",
+        "bytes": 145588,
+        "sha256": "e11805eed81d80111df4c03ad715a53d87ef6a9d284bbf3e6dc639c2a7559586",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop56-128.webp",
+        "bytes": 5744,
+        "sha256": "c0473e3f537a81a13ceed8efbd783ec73750080b2c04fa9e3dcc2513b9d1b60f",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop57": {
+      "agentIds": [
+        "1501"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop57.webp",
+      "crop": {
+        "x": 50,
+        "y": 43
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop57.webp",
+        "bytes": 172880,
+        "sha256": "79e82ead7140c9eed72c820020a1dbf31c888922427657357c55e5cac6c6b136",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop57-128.webp",
+        "bytes": 6790,
+        "sha256": "3d77085bcb0e9050c9bfd3694e2020e2be4a3b2564096939e66f15236d1f3ed9",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop58": {
+      "agentIds": [
+        "1491"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop58.webp",
+      "crop": {
+        "x": 50,
+        "y": 40
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop58.webp",
+        "bytes": 172038,
+        "sha256": "3e5406f03b82d1758e16a8182bc90c50ac22f5b629634585b9f3501c9a1ac2dc",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop58-128.webp",
+        "bytes": 7062,
+        "sha256": "3e457f9603006b4bb418b7d86178217b4ead0f7dfeb2d4264d5394de6a4d7fb8",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop59": {
+      "agentIds": [
+        "1511"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop59.webp",
+      "crop": {
+        "x": 50,
+        "y": 43
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop59.webp",
+        "bytes": 164018,
+        "sha256": "f91b3dd903f6c840d41378b273ff1bf797d6844c66b100fe0ccb4f7d0433d7de",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop59-128.webp",
+        "bytes": 7094,
+        "sha256": "c12005d16d7f3f7f03a6eeeddc3c060acc11e882966c13cc6179f35ad6b3a06f",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop60": {
+      "agentIds": [
+        "1521"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop60.webp",
+      "crop": {
+        "x": 50,
+        "y": 27
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop60.webp",
+        "bytes": 187698,
+        "sha256": "471768b319398bc331d16855060fa6efc95c68ad05ca441e6c71af1c54c087c1",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop60-128.webp",
+        "bytes": 7632,
+        "sha256": "c79926c7fb1bc5aeac972a2b7ea803bb6cdc6b0aebde4dba2de9295d61a42d83",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop61": {
+      "agentIds": [
+        "1541"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop61.webp",
+      "crop": {
+        "x": 100,
+        "y": 28
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop61.webp",
+        "bytes": 151020,
+        "sha256": "ee7de82d756ff25989cae5d4de5a5e7e507496a41f60cb51354bb889c835d6ec",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop61-128.webp",
+        "bytes": 6070,
+        "sha256": "76ac81fcc96aaf6171e65ef90d36628b435c60cd7996919dc987996b7dd630ef",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop62": {
+      "agentIds": [
+        "1531"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop62.webp",
+      "crop": {
+        "x": 50,
+        "y": 45
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop62.webp",
+        "bytes": 143638,
+        "sha256": "a2c60b316e757d8374de813e2652eca2033c9b339a17c15a6007cc4fd1e20a4b",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop62-128.webp",
+        "bytes": 5872,
+        "sha256": "a181cafc3da096f38ee153ba38613e49263901f01f9e5ccf49938b5474853a0b",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop63": {
+      "agentIds": [
+        "1551"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop63.webp",
+      "crop": {
+        "x": 50,
+        "y": 33
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop63.webp",
+        "bytes": 119564,
+        "sha256": "b1208623be84f86577a2dee474d71279b70e763a4371fef0bfe677131b0bac4c",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop63-128.webp",
+        "bytes": 5366,
+        "sha256": "c9989b063a88ee21e5670ead6145e64206e92a79d6dacdfed4935221da517ffd",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop64": {
+      "agentIds": [
+        "1561"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop64.webp",
+      "crop": {
+        "x": 0,
+        "y": 51
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop64.webp",
+        "bytes": 163866,
+        "sha256": "26c1b5ec35ab6026b8ae59edd17e480464aeb0f2e01b9a4dcbf9c0ea04234509",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop64-128.webp",
+        "bytes": 7112,
+        "sha256": "c4a1a55314e3e894a6d02d7177efc1e16632c31600fdb0c97a2e4f24ca517799",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop65": {
+      "agentIds": [
+        "1571"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop65.webp",
+      "crop": {
+        "x": 50,
+        "y": 42
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop65.webp",
+        "bytes": 189802,
+        "sha256": "1bb9454afde5cec15ab62ecb252d1e8ff2204825b1acfbe9741f912f7c2fb223",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop65-128.webp",
+        "bytes": 6324,
+        "sha256": "11aa4cf04bc24ee13f84b920230b7fe7f927152ebbf848b904324cae460a1ade",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop66": {
+      "agentIds": [
+        "1591"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop66.webp",
+      "crop": {
+        "x": 68,
+        "y": 45
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop66.webp",
+        "bytes": 178452,
+        "sha256": "b4ac377cf9880b19f229444d3872d0ef8186bdec38fe1ff48421f3a191a287ac",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop66-128.webp",
+        "bytes": 7716,
+        "sha256": "3491057a9d390a5ba98908f4d3dc3033524fac9197676ef0f8ce4eccf2eb4663",
+        "width": 128,
+        "height": 128
+      }
+    },
+    "IconRoleCrop67": {
+      "agentIds": [
+        "1581"
+      ],
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCrop67.webp",
+      "crop": {
+        "x": 50,
+        "y": 58
+      },
+      "square": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop67.webp",
+        "bytes": 133054,
+        "sha256": "9efb0543214bcb0a86162b514333428058dc53fc87187631265b43247431ecc7",
+        "width": 384,
+        "height": 384
+      },
+      "thumb": {
+        "path": "/images/agents/2026-10-09/IconRoleCrop67-128.webp",
+        "bytes": 5794,
+        "sha256": "988d3242e9f4aaa172c24b5431f058c5a84213b81efe96a6cd65dec77bd067ea",
+        "width": 128,
+        "height": 128
+      }
+    }
+  },
+  "classifications": {
+    "element-200": {
+      "stem": "IconPhysical",
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconPhysical.webp",
+      "file": {
+        "path": "/images/classifications/2026-10-09/IconPhysical.webp",
+        "bytes": 682,
+        "sha256": "2f03984d9894bb23b5c485291d270415dd765111deed42ad9b3ab18727355f86",
+        "width": 62,
+        "height": 61
+      }
+    },
+    "element-201": {
+      "stem": "IconFire",
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconFire.webp",
+      "file": {
+        "path": "/images/classifications/2026-10-09/IconFire.webp",
+        "bytes": 944,
+        "sha256": "e5fc2bdcb529707d4a96935a2f960c8167cac5600221581291a801c117ce1d73",
+        "width": 64,
+        "height": 64
+      }
+    },
+    "element-202": {
+      "stem": "IconIce",
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconIce.webp",
+      "file": {
+        "path": "/images/classifications/2026-10-09/IconIce.webp",
+        "bytes": 712,
+        "sha256": "db7330aba9de3fcad4c62e3af239faf1f2efd139b0dc0ed5b71c16c30f9a8084",
+        "width": 64,
+        "height": 64
+      }
+    },
+    "element-203": {
+      "stem": "IconElectric",
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconElectric.webp",
+      "file": {
+        "path": "/images/classifications/2026-10-09/IconElectric.webp",
+        "bytes": 814,
+        "sha256": "88e4540e78731efa530a264d59a9575d4b29baf43f93636e3c19e7e9dc342ec9",
+        "width": 63,
+        "height": 59
+      }
+    },
+    "element-204": {
+      "stem": "IconWind",
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconWind.webp",
+      "file": {
+        "path": "/images/classifications/2026-10-09/IconWind.webp",
+        "bytes": 1110,
+        "sha256": "9b6117c80c8ce94234619ae3e4ae2ca336d060e5d2e338a6930e5eebe8bbb75f",
+        "width": 60,
+        "height": 54
+      }
+    },
+    "element-205": {
+      "stem": "IconEther",
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconEther.webp",
+      "file": {
+        "path": "/images/classifications/2026-10-09/IconEther.webp",
+        "bytes": 714,
+        "sha256": "73cb5fa6df0b78148f1947e4c5b90e0b544d3e1111acfdc8288dac90901555fb",
+        "width": 62,
+        "height": 64
+      }
+    },
+    "element-300": {
+      "stem": "IconLumiflux",
+      "sourceUrl": "https://i.gachabase.net/WZ6dz2m66KusU0_Ir9Fjrtp9kP47RTv9U45GZPL33f8/q:50/f:webp/plain/zzz/assets/1ed527ad8b2d3f7015071c429a92c3ae.png",
+      "file": {
+        "path": "/images/classifications/2026-10-09/IconLumiflux.webp",
+        "bytes": 804,
+        "sha256": "971279cbe726e11aa99df68ba4583ee988d47400709174cd79375f7ebf76ecdd",
+        "width": 60,
+        "height": 60
+      }
+    },
+    "specialty-1": {
+      "stem": "IconAttackType",
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconAttackType.webp",
+      "file": {
+        "path": "/images/classifications/2026-10-09/IconAttackType.webp",
+        "bytes": 4146,
+        "sha256": "e3e74f82a8a1f27b17756298af4c3cfcc100269686aab84c23d8970e5579ba3e",
+        "width": 54,
+        "height": 54
+      }
+    },
+    "specialty-2": {
+      "stem": "IconStun",
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconStun.webp",
+      "file": {
+        "path": "/images/classifications/2026-10-09/IconStun.webp",
+        "bytes": 1730,
+        "sha256": "0276e5369cbd39ec7a62cfd999c45dc56f7c9dd84290c1c0f8d8358390161cce",
+        "width": 59,
+        "height": 60
+      }
+    },
+    "specialty-3": {
+      "stem": "IconAnomaly",
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconAnomaly.webp",
+      "file": {
+        "path": "/images/classifications/2026-10-09/IconAnomaly.webp",
+        "bytes": 1598,
+        "sha256": "0a5d750940934db65eb310ea27172a4e1c4f92d0696ab8dda4c84aa066ee745e",
+        "width": 58,
+        "height": 56
+      }
+    },
+    "specialty-4": {
+      "stem": "IconSupport",
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconSupport.webp",
+      "file": {
+        "path": "/images/classifications/2026-10-09/IconSupport.webp",
+        "bytes": 1554,
+        "sha256": "de800d47e164dace239bda557bb7c9a9277e2439e5f5ee5c7e4c2eeb4875be2c",
+        "width": 54,
+        "height": 55
+      }
+    },
+    "specialty-5": {
+      "stem": "IconDefense",
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconDefense.webp",
+      "file": {
+        "path": "/images/classifications/2026-10-09/IconDefense.webp",
+        "bytes": 1554,
+        "sha256": "01d1612831393d25f643d7ce391a752101ddff5beea0536b0231b1723d844255",
+        "width": 53,
+        "height": 53
+      }
+    },
+    "specialty-6": {
+      "stem": "IconRupture",
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRupture.webp",
+      "file": {
+        "path": "/images/classifications/2026-10-09/IconRupture.webp",
+        "bytes": 1610,
+        "sha256": "a68a64222c8ecffdbfab70054adff86e2d1577518ccc60619aa5f93f45c22bb3",
+        "width": 55,
+        "height": 55
+      }
+    }
+  },
+  "legacyCircles": {
+    "IconRoleCircle01.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle01.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle01.webp",
+        "bytes": 9456,
+        "sha256": "62dcad3961b4557663524e6f59df852fac2bef390af8b3ebf0bc1e4d9b8b7285",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle05.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle05.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle05.webp",
+        "bytes": 9382,
+        "sha256": "f082deea040118839e20341bcc891df66848bb0763f6a1e6483d71c0d286bbcc",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle09.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle09.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle09.webp",
+        "bytes": 9520,
+        "sha256": "c235193878b33bdd6c66cccd3ca3f05c43957ef79de171fdf2d38e8f00f2b927",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle10.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle10.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle10.webp",
+        "bytes": 7336,
+        "sha256": "a992da2f4e090e94c68430981db6ca166451da94ba16933222b7915428968448",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle11.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle11.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle11.webp",
+        "bytes": 9238,
+        "sha256": "6bd0a3822de7a49b157641533ddaabe809994a81a4e524434259182fb2fdb75f",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle12.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle12.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle12.webp",
+        "bytes": 10134,
+        "sha256": "32d5fe8b0812f8065a6f582622d22f6ca5e7596765fadaf48c8e23c78e0b2ab5",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle13.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle13.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle13.webp",
+        "bytes": 8422,
+        "sha256": "a871ee93f13b945117fd7642322362dd61ea04acc4ec4277195987d336676567",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle14.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle14.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle14.webp",
+        "bytes": 10766,
+        "sha256": "da37eb1171cc508e68e79969b687d849c6a934e85369a06c55de084d2161eea1",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle15.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle15.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle15.webp",
+        "bytes": 8090,
+        "sha256": "6bf77510934795c3cc0b11cfd2b18eda7a33a8321cb6d0c9712869c8795b1e56",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle16.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle16.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle16.webp",
+        "bytes": 5976,
+        "sha256": "2e409fb8233937b6146ad56325115ca19b093a7f0d23403c2889cf881a404875",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle17.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle17.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle17.webp",
+        "bytes": 9876,
+        "sha256": "f6a92b4177c4ccfb9558c24e16b1b35defda2b10473b049eac7b23ff09487e4f",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle18.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle18.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle18.webp",
+        "bytes": 9832,
+        "sha256": "c8502bf6dacaaab03017f0c62016a7d07fe2bf185cc103b603039dd976721a49",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle20.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle20.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle20.webp",
+        "bytes": 9654,
+        "sha256": "9023422c65922ed2fcc0a192c39237b3b093cec93ff9a0cccf967aa018dddf0d",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle21.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle21.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle21.webp",
+        "bytes": 9142,
+        "sha256": "1cacf3ef49ea30fe0f0948add4db5508df254da3d7338a021ca5d7094caee944",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle22.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle22.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle22.webp",
+        "bytes": 8474,
+        "sha256": "6986645ab96e959e76943e654264599517ccd0c43b4ab226df14fd84663894dd",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle23.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle23.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle23.webp",
+        "bytes": 9640,
+        "sha256": "58dcf6df195a4424b371c5993ce7ffc09a04693c11fedf8836da67faaba6ce80",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle24.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle24.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle24.webp",
+        "bytes": 8930,
+        "sha256": "a9ca6e54542d2769b8b00934a3d53e8240101f640e73c8c1cbddd4c486341a89",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle25.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle25.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle25.webp",
+        "bytes": 9954,
+        "sha256": "84429481b8536b53bddb770f9e93fcc1db0932cd7c115bffd6d61829eb534668",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle26.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle26.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle26.webp",
+        "bytes": 8966,
+        "sha256": "7003698d87732957f40381af7370777e90f8c77eee68657488b5c2418e04fade",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle27.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle27.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle27.webp",
+        "bytes": 9634,
+        "sha256": "0199ed5d042a26b5797d9529fa705da9fc5c47cfded1531a1e463452282e3b0d",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle28.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle28.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle28.webp",
+        "bytes": 10336,
+        "sha256": "9f49a68ffa8f1dac24f3431d0bc73717c4289b556bfbae0efaf39274f7faee35",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle29.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle29.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle29.webp",
+        "bytes": 9018,
+        "sha256": "031db1c08628e945e63cf82f26407353055b160153d6b510907d7816f13e1599",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle30.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle30.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle30.webp",
+        "bytes": 8664,
+        "sha256": "ce432d21c0c4519a6cc99138cf932e80a08b100b7ad122fe37d4cc2f7e406c6f",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle31.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle31.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle31.webp",
+        "bytes": 8662,
+        "sha256": "cdb16668f39bbb308e9f1e4821ba4a13cfa039e69f82406f76390d49334d5b7e",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle32.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle32.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle32.webp",
+        "bytes": 8930,
+        "sha256": "7b1868d9a197f6e1a673bfd0f670004ede43a4ff22c30fee837fab31f768b28b",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle35.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle35.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle35.webp",
+        "bytes": 9502,
+        "sha256": "3f5c9e4866beebb608e35f50e164671e86af239dcc0479a161327767a75611c5",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle36.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle36.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle36.webp",
+        "bytes": 9066,
+        "sha256": "967e422527be3805098e873fc4059ecb11d0f7fccf0429a2d77f3413e48c68b7",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle37.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle37.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle37.webp",
+        "bytes": 8824,
+        "sha256": "42b824422bf4b1a73133d48d3b58f78cd148be52c2c8e5430139224644a22dcd",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle38.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle38.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle38.webp",
+        "bytes": 10678,
+        "sha256": "d4427dfc434190e0760f6afca1d1775fb495ebe3a3159caa24cf0668ea2422cf",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle39.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle39.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle39.webp",
+        "bytes": 8844,
+        "sha256": "26c1c0e687f9f83ed2dcc6d0a6f3f133ebecb578b7a74c2d55dfcfd559276a11",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle41.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle41.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle41.webp",
+        "bytes": 10214,
+        "sha256": "acfcddfbf5c50faf709755f4de53cb287036008b3e29e0e88ba64f1218412e34",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle42.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle42.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle42.webp",
+        "bytes": 8860,
+        "sha256": "50e34ed35bf42622d0f0aca7185a4c94bd7c7907bdf97ea99c5645b6e0d1402b",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle43.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle43.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle43.webp",
+        "bytes": 9268,
+        "sha256": "a1b7c1b8045e2f07acbaf9041ebde113ae1b0e4d6a01e273fdb5f90565d6a56a",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle44.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle44.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle44.webp",
+        "bytes": 9612,
+        "sha256": "749652b028f88b26f37157d68d45bce7fb05c680fb6483870fde8e0bb066da25",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle45.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle45.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle45.webp",
+        "bytes": 7724,
+        "sha256": "e521307bff93070de60f1aa137b278a19bcf0534a273fcc1585daa7abf15af12",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle46.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle46.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle46.webp",
+        "bytes": 9336,
+        "sha256": "6fe1fdc5944f63ae553cbfd8d6a81242ffe857f6ee7a9605a0054861e76f08ee",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle47.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle47.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle47.webp",
+        "bytes": 9002,
+        "sha256": "c5310ef6a0d567ca4bf1ffb5057c142bfdcde272bb8ebfeff9330ce0548d1b5b",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle48.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle48.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle48.webp",
+        "bytes": 9356,
+        "sha256": "8e2fa6178ffd8a1b5c7c24bb6c3a4cdeaed533f21a3620387106190faa1fe03b",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle49.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle49.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle49.webp",
+        "bytes": 9776,
+        "sha256": "881ea4ac6806a82be3ce622a7fda6323d14f82f5eda8967ecada1f82b607e456",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle50.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle50.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle50.webp",
+        "bytes": 10192,
+        "sha256": "b8e559abc751daa8334a7da6df997a9d60a25c49f10378353b343a400e27c3ca",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle51.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle51.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle51.webp",
+        "bytes": 9796,
+        "sha256": "0a104c2be70438de87591648eeaf9aad765dc7d6d763f20cdcdb6d2b13f44d76",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle52.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle52.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle52.webp",
+        "bytes": 11084,
+        "sha256": "2ffbbe8c1c1708f5e7091d048b329364c8a71125720f5718b25c37a1925e0db3",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle53.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle53.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle53.webp",
+        "bytes": 10716,
+        "sha256": "740aa08abb1ba7cfec24cee360fc3fb6a51acf1496acf8b57502519411af5ecf",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle54.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle54.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle54.webp",
+        "bytes": 10420,
+        "sha256": "697a6fac5c94e44ebf2fb1f13de3c52923d610f9c56740f0ccbd5fd632166ca4",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle55.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle55.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle55.webp",
+        "bytes": 9342,
+        "sha256": "7126e40490f64190cf770b932c60481e6117df07fd2a98024bca55d5cf2ca407",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle56.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle56.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle56.webp",
+        "bytes": 8726,
+        "sha256": "3940ecb3af72c9d186dedce6b491335b6ab4cc84693b10612ae9645b0647ddb1",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle57.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle57.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle57.webp",
+        "bytes": 9578,
+        "sha256": "54f655b75153f7e43d0aec6afe9fd689000ad8e9746ed893bf8fd2134189285d",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle58.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle58.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle58.webp",
+        "bytes": 8818,
+        "sha256": "c29a2a16a07db788098a22326febb71b07337792ef8a244cede379dcfea08967",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle59.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle59.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle59.webp",
+        "bytes": 8228,
+        "sha256": "e4c8e69204368fcbf1724206e0a59e6cd459f1ca2580f0641ac4725bb3ee3094",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle60.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle60.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle60.webp",
+        "bytes": 10434,
+        "sha256": "6b0257ecc20daace32f6ecd5cec17335cc3c2154b454d74648ab63eef14a5f78",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle61.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle61.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle61.webp",
+        "bytes": 9004,
+        "sha256": "79e0776ce5635dedcea641c56d8b3277f2996c1390d46d32e8f8e9df26a5d46c",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle64.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle64.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle64.webp",
+        "bytes": 9584,
+        "sha256": "6955e8814bea2f4cf22ec3552963edceda6a838fe483c095c702738117c4b4a3",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle65.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle65.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle65.webp",
+        "bytes": 9296,
+        "sha256": "fd9508dbb83186bace657246f890ccb2459f49bbfa95790e9b737605d70aa962",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle66.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle66.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle66.webp",
+        "bytes": 9640,
+        "sha256": "06f38f58db6a859e95b08202431221559ca5dbd0fa942d399aac3e9495b8fc92",
+        "width": 142,
+        "height": 142
+      }
+    },
+    "IconRoleCircle67.webp": {
+      "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRoleCircle67.webp",
+      "file": {
+        "path": "/images/agents/legacy/IconRoleCircle67.webp",
+        "bytes": 9874,
+        "sha256": "7548abd3c9fcca725fb6b1a9d29cff1757f74275bd7c7bc272064150ff0df57c",
+        "width": 142,
+        "height": 142
+      }
+    }
+  }
+}

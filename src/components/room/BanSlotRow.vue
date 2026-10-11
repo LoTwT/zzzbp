@@ -5,8 +5,9 @@ import type { AgentDisplayBase } from "../../room/room-catalog";
 import { banRoundBreakIndex } from "../../room/pick-layout";
 import AgentAvatar from "./AgentAvatar.vue";
 
-// 顶部禁用槽位（每方 4 个）：已提交的禁用结果显示头像与斜杠；当前操作位
-// 是禁用时进入 active（高亮描边，进行中且连接正常时呼吸），并公开预选。
+// 顶部禁用槽位（每方 4 个）：已提交的禁用结果显示缩略图与斜杠（方图走
+// 同修订的 128 缩略图，见 AgentAvatar 的 thumb 用途）；当前操作位是禁用
+// 时进入 active（高亮描边，进行中且连接正常时呼吸），并公开预选。
 // 两轮禁用（每方前 2 位与后 2 位）之间以竖线分隔，边界按权威操作位推导
 // （banRoundBreakIndex），与显示顺序无关；实时房间、展示页与记录页共用
 // 本组件，三个页面的分隔一致。
@@ -52,7 +53,9 @@ const roundBreakIndex = computed(() => banRoundBreakIndex(props.slots));
           aria-hidden="true"
         />
         <template v-if="slot.agent !== null">
-          <AgentAvatar :agent="slot.agent" />
+          <!-- 顶部禁用区使用同一资源修订的 128 缩略图（方图缺缩略图时由
+               AgentAvatar 回退母图；旧圆图完整展示）。 -->
+          <AgentAvatar :agent="slot.agent" variant="thumb" />
           <!-- 已禁用：压暗 + 斜杠覆盖（图像遮罩按实际用途保留）。 -->
           <span class="absolute inset-0 rounded-md bg-(--text-primary)/50" aria-hidden="true" />
           <svg
@@ -73,7 +76,7 @@ const roundBreakIndex = computed(() => banRoundBreakIndex(props.slots));
           <span class="sr-only">已禁用：{{ slot.agent.name }}</span>
         </template>
         <template v-else-if="slot.active && preselectAgent !== null">
-          <AgentAvatar :agent="preselectAgent" />
+          <AgentAvatar :agent="preselectAgent" variant="thumb" />
           <span class="sr-only">当前操作位，预选：{{ preselectAgent.name }}</span>
         </template>
         <template v-else>

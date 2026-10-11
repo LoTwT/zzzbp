@@ -165,7 +165,7 @@ async function copyRecordLink(): Promise<void> {
                 <span class="text-sm text-(--text-secondary)">{{ row.actionText }}</span>
                 <span class="flex min-w-0 items-center gap-2">
                   <span class="size-9 shrink-0 rounded-md">
-                    <AgentStatusAvatar :agent="row.agent" :status="row.status" />
+                    <AgentStatusAvatar :agent="row.agent" :status="row.status" variant="thumb" />
                   </span>
                   <span class="min-w-0 truncate text-sm text-(--text-primary)" :title="row.name">
                     {{ row.name }}

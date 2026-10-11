@@ -10,7 +10,7 @@
 |---|---|---|
 | `src/` | Vue 页面、组件与浏览器连接管理。 | 依赖 `shared/` |
 | `shared/bp/` | BP 规则：26 步权威顺序、互斥池、BP 进度状态。 | 不依赖浏览器或 Workers 运行时，可依赖 Zod 与共享 schema |
-| `shared/agents/` | 代理人目录：固定版本的只读数据产物（`catalog.json`）、共享 Zod schema、目录派生接口（含头像图片 URL 派生）与纯数据搜索筛选。 | 不依赖浏览器或 Workers 运行时，可依赖 Zod；运行时只读产物，不导入上游数据包 |
+| `shared/agents/` | 代理人目录：固定版本的只读数据产物（`catalog.json`，含图片资源引用、修订与已收录旧圆图摘要）、图片资源清单（`assets.json`，仅脚本与测试使用）、共享 Zod schema（`schema.ts` 运行时 / `assets-schema.ts` 构建期）、目录派生接口与图片 URL 布局/旧地址解析（`assets.ts`）、图片资源导入批次校验（`assets-import.ts`，仅脚本与测试使用）与纯数据搜索筛选。 | 不依赖浏览器或 Workers 运行时，可依赖 Zod；运行时只读产物与 `assets.ts`，不导入上游数据包或清单 |
 | `shared/`（根） | 房间状态、命令契约与纯函数状态转换（`room.ts`、`commands.ts`、`transitions.ts`、`ids.ts`）。 | 依赖 `shared/bp/` |
 | `shared/contracts/` | 网络合同：HTTP、视图投影、WebSocket、归档记录、版本信息。 | 依赖 `shared/` 根、`shared/bp/` 与 `shared/agents/` 的 schema（房间目录合同复用） |
 | `shared/api.ts` | 引导期的 `/api/health` 契约，保留兼容；房间协议不在此扩展。 | — |
@@ -139,7 +139,9 @@
   lookup（`toAgentDisplayLookup`）与 `GET /api/rooms/:roomId/catalog`
   一律从其持久快照派生；房间对象与一切房间读取只使用该持久快照
   （全局目录仅在 Worker 建房入口作为创建输入注入一次），部署升级不
-  重解释旧房间的名单、展示或可选资格。数据来源与更新办法见
+  重解释旧房间的名单、展示或可选资格（目录快照随附的图片资源修订
+  `imageAssets.revision` 与旧快照缺失该字段时的旧圆图解释同样固定，
+  见[代理人数据接入](specs/agent-data.md)）。数据来源与更新办法见
   [代理人数据接入](specs/agent-data.md)。
 - 载入状态一律经 `roomStateSchema` / `agentCatalogSchema` 校验，不建立
   第二套 BP 规则；BP 命令语义走 `shared/transitions.ts` 纯函数，持久层
@@ -309,7 +311,10 @@
 产品规则见[房间保留与只读记录](specs/room-roles.md#房间保留与只读记录)；
 时间常量：全员离开后空房保留 12 小时，只读快照自归档起 90 天。
 运行时实现于 `server/room.ts`（裁决与编排）与 `server/persistence.ts`
-（归档行读写）。
+（归档行读写）。归档操作固定代理人展示名称、稳定头像路径（本站公开
+路径或映射后的旧圆图本地副本）与方图宽幅裁切位置
+（`agentAvatarUrl`/`agentAvatarCrop`，旧归档缺裁切字段按 null 解释）；
+图片 URL 布局与旧地址解析见 `shared/agents/assets.ts`。
 
 - 单一裁决入口（`adjudicateLifecycleInTransaction`）：读取（含目录）、
   入房、WS 接纳、已有 WS 命令与 Alarm 处理器共用同一规则，不复制各自
@@ -463,6 +468,22 @@ PR9 已落地归档与只读记录（`server/room.ts` 生命周期裁决、
   记录到期时间；页面无实时连接、无倒计时轮询。
 - 生命周期与 Alarm 语义见[生命周期与归档记录](#生命周期与归档记录)。
 
+PR11 已落地图片与图标资源统一接入（`shared/agents/assets.ts`、
+`assets.json`、`src/room/agent-image.ts` 与共用图片组件）：
+
+- 游戏图片与分类图标改为本站同源静态资源（`public/images/`，随既有
+  Vite / Workers Static Assets 链路分发），同源根路径引用；目录快照随附
+  图片资源修订（`imageAssets`），条目与分类携带 `iconAsset` 引用与宽幅
+  裁切校准值，来源与导入流程见[代理人数据接入](specs/agent-data.md)。
+- 共用图片组件按用途表达三种展示（池内方图母图、禁用区 128 缩略图、
+  选用区 cover+逐角色 object-position 宽幅裁切）；旧目录快照与旧归档按
+  原始 `avatarPath`/保存地址解释，已收录的旧远程圆图 URL 精确映射到本地
+  副本并完整 contain 展示，未收录或未知引用失败降级不推测新路径。
+- 归档操作新增可选 `agentAvatarCrop`（方图宽幅裁切）；新归档保存稳定
+  本地路径与裁切，旧归档按保存地址原样解释。工具栏分类筛选随目录快照
+  的图标引用切换「图标＋名称/仅图标」形态，图标加载失败退回可见分类
+  文字，旧目录回退文字按钮。
+
 | PR | 接入点 |
 |---|---|
 | PR6（房间界面与常规连接） | 房间主界面、角色权限 UI 与常规 WS 客户端连接管理；命令与视图协议已就位。 |
@@ -470,3 +491,4 @@ PR9 已落地归档与只读记录（`server/room.ts` 生命周期裁决、
 | PR8（展示页，已落地） | 独立展示页 UI、只读展示客户端连接、URL 冻结布局与全量同屏代理人池；展示通道传输边界不变（只读、无身份、不计在线）。 |
 | PR9（归档与清理，已落地） | Alarm 与读写路径共用到期裁决（读 `room_meta.last_member_left_at` 与快照 `expiresAt`）；到期经 `projectArchiveSnapshot` 生成快照或原子清理空房间；`GET /api/rooms/:roomId` 的 archived 分支返回只读快照，原链接进入只读记录页。 |
 | PR10（端到端与容量复核，已落地） | 真实浏览器验收平台（`tests/e2e`：Vitest + Playwright 驱动真实 `cf dev`，服务生命周期由 globalSetup 管理）与资源基准（`tests/measure`，`pnpm measure:rooms`）；验收事实、分层证据与部署前检查见[首版发布与验收说明](release.md)，预算方法见[Cloudflare 部署与预算评估](specs/cloudflare-budget.md#容量估算方法与本地基准)。 |
+| PR11（图片与图标资源，已落地） | 同源静态图片资源、图片资源清单与目录图片资源引用、共用图片组件三用途（方图/缩略/宽幅裁切）、旧圆图精确映射与旧目录/旧归档兼容、分类图标工具栏形态；静态资源清单与导入流程见[代理人数据接入](specs/agent-data.md)。 |

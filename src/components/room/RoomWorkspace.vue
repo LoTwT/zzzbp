@@ -8,7 +8,6 @@ import {
   filterAgentEntries,
   type AgentPoolQuery,
 } from "../../../shared/agents/filter";
-import type { AgentClassification } from "../../../shared/agents/schema";
 import { ArrowLeft, SlidersHorizontal } from "@lucide/vue";
 import AgentCard from "./AgentCard.vue";
 import AgentPoolToolbar from "./AgentPoolToolbar.vue";
@@ -16,7 +15,7 @@ import ControlPanel from "./ControlPanel.vue";
 import PickColumn from "./PickColumn.vue";
 import RoomHeader from "./RoomHeader.vue";
 import { fetchRoomCatalog } from "../../room/api";
-import type { RoomCatalogModel } from "../../room/room-catalog";
+import type { RoomCatalogModel, RoomClassificationDisplay } from "../../room/room-catalog";
 import { toRoomCatalogModel } from "../../room/room-catalog";
 import {
   banSlotsOfView,
@@ -167,7 +166,7 @@ const pickColumns = computed(() =>
 const isSeatedMember = computed(() => view.value !== null && view.value.self.seatTeam !== null);
 
 /** 目录未就绪时工具栏的分类占位：不渲染分类按钮，仅保留搜索与清除入口。 */
-const EMPTY_CLASSIFICATIONS: readonly AgentClassification[] = [];
+const EMPTY_CLASSIFICATIONS: readonly RoomClassificationDisplay[] = [];
 
 const agentQuery = ref<AgentPoolQuery>({ ...EMPTY_AGENT_POOL_QUERY });
 

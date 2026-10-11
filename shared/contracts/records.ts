@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getBpStep, BP_STEP_COUNT, BP_STEP_ORDER } from "../bp/steps";
 import { bpActionSchema, bpTeamSchema } from "../bp/steps";
 import { agentIdSchema, roomIdSchema, type AgentId } from "../ids";
+import { imageCropSchema, type ImageCrop } from "../agents/schema";
 import { roomNameSchema, teamNamesSchema, type RoomState } from "../room";
 import { versionInfoSchema, type VersionInfo } from "./versions";
 
@@ -46,6 +47,8 @@ export function computeSnapshotDeadline(archivedAt: string): string {
 export interface AgentDisplayInfo {
   readonly name: string;
   readonly avatarUrl: string | null;
+  /** 方图在宽幅选用槽位的裁切位置；旧圆图/缺头像为 null。 */
+  readonly avatarCrop: ImageCrop | null;
 }
 export type AgentDisplayLookup = ReadonlyMap<AgentId, AgentDisplayInfo>;
 
@@ -63,8 +66,13 @@ export const archivedOperationSchema = z.object({
   agentId: agentIdSchema,
   /** 归档时的代理人展示名称。 */
   agentName: z.string().trim().min(1),
-  /** 归档时的头像路径；缺失为 null，展示留空。 */
+  /** 归档时的头像地址：稳定的本站公开路径；缺失为 null，展示走占位。 */
   agentAvatarUrl: z.string().nullable(),
+  /**
+   * 归档时固定的方图宽幅裁切位置（选用区矩形槽位）。旧归档快照缺少
+   * 本字段时按 null 解释（方图退回默认居中裁切或按圆图完整展示）。
+   */
+  agentAvatarCrop: imageCropSchema.nullish(),
 });
 export type ArchivedOperation = z.infer<typeof archivedOperationSchema>;
 
@@ -178,6 +186,7 @@ export function projectArchiveSnapshot(input: {
       agentId: submission.agentId,
       agentName: display.name,
       agentAvatarUrl: display.avatarUrl,
+      agentAvatarCrop: display.avatarCrop,
     };
   });
 

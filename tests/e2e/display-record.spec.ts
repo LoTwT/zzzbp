@@ -283,6 +283,10 @@ test("记录页：完成/未完成快照、终态分流与真实 404", async () 
         body: JSON.stringify({ kind: "archived", record: completed }),
       });
     });
+    // 头像加载失败的占位回归：拦截第一条记录（安比）旧圆图 URL 映射到的
+    // 本地副本，行内应走占位（无 img、名称悬停提示保留），第二条记录
+    // （猫又）的图片正常加载。
+    await context.route("**/images/agents/legacy/IconRoleCircle01.webp", (route) => route.abort());
     await page.goto(`${E2E_BASE_URL}/rooms/${roomId}`);
     await page.getByText("只读记录 · 已完成", { exact: true }).waitFor();
     await page.getByText("共 26 步", { exact: true }).waitFor();
@@ -303,8 +307,12 @@ test("记录页：完成/未完成快照、终态分流与真实 404", async () 
       .first()
       .waitFor();
     await page.getByText("已禁用：", { exact: false }).first().waitFor();
-    // 中央列表的步骤序号保留（与已移除的槽位数字角标无关）。
+    // 中央列表的步骤序号保留（与已移除的选用槽位数字角标无关）。
     expect((await recordRows(page).first().innerText()).trimStart().startsWith("1")).toBe(true);
+    // 头像失败占位：第一条记录的行缩略无 img（走占位分支）；第二条记录图片正常。
+    // （禁用行还叠加斜杠 svg，不按 svg 数量断言。）
+    await expectCount(recordRows(page).first().locator(".size-9 img"), 0);
+    await expectCount(recordRows(page).nth(1).locator(".size-9 img"), 1);
     // 归档记录页不虚构成员身份：不出现本人身份提示。
     expect(await page.locator("p[aria-live='polite']").count()).toBe(0);
 

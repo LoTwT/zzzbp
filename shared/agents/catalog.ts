@@ -1,8 +1,14 @@
 import type { AgentCatalog } from "../bp/agents";
 import type { AgentDisplayInfo, AgentDisplayLookup } from "../contracts/records";
 import type { AgentId } from "../ids";
+import { agentSquareImageUrl, localizeLegacyAgentImageUrl, toAgentImageUrl } from "./assets";
 import catalogJson from "./catalog.json";
 import { agentCatalogSchema, type AgentCatalogData, type AgentEntry } from "./schema";
+
+// toAgentImageUrl 的实现随图片 URL 布局统一维护在 ./assets.ts（Node 原生
+// 类型剥离可执行，供导入/生成脚本直接复用）；此处再导出保持既有导入
+// 路径稳定，不产生第二份转换实现。
+export { toAgentImageUrl } from "./assets";
 
 /**
  * 代理人目录的运行时入口。
@@ -24,32 +30,14 @@ export const agentCatalogData: AgentCatalogData = agentCatalogSchema.parse(catal
 export const agentDataVersion: string = agentCatalogData.agentDataVersion;
 
 /**
- * 上游已确认的图片资源固定前缀。
- *
- * 依据 fairy 上游 nanoka 来源规格（docs/specs/nanoka/source.md
- * 「已确认的图片地址规则」，2026-09-14 实测）：非空 `.png` 来源图片路径
- * 去掉首尾空白与原目录、扩展名改 `.webp` 后拼接该前缀。
+ * 当前部署已收录旧圆图本地副本的文件名集合（目录产物内嵌的清单摘要，
+ * 由图片资源清单生成并经测试对齐）。legacy 副本跨修订只增不改，当前
+ * 构建的摘要是历史摘要的超集，因此旧目录快照与旧归档也按本集合判断
+ * 收录情况（详见 shared/agents/assets.ts 的 localizeLegacyAgentImageUrl）。
  */
-const AGENT_IMAGE_BASE_URL = "https://static.nanoka.cc/assets/zzz/";
-
-/**
- * 由数据包记录的来源图片路径派生可加载的图片 URL。
- *
- * 这是上游文档记录的消费时转换，不是按图标编号猜文件名：原始路径保留
- * 在目录产物中，完整 URL 只在消费边界派生。归档映射与后续界面共用本
- * 函数，不在别处重复实现转换。
- *
- * 仅适用于非空、以 `.png` 结尾的来源图片路径；`live2_d` 等无图片扩展名
- * 的动画资源标识不适用。无来源路径或输入不满足规则时返回 null，不制造
- * 图片地址。浏览器与部署环境的实际可达性（含防盗链行为）由界面 PR
- * 验证，本函数不做网络请求。
- */
-export function toAgentImageUrl(sourcePath: string | null): string | null {
-  if (sourcePath === null) return null;
-  const fileName = sourcePath.trim().split("/").pop() ?? "";
-  if (!/^[^/]+\.png$/i.test(fileName)) return null;
-  return `${AGENT_IMAGE_BASE_URL}${fileName.replace(/\.png$/i, ".webp")}`;
-}
+export const localLegacyCircleFileNames: ReadonlySet<string> = new Set(
+  agentCatalogData.imageAssets?.legacyCircleFileNames ?? [],
+);
 
 /** 查询单个代理人的目录条目；不在名单内时返回 null。 */
 export function getAgentEntry(data: AgentCatalogData, agentId: AgentId): AgentEntry | null {
@@ -72,15 +60,35 @@ export function toAgentCatalog(data: AgentCatalogData): AgentCatalog {
 /**
  * 由目录派生归档展示信息表：代理人 ID → 官方名称与头像图片 URL。
  *
- * 供 projectArchiveSnapshot（shared/contracts/records.ts）在归档时
- * 固定每步的展示信息；头像 URL 由记录的来源路径经 toAgentImageUrl
- * 派生，缺头像代理人为 null，展示留空，不影响其身份与禁选结果
- * （见 docs/specs/room-layout.md「代理人头像」）。
+ * 供 projectArchiveSnapshot（shared/contracts/records.ts）在归档时固定
+ * 每步的展示信息。带图片资源引用的条目保存稳定的本地方图路径（含宽幅
+ * 裁切位置，归档快照自足解释）；旧目录条目按原始 avatarPath 派生旧圆图
+ * URL 并映射到同源本地副本。缺头像代理人为 null，展示走占位，不影响其
+ * 身份与禁选结果（见 docs/specs/room-layout.md「代理人头像」）。
  */
 export function toAgentDisplayLookup(data: AgentCatalogData): AgentDisplayLookup {
+  const revision = data.imageAssets?.revision ?? null;
   const lookup = new Map<AgentId, AgentDisplayInfo>();
   for (const entry of data.agents) {
-    lookup.set(entry.id, { name: entry.name, avatarUrl: toAgentImageUrl(entry.avatarPath) });
+    lookup.set(entry.id, {
+      name: entry.name,
+      avatarUrl: toArchiveImageUrl(revision, entry),
+      avatarCrop: revision !== null && entry.iconAsset !== undefined ? entry.iconAsset.crop : null,
+    });
   }
   return lookup;
+}
+
+/**
+ * 归档保存的稳定头像 URL：新条目取资源修订内的本地方图路径；旧条目按
+ * 原始 avatarPath 派生旧圆图 URL 并映射到同源本地副本（旧圆图不替换为
+ * 新方图，归档不保存当前机器地址或热链远程地址）。
+ */
+function toArchiveImageUrl(revision: string | null, entry: AgentEntry): string | null {
+  if (revision !== null && entry.iconAsset !== undefined) {
+    return agentSquareImageUrl(revision, entry.iconAsset.icon);
+  }
+  const remote = toAgentImageUrl(entry.avatarPath);
+  if (remote === null) return null;
+  return localizeLegacyAgentImageUrl(remote, localLegacyCircleFileNames);
 }

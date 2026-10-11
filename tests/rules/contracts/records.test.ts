@@ -27,13 +27,22 @@ const archivedAt = "2026-10-05T00:00:00.000Z";
 
 /** 全量合成代理人的展示信息表；每 3 个留一个空头像覆盖缺失场景。 */
 const agentDisplay: AgentDisplayLookup = new Map(
-  SYNTHETIC_AGENT_IDS.map((agentId): [string, { name: string; avatarUrl: string | null }] => [
-    agentId,
-    {
-      name: `代理人 ${agentId}`,
-      avatarUrl: agentId.endsWith("3") ? null : `/avatars/${agentId}.png`,
-    },
-  ]),
+  SYNTHETIC_AGENT_IDS.map(
+    (
+      agentId,
+    ): [
+      string,
+      { name: string; avatarUrl: string | null; avatarCrop: { x: number; y: number } | null },
+    ] => [
+      agentId,
+      {
+        name: `代理人 ${agentId}`,
+        avatarUrl: agentId.endsWith("3") ? null : `/avatars/${agentId}.png`,
+        // 方图条目携带宽幅裁切；圆图/缺头像为 null。
+        avatarCrop: agentId.endsWith("3") ? null : { x: 50, y: 36 },
+      },
+    ],
+  ),
 );
 
 describe("保留计时合同", () => {
@@ -83,6 +92,7 @@ describe("归档快照投影", () => {
       agentId: SYNTHETIC_AGENT_IDS[0],
       agentName: `代理人 ${SYNTHETIC_AGENT_IDS[0]}`,
       agentAvatarUrl: `/avatars/${SYNTHETIC_AGENT_IDS[0]}.png`,
+      agentAvatarCrop: { x: 50, y: 36 },
     });
     expect(snapshot.expiresAt).toBe(
       new Date(Date.parse(archivedAt) + 90 * 24 * 60 * 60 * 1000).toISOString(),

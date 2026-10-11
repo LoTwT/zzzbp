@@ -1,5 +1,6 @@
 import type { BpTeam } from "../../shared/bp/steps";
 import type { ArchivedOperation, ArchiveSnapshot } from "../../shared/contracts/records";
+import { agentImageFromSavedUrl } from "./agent-image";
 import type { AgentDisplayBase } from "./room-catalog";
 import { banStepsOfTeam, pickSlotRows } from "./pick-layout";
 import type { BanSlotView, PickSlotView, TeamPickColumnView } from "./view-projections";
@@ -8,14 +9,20 @@ import type { BanSlotView, PickSlotView, TeamPickColumnView } from "./view-proje
  * 只读记录页的快照投影（docs/specs/room-layout.md「只读记录页」）。
  *
  * 归档快照是唯一数据来源：不请求当前 catalog 重解释旧名称或头像，
- * 代理人展示信息在归档时已固定在快照中（agentName/agentAvatarUrl）。
- * 行结构沿用 pick-layout 的权威顺序推导（九格竖排），与实时房间/
- * 展示页同一套槽位语义；所有槽位静态展示（无 active、无预选、无动效）。
+ * 代理人展示信息在归档时已固定在快照中（agentName/agentAvatarUrl/
+ * agentAvatarCrop）。图片由 agentImageFromSavedUrl 解释：方图稳定路径
+ * 携带资源修订与宽幅裁切，旧远程圆图 URL 映射到同源本地副本。行结构
+ * 沿用 pick-layout 的权威顺序推导（九格竖排），与实时房间/展示页同一套
+ * 槽位语义；所有槽位静态展示（无 active、无预选、无动效）。
  */
 
 /** 由快照单步构造最小代理人展示信息（AgentAvatar/状态视觉共用）。 */
 export function recordAgentDisplay(operation: ArchivedOperation): AgentDisplayBase {
-  return { id: operation.agentId, name: operation.agentName, avatarUrl: operation.agentAvatarUrl };
+  return {
+    id: operation.agentId,
+    name: operation.agentName,
+    image: agentImageFromSavedUrl(operation.agentAvatarUrl, operation.agentAvatarCrop ?? null),
+  };
 }
 
 /**

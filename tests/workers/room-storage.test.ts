@@ -89,7 +89,7 @@ function controlledCatalog(agentDataVersion: string, withThirdAgent: boolean): A
       id: "9002",
       name: "乙",
       fullName: null,
-      avatarPath: "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle02.png",
+      avatarPath: "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle01.png",
       elementId: "201",
       specialtyId: "1",
     },
@@ -165,10 +165,15 @@ describe("目录快照按房间固定", () => {
     if (persistedA.kind !== "catalog") throw new Error("房间 A 目录读取失败");
     expect(toAgentCatalog(persistedA.data).agentIds).toEqual(["9001", "9002"]);
     const display = toAgentDisplayLookup(persistedA.data);
-    expect(display.get("9001")).toEqual({ name: "甲", avatarUrl: null });
+    expect(display.get("9001")).toEqual({ name: "甲", avatarUrl: null, avatarCrop: null });
+    // 旧目录快照（无图片资源引用）按原始 avatarPath 派生旧圆图 URL；
+    // 已收录的文件映射为归档保存的稳定本地副本路径（不热链远程地址），
+    // 未收录的保持远程 URL 走外部图片处理（收录边界见
+    // tests/rules/agent-image-assets.test.ts）。
     expect(display.get("9002")).toEqual({
       name: "乙",
-      avatarUrl: "https://static.nanoka.cc/assets/zzz/IconRoleCircle02.webp",
+      avatarUrl: "/images/agents/legacy/IconRoleCircle01.webp",
+      avatarCrop: null,
     });
   });
 });
