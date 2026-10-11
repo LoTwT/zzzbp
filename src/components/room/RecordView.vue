@@ -5,8 +5,10 @@ import { ArrowLeft, Link2, SlidersHorizontal, X } from "@lucide/vue";
 import type { ArchiveSnapshot } from "../../../shared/contracts/records";
 import AgentStatusAvatar from "./AgentStatusAvatar.vue";
 import PickColumn from "./PickColumn.vue";
+import ResultExportActions from "./ResultExportActions.vue";
 import RoomHeader from "./RoomHeader.vue";
 import { usePanelDismiss } from "../../room/panel-dismiss";
+import { buildArchiveExportResult, exportResultFingerprint } from "../../room/result-export";
 import {
   formatRecordExpiry,
   recordActionText,
@@ -26,7 +28,8 @@ import {
 //   （顺序/操作/代理人三列，1 起连续顺序、左右方动作文案、代理人头像
 //   与名称）；
 // - 只有列表内部纵向滚动；标题、列头、控制面板入口及顶部/两侧固定；
-// - 控制面板为右侧覆盖（不挤压两侧网格）：复制原链接与记录到期时间；
+// - 控制面板为右侧覆盖（不挤压两侧网格）：复制原链接、BP 结果导出
+//   （复制结果文本/下载结果图片，见 ResultExportActions）与记录到期时间；
 //   Esc 关闭，关闭后焦点回到入口。
 
 const props = defineProps<{
@@ -99,6 +102,20 @@ onBeforeUnmount(() => {
 
 async function copyRecordLink(): Promise<void> {
   await copy(window.location.href);
+}
+
+// ---- BP 结果导出（docs/specs/room-layout.md「BP 结果导出」）：直接导出
+// 保存的最后有效序列；完整/未完成记录都可导出，空槽由快照推导为未提交。
+// 来源一致性按导出内容指纹判定（快照不可变，指纹等价于内容等价）。 ----
+
+const exportResult = computed(() => buildArchiveExportResult(props.record));
+
+function captureRecordSource(): unknown {
+  return exportResultFingerprint(exportResult.value);
+}
+
+function recordSourceStaleness(captured: unknown): string | null {
+  return exportResultFingerprint(exportResult.value) === captured ? null : "记录已更新，请重新导出";
 }
 </script>
 
@@ -213,6 +230,13 @@ async function copyRecordLink(): Promise<void> {
                   <Link2 class="size-4 text-(--text-muted)" aria-hidden="true" />
                   {{ copied ? "已复制" : "复制房间链接" }}
                 </button>
+                <!-- BP 结果导出：复制结果文本 / 下载结果图片（共用动作组件）。 -->
+                <ResultExportActions
+                  :result="exportResult"
+                  :unavailable-reason="null"
+                  :capture-source="captureRecordSource"
+                  :source-staleness="recordSourceStaleness"
+                />
               </section>
 
               <!-- 记录到期时间：静态展示，不做倒计时。 -->

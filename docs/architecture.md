@@ -484,6 +484,23 @@ PR11 已落地图片与图标资源统一接入（`shared/agents/assets.ts`、
   的图标引用切换「图标＋名称/仅图标」形态，图标加载失败退回可见分类
   文字，旧目录回退文字按钮。
 
+PR12 已落地 BP 结果导出（`src/room/result-export.ts`、`src/room/result-image.ts`
+与共用动作组件 `src/components/room/ResultExportActions.vue`，接入控制面板
+与只读记录页的「显示与分享」）：
+
+- 浏览器本地导出，不新增服务、API、存储、账号、依赖或云资源：实时来源
+  是当前公开视图 + 房间固定目录，归档来源是快照保存的展示信息（不请求
+  当前 catalog 重解释旧名称/头像），两者适配到同一份导出快照（点击时
+  深拷贝公开数据；槽位顺序与两轮边界由 pick-layout 从权威顺序推导）。
+- 文本与 Canvas PNG（固定 1600×1200）只含公开结果（房名、完成情况、队名、
+  每方 4 禁用与 9 选用名称）；PNG 只加载同源图片（方图按保存 crop 等价
+  cover/object-position 裁切、旧圆图 contain、缺图/超时/跨域占位，等待有
+  上限），颜色取主题 token 已解析的计算值。图片异步生成后、下载前校验
+  来源一致性（导出内容指纹/同步连接/组件存续：无关的 revision 变化不
+  取消，内容变化或未恢复同步即终止并提示重新导出，卸载始终取消）。
+- 共享 HTTP/WS schema、Worker、数据库、资源包与 CI 不变；导出可在前端
+  回退撤销，不涉及数据迁移。
+
 | PR | 接入点 |
 |---|---|
 | PR6（房间界面与常规连接） | 房间主界面、角色权限 UI 与常规 WS 客户端连接管理；命令与视图协议已就位。 |
@@ -492,3 +509,4 @@ PR11 已落地图片与图标资源统一接入（`shared/agents/assets.ts`、
 | PR9（归档与清理，已落地） | Alarm 与读写路径共用到期裁决（读 `room_meta.last_member_left_at` 与快照 `expiresAt`）；到期经 `projectArchiveSnapshot` 生成快照或原子清理空房间；`GET /api/rooms/:roomId` 的 archived 分支返回只读快照，原链接进入只读记录页。 |
 | PR10（端到端与容量复核，已落地） | 真实浏览器验收平台（`tests/e2e`：Vitest + Playwright 驱动真实 `cf dev`，服务生命周期由 globalSetup 管理）与资源基准（`tests/measure`，`pnpm measure:rooms`）；验收事实、分层证据与部署前检查见[首版发布与验收说明](release.md)，预算方法见[Cloudflare 部署与预算评估](specs/cloudflare-budget.md#容量估算方法与本地基准)。 |
 | PR11（图片与图标资源，已落地） | 同源静态图片资源、图片资源清单与目录图片资源引用、共用图片组件三用途（方图/缩略/宽幅裁切）、旧圆图精确映射与旧目录/旧归档兼容、分类图标工具栏形态；静态资源清单与导入流程见[代理人数据接入](specs/agent-data.md)。 |
+| PR12（BP 结果导出，已落地） | 浏览器本地的结果文本复制与 PNG 下载（`src/room/result-export.ts`、`src/room/result-image.ts`、`ResultExportActions.vue`）：双来源导出快照（实时视图+房间目录 / 归档快照）、共用文本格式化与 Canvas 渲染、来源一致性收口；传输与存储边界不变。 |
