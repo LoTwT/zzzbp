@@ -42,6 +42,55 @@ export const officialAgentNameSchema = z.string().trim().min(1).max(50);
  */
 export const agentResourcePathSchema = z.string().min(1).nullable();
 
+/**
+ * 图片资源名（文件名主干或修订目录名）：单段安全字符，禁止路径分隔符与
+ * 「..」，供 URL 构造（shared/agents/assets.ts）与清单校验共用。
+ */
+export const imageAssetNameSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/);
+export type ImageAssetName = z.infer<typeof imageAssetNameSchema>;
+
+/**
+ * 宽幅裁切位置：矩形图片槽位内 object-position 的百分比坐标（0-100）。
+ *
+ * 值来自对母图的实际看图校准（见 docs/specs/agent-data.md「图片资源清单」），
+ * 随图片资源修订一起不可变地固定；改图片或改裁切均产生新修订，不按角色
+ * ID 查询最新配置重解释旧快照。
+ */
+export const imageCropSchema = z.object({
+  x: z.number().min(0).max(100),
+  y: z.number().min(0).max(100),
+});
+export type ImageCrop = z.infer<typeof imageCropSchema>;
+
+/**
+ * 代理人条目的图片资源引用：图片资源修订内的方图/缩略图主干与宽幅裁切。
+ *
+ * 主干（如 IconRoleCrop01）经 shared/agents/assets.ts 的路径构造得到公开
+ * URL；旧目录快照缺少本字段时按原始 avatarPath 解释（见目录 schema 的
+ * imageAssets 耦合校验与 docs/specs/agent-data.md）。
+ */
+export const agentIconAssetSchema = z.object({
+  icon: imageAssetNameSchema,
+  crop: imageCropSchema,
+});
+export type AgentIconAsset = z.infer<typeof agentIconAssetSchema>;
+
+/**
+ * 目录随附的图片资源摘要：修订标识与已收录旧圆图本地副本的文件名清单。
+ *
+ * 修订与角色数据版本（agentDataVersion）分开，图片或裁切更新时推进，
+ * 代理人条目与分类的 iconAsset 引用都落在该修订内。legacyCircleFileNames
+ * 由图片资源清单（shared/agents/assets.json）生成，供运行时判断远程旧圆图
+ * URL 是否有同源本地副本可映射（shared/agents/assets.ts 的
+ * localizeLegacyAgentImageUrl）：完整清单含审计事实、不进入运行时 bundle，
+ * 目录内嵌该摘要并经测试对齐，保持单一事实来源而不引入第二份手写名单。
+ */
+export const agentImageAssetsSchema = z.object({
+  revision: imageAssetNameSchema,
+  legacyCircleFileNames: z.array(imageAssetNameSchema),
+});
+export type AgentImageAssets = z.infer<typeof agentImageAssetsSchema>;
+
 /** 属性或特性分类条目：筛选按钮与悬停名称由此派生。 */
 export const agentClassificationSchema = z.object({
   /** 来源分类数值 ID 的规范十进制字符串。 */
@@ -53,6 +102,11 @@ export const agentClassificationSchema = z.object({
    * 属性/特性图标字段，恒为 null；上游补齐后随数据更新接入。
    */
   iconPath: agentResourcePathSchema,
+  /**
+   * 本站图片资源修订内的分类图标主干（如 IconPhysical）；旧目录快照
+   * 缺少本字段时筛选按钮回退为名称文字（见 imageAssets 耦合校验）。
+   */
+  iconAsset: imageAssetNameSchema.optional(),
 });
 export type AgentClassification = z.infer<typeof agentClassificationSchema>;
 
@@ -62,14 +116,18 @@ export const agentEntrySchema = z.object({
   id: agentSourceIdSchema,
   /** 官方中文名称（简短展示名）。 */
   name: officialAgentNameSchema,
-  /**
-   * 官方中文全名：上游本地化详情 `partnerInfo.fullName` 的原值（如
+  /** 官方中文全名：上游本地化详情 `partnerInfo.fullName` 的原值（如
    * 「星见雅」对应简短名「雅」）；来源未记录时为 null，不推测或合并
    * 变体身份。与简短名同为官方名称，均参与搜索包含匹配。
    */
   fullName: officialAgentNameSchema.nullable(),
   /** 头像路径；数据包未记录时为 null，展示留空。 */
   avatarPath: agentResourcePathSchema,
+  /**
+   * 图片资源引用（方图/缩略图主干 + 宽幅裁切）。当前目录全部条目都有
+   * 引用；旧目录快照缺少本字段时按原始 avatarPath 派生旧圆图 URL 解释。
+   */
+  iconAsset: agentIconAssetSchema.optional(),
   /** 属性分类 ID（引用 catalog.elements）。 */
   elementId: agentClassificationIdSchema,
   /** 特性分类 ID（引用 catalog.specialties）。 */
@@ -108,6 +166,11 @@ export const agentCatalogSchema = z
   .object({
     agentDataVersion: z.string().trim().min(1).max(50),
     source: agentCatalogSourceSchema,
+    /**
+     * 随附的图片资源修订；旧目录快照缺少本字段时仍可解析，条目与分类
+     * 按原始来源路径解释（旧圆图 URL）。
+     */
+    imageAssets: agentImageAssetsSchema.optional(),
     /** 属性分类表；由代理人条目推导，不做手工维护。 */
     elements: z.array(agentClassificationSchema).min(1),
     /** 特性分类表；由代理人条目推导，不做手工维护。 */
@@ -116,6 +179,65 @@ export const agentCatalogSchema = z
     agents: z.array(agentEntrySchema).min(1),
   })
   .superRefine((catalog, ctx) => {
+    // 图片资源引用整体耦合：带修订标识的目录中，条目与分类的引用必须
+    // 完整（无效引用显式失败，不静默降级）；不带修订的旧目录中，不允许
+    // 出现没有修订标识的孤儿引用（无法构造稳定公开路径）。
+    if (catalog.imageAssets !== undefined) {
+      for (let index = 0; index < catalog.agents.length; index += 1) {
+        const agent = catalog.agents[index];
+        if (agent.iconAsset === undefined) {
+          ctx.addIssue({
+            code: "custom",
+            message: `目录声明图片资源修订，但代理人 ${agent.id} 缺少 iconAsset 引用`,
+            path: ["agents", index, "iconAsset"],
+            input: agent,
+          });
+        }
+      }
+      for (const [tableField, table] of [
+        ["elements", catalog.elements],
+        ["specialties", catalog.specialties],
+      ] as const) {
+        for (let index = 0; index < table.length; index += 1) {
+          const classification = table[index];
+          if (classification.iconAsset === undefined) {
+            ctx.addIssue({
+              code: "custom",
+              message: `目录声明图片资源修订，但分类 ${classification.id}（${classification.name}）缺少 iconAsset 引用`,
+              path: [tableField, index, "iconAsset"],
+              input: classification,
+            });
+          }
+        }
+      }
+    } else {
+      for (const [index, agent] of catalog.agents.entries()) {
+        if (agent.iconAsset !== undefined) {
+          ctx.addIssue({
+            code: "custom",
+            message: `代理人 ${agent.id} 带有 iconAsset 引用，但目录缺少 imageAssets 修订标识`,
+            path: ["agents", index, "iconAsset"],
+            input: agent,
+          });
+        }
+      }
+      for (const [tableField, table] of [
+        ["elements", catalog.elements],
+        ["specialties", catalog.specialties],
+      ] as const) {
+        for (const [index, classification] of table.entries()) {
+          if (classification.iconAsset !== undefined) {
+            ctx.addIssue({
+              code: "custom",
+              message: `分类 ${classification.id}（${classification.name}）带有 iconAsset 引用，但目录缺少 imageAssets 修订标识`,
+              path: [tableField, index, "iconAsset"],
+              input: classification,
+            });
+          }
+        }
+      }
+    }
+
     // 版本与来源记录一致：目录版本以包版本为单一事实。
     if (catalog.agentDataVersion !== catalog.source.packageVersion) {
       ctx.addIssue({

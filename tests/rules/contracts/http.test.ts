@@ -20,10 +20,12 @@ const versions: VersionInfo = { ruleVersion: "rules-test", agentDataVersion: "ag
 
 /** 全量合成代理人的展示信息表。 */
 const agentDisplay: AgentDisplayLookup = new Map(
-  SYNTHETIC_AGENT_IDS.map((agentId): [string, { name: string; avatarUrl: string | null }] => [
-    agentId,
-    { name: `代理人 ${agentId}`, avatarUrl: `/avatars/${agentId}.png` },
-  ]),
+  SYNTHETIC_AGENT_IDS.map(
+    (agentId): [string, { name: string; avatarUrl: string | null; avatarCrop: null }] => [
+      agentId,
+      { name: `代理人 ${agentId}`, avatarUrl: `/avatars/${agentId}.png`, avatarCrop: null },
+    ],
+  ),
 );
 
 describe("HTTP 合同", () => {

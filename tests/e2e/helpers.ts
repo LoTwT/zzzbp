@@ -9,9 +9,11 @@ import { E2E_BASE_URL } from "./server";
  * E2E 浏览器验收共享辅助（PR10）。
  *
  * 断言使用界面的可访问名称/角色与 sr-only 文案，不依赖布局实现细节；
- * 第三方头像 CDN（static.nanoka.cc）在测试上下文中统一拦截，验收不依赖
- * 外部网络，也不向第三方资产源发请求（界面渲染不依赖图片加载成功，
- * 见 docs/specs/room-layout.md「代理人头像」）。
+ * 当前目录的图片为本站同源静态资源（public/images，见
+ * docs/specs/agent-data.md），注入的旧式快照沿用远程圆图 URL 并在展示时
+ * 映射为本地副本，界面不向第三方资产源发请求；第三方头像 CDN
+ * （static.nanoka.cc）在测试上下文中仍统一拦截（防御旧引用），验收不
+ * 依赖外部网络，界面渲染也不依赖图片加载成功（失败走占位）。
  */
 
 export const AGENTS: readonly AgentEntry[] = agentCatalogData.agents;

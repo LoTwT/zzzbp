@@ -1,7 +1,11 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { agentNames, calculationDataVersion, loadAllAgents, loadIndex } from "@randomplay/data";
+import {
+  imageAssetsManifestSchema,
+  type ImageAssetsManifest,
+} from "../shared/agents/assets-schema.ts";
 import {
   agentCatalogSchema,
   type AgentCatalogData,
@@ -20,12 +24,23 @@ import {
  * 产物 shared/agents/catalog.json 提交入库，日常构建与测试只读取产物、
  * 不重新生成、不访问网络。数据来源、字段映射与版本更新办法见
  * docs/specs/agent-data.md。
+ *
+ * 图片资源引用（条目 iconAsset 与分类 iconAsset、目录 imageAssets 修订）
+ * 读取本站图片资源清单 shared/agents/assets.json（由
+ * pnpm run import:image-assets 产出并提交）；清单缺失条目时显式失败，
+ * 不生成没有图片资源的目录，也不凭空猜测资源主干。
  */
 
 /** 产物输出路径（相对本文件）。 */
 const OUTPUT_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../shared/agents/catalog.json",
+);
+
+/** 图片资源清单路径（导入脚本的产物，提交入库）。 */
+const ASSETS_PATH = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../shared/agents/assets.json",
 );
 
 /** 生成失败时带上下文抛出：数据异常必须显式暴露，不允许静默跳过条目。 */
@@ -63,18 +78,61 @@ function classificationName(
 function deriveClassifications(
   usages: ReadonlyMap<string, { name: string }>,
   kind: "属性" | "特性",
+  assets: ImageAssetsManifest,
 ): AgentClassification[] {
   return [...usages.entries()]
     .sort(([left], [right]) => Number(left) - Number(right))
     .map(([id, { name }]) => {
       if (name.trim() === "") fail(`推导${kind}分类`, `分类 ${id} 名称为空`);
-      // 当前数据包未记录属性/特性图标资源字段，只能为 null；
-      // 上游补齐后在此处改为读取实际字段，不拼接、不制造图标。
-      return { id, name, iconPath: null };
+      // 数据包未记录属性/特性图标资源字段（iconPath 恒为 null）；图标由
+      // 本站图片资源清单按分类 ID 提供（见 loadImageAssets）。
+      return {
+        id,
+        name,
+        iconPath: null,
+        iconAsset: classificationIconStem(assets, kind === "属性" ? "element" : "specialty", id),
+      };
     });
 }
 
+/**
+ * 读取并校验图片资源清单，返回当前修订与按主干索引的方图资源。
+ *
+ * 清单由导入脚本产出；目录生成只读取本地文件，不访问网络。方图主干的
+ * 命名规则来自 fairy 上游消费库的已确认实现（data.icon 将 Role 替换为
+ * RoleCrop），生成时逐条与清单比对，缺失即失败。
+ */
+async function loadImageAssets(): Promise<ImageAssetsManifest> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(ASSETS_PATH, "utf8"));
+  } catch (error) {
+    fail(
+      "读取图片资源清单",
+      `${ASSETS_PATH} 不可读（先运行 pnpm run import:image-assets）：${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const result = imageAssetsManifestSchema.safeParse(parsed);
+  if (!result.success) {
+    fail("读取图片资源清单", `清单未通过 schema 校验：${result.error.message}`);
+  }
+  return result.data;
+}
+
+/** 读取分类图标主干（element-<id> / specialty-<id>）；缺失即失败。 */
+function classificationIconStem(assets: ImageAssetsManifest, kind: string, id: string): string {
+  const asset = assets.classifications[`${kind}-${id}`];
+  if (asset === undefined) {
+    fail(
+      "图片资源清单",
+      `分类 ${kind}-${id} 没有图标资源记录；先在导入脚本的来源表中补充并重新导入`,
+    );
+  }
+  return asset.stem;
+}
+
 async function main(): Promise<void> {
+  const assets = await loadImageAssets();
   const agents = await loadAllAgents("zh");
   const snapshotIndex = await loadIndex();
   if (snapshotIndex.source.version !== calculationDataVersion.gameVersion) {
@@ -120,6 +178,23 @@ async function main(): Promise<void> {
       fail(context, "头像路径记录为空字符串，应视为缺失（null）还是异常需人工确认");
     }
 
+    // 图片资源引用：主干按上游已确认规则由 data.icon 推导（Role →
+    // RoleCrop），与图片资源清单逐条比对（含宽幅裁切校准值）；1381/
+    // 1531/1551 缺 avatarPath 但有 data.icon，其方图资源由清单提供，
+    // 不伪造它们的旧来源路径。
+    const icon = data.icon;
+    if (typeof icon !== "string" || !/^IconRole[0-9]+$/.test(icon)) {
+      fail(context, `data.icon 不是 IconRoleNN 形态：${JSON.stringify(icon)}`);
+    }
+    const iconStem = icon.replace("Role", "RoleCrop");
+    const imageAsset = assets.agents[iconStem];
+    if (imageAsset === undefined || !imageAsset.agentIds.includes(id)) {
+      fail(
+        context,
+        `图片资源清单缺少主干 ${iconStem}（或未登记该代理人）；先运行 pnpm run import:image-assets`,
+      );
+    }
+
     // 属性与特性：classificationIds 取唯一分类，名称读中文详情原值。
     const elementId = singleClassification(
       context,
@@ -142,7 +217,15 @@ async function main(): Promise<void> {
       });
     }
 
-    entries.push({ id, name: officialName, fullName, avatarPath, elementId, specialtyId });
+    entries.push({
+      id,
+      name: officialName,
+      fullName,
+      avatarPath,
+      iconAsset: { icon: iconStem, crop: imageAsset.crop },
+      elementId,
+      specialtyId,
+    });
   }
 
   // 按来源 ID 数值升序固定排列（目录默认排列的权威顺序）。
@@ -157,8 +240,14 @@ async function main(): Promise<void> {
       sourceId: snapshotIndex.source.id,
       snapshotId: calculationDataVersion.snapshotId,
     },
-    elements: deriveClassifications(elements, "属性"),
-    specialties: deriveClassifications(specialties, "特性"),
+    imageAssets: {
+      revision: assets.revision,
+      // 已收录旧圆图本地副本的文件名摘要（清单为单一事实来源，此处按
+      // 排序嵌入供运行时收录判断；对齐由 tests/rules 校验，不允许漂移）。
+      legacyCircleFileNames: Object.keys(assets.legacyCircles).sort(),
+    },
+    elements: deriveClassifications(elements, "属性", assets),
+    specialties: deriveClassifications(specialties, "特性", assets),
     agents: entries,
   };
 

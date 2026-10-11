@@ -56,13 +56,68 @@ test("状态与操作文案：只读记录 + 完成情况；左右方动作不�
   expect(recordActionText(partial.operations[1]!)).toBe("右方禁用");
   expect(recordActionText(partial.operations[4]!)).toBe("左方选用");
   expect(recordActionText(partial.operations[5]!)).toBe("右方选用");
-  // 展示信息固定自快照：名称与头像 URL（缺失为 null），不查目录。
+  // 展示信息固定自快照：名称与图片解释（缺失为 null），不查目录。
   expect(recordAgentDisplay(partial.operations[0]!)).toEqual({
     id: "9001",
     name: "代理人 9001",
-    avatarUrl: "https://example.com/9001.webp",
+    image: { kind: "external", url: "https://example.com/9001.webp", thumbUrl: null, crop: null },
   });
-  expect(recordAgentDisplay(partial.operations[2]!).avatarUrl).toBeNull();
+  expect(recordAgentDisplay(partial.operations[2]!).image).toBeNull();
+});
+
+test("图片解释：方图稳定路径携带修订与缩略图；旧远程圆图映射本地副本", () => {
+  const square = archiveSnapshotSchema.parse({
+    ...snapshotOf(1),
+    operations: [
+      {
+        ...snapshotOf(1).operations[0]!,
+        agentAvatarUrl: "/images/agents/2026-10-09/IconRoleCrop01.webp",
+        agentAvatarCrop: { x: 50, y: 36 },
+      },
+    ],
+  });
+  expect(recordAgentDisplay(square.operations[0]!).image).toEqual({
+    kind: "square",
+    url: "/images/agents/2026-10-09/IconRoleCrop01.webp",
+    thumbUrl: "/images/agents/2026-10-09/IconRoleCrop01-128.webp",
+    crop: { x: 50, y: 36 },
+  });
+
+  // 旧归档的远程圆图 URL 精确映射到同源本地副本（不替换为新方图）。
+  const legacy = archiveSnapshotSchema.parse({
+    ...snapshotOf(1),
+    operations: [
+      {
+        ...snapshotOf(1).operations[0]!,
+        agentAvatarUrl: "https://static.nanoka.cc/assets/zzz/IconRoleCircle01.webp",
+      },
+    ],
+  });
+  expect(recordAgentDisplay(legacy.operations[0]!).image).toEqual({
+    kind: "circle",
+    url: "/images/agents/legacy/IconRoleCircle01.webp",
+    thumbUrl: null,
+    crop: null,
+  });
+
+  // 旧归档缺少裁切字段：方图退回 null 裁切（默认居中），不依赖当前目录。
+  const noCrop = archiveSnapshotSchema.parse({
+    ...snapshotOf(1),
+    operations: [
+      {
+        ...snapshotOf(1).operations[0]!,
+        agentAvatarUrl: "/images/agents/2026-10-09/IconRoleCrop01.webp",
+      },
+    ],
+  });
+  const withoutCrop = noCrop.operations[0] as { agentAvatarCrop?: unknown };
+  delete withoutCrop.agentAvatarCrop;
+  expect(recordAgentDisplay(noCrop.operations[0]!).image).toEqual({
+    kind: "square",
+    url: "/images/agents/2026-10-09/IconRoleCrop01.webp",
+    thumbUrl: "/images/agents/2026-10-09/IconRoleCrop01-128.webp",
+    crop: null,
+  });
 });
 
 test("禁用槽位：每方 4 个、未提交保持空槽、无 active", () => {

@@ -1,8 +1,10 @@
 import { expect, test } from "vitest";
 import { chromium } from "playwright";
 import type { Page, WebSocketRoute } from "playwright";
+import { agentCatalogData } from "../../shared/agents/catalog";
 import {
   AGENTS,
+  agentCard,
   assertHeaderPrioritizesCenter,
   assertNoOverflow,
   assertNoPageErrors,
@@ -604,6 +606,133 @@ test("实时房间：控制面板底部动作固定与成员列表滚动（零/�
 
     assertNoPageErrors(host);
     assertNoPageErrors(guest);
+  } finally {
+    await browser.close();
+  }
+}, 240_000);
+
+/**
+ * 筛选工具栏状态：各分类按钮的可见文字、图标加载与行溢出（按用户实际
+ * 可见结果判定；图标失败兜底复现的是资源修订目录缺失——全部分类图标
+ * 404，此时仅图标的按钮必须退回可见分类名称，不允许出现空按钮）。
+ */
+async function toolbarState(page: Page): Promise<{
+  readonly rowOverflow: boolean;
+  readonly buttons: ReadonlyArray<{
+    readonly label: string;
+    readonly text: string;
+    readonly iconLoaded: boolean | null;
+  }>;
+}> {
+  return page.evaluate(() => {
+    const group = document.querySelector('[role="group"][aria-label="属性筛选"]');
+    if (!(group instanceof HTMLElement) || !(group.parentElement instanceof HTMLElement)) {
+      throw new Error("筛选工具栏未渲染");
+    }
+    const row = group.parentElement;
+    const buttons = [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="group"][aria-label="属性筛选"] button, [role="group"][aria-label="特性筛选"] button',
+      ),
+    ].filter((button) => !(button.getAttribute("aria-label") ?? "").startsWith("清除"));
+    return {
+      rowOverflow: row.scrollWidth > row.clientWidth + 0.5,
+      buttons: buttons.map((button) => ({
+        label: button.getAttribute("aria-label") ?? "",
+        text: button.innerText.trim(),
+        iconLoaded:
+          button.querySelector("img") === null
+            ? null
+            : (button.querySelector("img") as HTMLImageElement).naturalWidth > 0,
+      })),
+    };
+  });
+}
+
+test("筛选工具栏：分类图标加载失败时恢复可见分类文字且不溢出", async () => {
+  const browser = await chromium.launch();
+  try {
+    const host = await newRoomContext(browser, "host", { width: 1024, height: 768 });
+    const playerA = await newRoomContext(browser, "playerA", { width: 1024, height: 768 });
+    // playerB 的分类图标全部 404（上下文建立后、首次导航前安装拦截，
+    // 不依赖缓存与真实资源删除）。
+    const playerB = await newRoomContext(browser, "playerB", { width: 1024, height: 768 });
+    await playerB.context.route("**/images/classifications/**", (route) =>
+      route.fulfill({ status: 404, contentType: "text/plain", body: "not found" }),
+    );
+
+    const roomUrl = await createRoomViaUi(host, "图标失败兜底赛", "主办小鱼");
+    await joinRoomViaUi(playerA, roomUrl, "选手甲");
+    await joinRoomViaUi(playerB, roomUrl, "选手乙");
+    await openPanel(host.page);
+    await assignSeatViaUi(host.page, "A", "选手甲");
+    await assignSeatViaUi(host.page, "B", "选手乙");
+    await closePanel(host.page);
+
+    const classificationCount =
+      agentCatalogData.elements.length + agentCatalogData.specialties.length;
+
+    // ---- 正常图标：1024（最小支持宽度）为仅图标两行形态，按钮无可见
+    //      文字、图标加载成功——这是故障态兜底要覆盖的形态前置。 ----
+    for (const ctx of [playerA, playerB]) {
+      await expectVisible(ctx.page.getByRole("group", { name: "属性筛选" }));
+    }
+    await playerA.page.waitForTimeout(600);
+    let state = await toolbarState(playerA.page);
+    expect(state.buttons).toHaveLength(classificationCount);
+    expect(
+      state.buttons.every((button) => button.iconLoaded === true),
+      "图标应全部加载",
+    ).toBe(true);
+    expect(
+      state.buttons.every((button) => button.text === ""),
+      "1024 宽度应为仅图标形态（无可见文字）",
+    ).toBe(true);
+    expect(state.rowOverflow, "正常图标行不溢出").toBe(false);
+    await assertNoOverflow(playerA.page, "选手甲 1024x768 图标正常");
+
+    // ---- 宽屏（1920）为「图标＋名称」形态：名称可见。 ----
+    await playerA.page.setViewportSize({ width: 1920, height: 1080 });
+    await playerA.page.waitForTimeout(600);
+    state = await toolbarState(playerA.page);
+    expect(
+      state.buttons.every((button) => button.text === button.label),
+      "宽屏按钮应显示图标＋名称",
+    ).toBe(true);
+
+    // ---- 图标全部 404（选手乙）：每个筛选按钮恢复可见的分类名称文字
+    //      （与目录名称一致），不出现空按钮；行与整页都不溢出。 ----
+    for (const size of [
+      { width: 1024, height: 768 },
+      { width: 1440, height: 900 },
+    ]) {
+      await playerB.page.setViewportSize(size);
+      await playerB.page.waitForTimeout(600);
+      state = await toolbarState(playerB.page);
+      expect(state.buttons).toHaveLength(classificationCount);
+      expect(
+        state.buttons.every((button) => button.iconLoaded !== true),
+        "图标应全部失败",
+      ).toBe(true);
+      expect(
+        state.buttons.every((button) => button.text === button.label),
+        `${size.width} 宽度图标失败后按钮应显示分类名称`,
+      ).toBe(true);
+      expect(state.rowOverflow, `${size.width} 宽度失败兜底行不溢出`).toBe(false);
+      await assertNoOverflow(playerB.page, `选手乙 ${size.width}x${size.height} 图标失败`);
+    }
+
+    // ---- 兜底按钮仍可用：点击「流明」文字按钮后进入选中态，池内只保留
+    //      流明代理人（蕾米埃尔可见、电属性的安比被过滤）。 ----
+    const lumifluxButton = playerB.page.getByRole("button", { name: "流明", exact: true });
+    await lumifluxButton.click();
+    expect(await lumifluxButton.getAttribute("aria-pressed")).toBe("true");
+    await expectVisible(agentCard(playerB.page, "蕾米埃尔"));
+    await expectHidden(agentCard(playerB.page, "安比"));
+
+    assertNoPageErrors(host);
+    assertNoPageErrors(playerA);
+    assertNoPageErrors(playerB);
   } finally {
     await browser.close();
   }

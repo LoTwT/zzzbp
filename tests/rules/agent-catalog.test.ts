@@ -23,6 +23,9 @@ import { roomStateSchema, type RoomState } from "../../shared/room";
 /** 固定的数据版本：升级依赖与再生成目录时需有意识地同步更新本常量。 */
 const PINNED_AGENT_DATA_VERSION = "0.2.1";
 
+/** 固定的图片资源修订：更新图片或裁切校准时需有意识地同步更新本常量。 */
+const PINNED_IMAGE_ASSETS_REVISION = "2026-10-09";
+
 /** 构造可直接通过校验的最小目录，用于失败输入用例的基底。 */
 function minimalCatalog(): AgentCatalogData {
   return agentCatalogSchema.parse({
@@ -144,6 +147,39 @@ describe("真实固定版本加载", () => {
     }
   });
 
+  it("图片资源引用：全部条目与分类携带固定修订内的引用", () => {
+    expect(agentCatalogData.imageAssets?.revision).toBe(PINNED_IMAGE_ASSETS_REVISION);
+    // 内嵌的旧圆图收录摘要：形态合法、排序确定（与清单的对齐在
+    // tests/rules/agent-image-assets.test.ts 校验）。
+    const legacyNames = agentCatalogData.imageAssets?.legacyCircleFileNames ?? [];
+    expect(legacyNames).toHaveLength(55);
+    expect([...legacyNames].sort()).toEqual(legacyNames);
+    for (const name of legacyNames) expect(name).toMatch(/^IconRoleCircle[0-9]+\.webp$/);
+    // 58 人全部有方图资源（含缺 avatarPath 的 1381/1531/1551，其方图来自
+    // 图片资源清单，不伪造它们的旧来源路径）。
+    for (const entry of agentCatalogData.agents) {
+      expect(entry.iconAsset, `代理人 ${entry.id} 缺少图片资源引用`).toBeDefined();
+      expect(entry.iconAsset?.icon).toMatch(/^IconRoleCrop[0-9]+$/);
+      expect(entry.iconAsset?.crop.x).toBeGreaterThanOrEqual(0);
+      expect(entry.iconAsset?.crop.x).toBeLessThanOrEqual(100);
+      expect(entry.iconAsset?.crop.y).toBeGreaterThanOrEqual(0);
+      expect(entry.iconAsset?.crop.y).toBeLessThanOrEqual(100);
+    }
+    for (const classification of [...agentCatalogData.elements, ...agentCatalogData.specialties]) {
+      expect(classification.iconAsset, `分类 ${classification.id} 缺少图标资源引用`).toBeDefined();
+    }
+    // 缺 avatarPath 的三人的方图主干与其余来源推导一致。
+    expect(agentCatalogData.agents.find((entry) => entry.id === "1381")?.iconAsset?.icon).toBe(
+      "IconRoleCrop40",
+    );
+    expect(agentCatalogData.agents.find((entry) => entry.id === "1531")?.iconAsset?.icon).toBe(
+      "IconRoleCrop62",
+    );
+    expect(agentCatalogData.agents.find((entry) => entry.id === "1551")?.iconAsset?.icon).toBe(
+      "IconRoleCrop63",
+    );
+  });
+
   it("ID 升序固定排列且无重复", () => {
     const ids = agentCatalogData.agents.map((entry) => entry.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -218,6 +254,61 @@ describe("目录 schema 拒绝无效输入", () => {
   it("agentDataVersion 与来源包版本不一致", () => {
     expectInvalid((catalog) => {
       (catalog as { agentDataVersion: string }).agentDataVersion = "0.2.0";
+    });
+  });
+
+  it("图片资源引用与修订标识整体耦合：带修订缺引用、缺修订带引用均非法", () => {
+    // 旧目录（无 imageAssets）仍可解析：字段全部可选。
+    expect(agentCatalogSchema.safeParse(minimalCatalog()).success).toBe(true);
+    // 带修订标识的新目录必须全量携带条目引用（无效引用显式失败）。
+    expectInvalid((catalog) => {
+      catalog.imageAssets = { revision: "2026-10-09", legacyCircleFileNames: [] };
+    });
+    expectInvalid((catalog) => {
+      catalog.imageAssets = { revision: "2026-10-09", legacyCircleFileNames: [] };
+      catalog.elements[0]!.iconAsset = "IconPhysical";
+      catalog.specialties[0]!.iconAsset = "IconAttackType";
+      delete catalog.agents[0]!.iconAsset;
+      catalog.agents[1]!.iconAsset = { icon: "IconRoleCrop01", crop: { x: 50, y: 36 } };
+    });
+    expectInvalid((catalog) => {
+      catalog.imageAssets = { revision: "2026-10-09", legacyCircleFileNames: [] };
+      catalog.agents[0]!.iconAsset = { icon: "IconRoleCrop01", crop: { x: 50, y: 36 } };
+      catalog.agents[1]!.iconAsset = { icon: "IconRoleCrop11", crop: { x: 50, y: 36 } };
+      delete catalog.specialties[0]!.iconAsset;
+    });
+    // 没有修订标识的孤儿引用无法构造稳定公开路径，同样非法。
+    expectInvalid((catalog) => {
+      catalog.agents[0]!.iconAsset = { icon: "IconRoleCrop01", crop: { x: 50, y: 36 } };
+    });
+    expectInvalid((catalog) => {
+      catalog.elements[0]!.iconAsset = "IconPhysical";
+    });
+  });
+
+  it("裁切值超出 0-100 或资源主干形态非法", () => {
+    const withAssets = (catalog: AgentCatalogData): void => {
+      catalog.imageAssets = { revision: "2026-10-09", legacyCircleFileNames: [] };
+      catalog.elements[0]!.iconAsset = "IconPhysical";
+      catalog.specialties[0]!.iconAsset = "IconAttackType";
+      catalog.agents[0]!.iconAsset = { icon: "IconRoleCrop01", crop: { x: 50, y: 36 } };
+      catalog.agents[1]!.iconAsset = { icon: "IconRoleCrop11", crop: { x: 50, y: 36 } };
+    };
+    // 完整引用的新目录形态合法（这里只测形态，真实引用由真实目录覆盖）。
+    const valid = minimalCatalog();
+    withAssets(valid);
+    expect(agentCatalogSchema.safeParse(valid).success).toBe(true);
+    expectInvalid((catalog) => {
+      withAssets(catalog);
+      catalog.agents[0]!.iconAsset = { icon: "IconRoleCrop01", crop: { x: 50, y: 140 } };
+    });
+    expectInvalid((catalog) => {
+      withAssets(catalog);
+      catalog.agents[0]!.iconAsset = { icon: "../escape", crop: { x: 50, y: 36 } };
+    });
+    expectInvalid((catalog) => {
+      withAssets(catalog);
+      catalog.elements[0]!.iconAsset = "a/b";
     });
   });
 
@@ -407,12 +498,16 @@ describe("目录派生一致性", () => {
       const display = lookup.get(entry.id);
       expect(display, `缺少 ${entry.id} 的展示信息`).toEqual({
         name: entry.name,
-        avatarUrl: toAgentImageUrl(entry.avatarPath),
+        avatarUrl: `/images/agents/${PINNED_IMAGE_ASSETS_REVISION}/${entry.iconAsset?.icon}.webp`,
+        avatarCrop: entry.iconAsset?.crop ?? null,
       });
     }
-    // 具体样例：安比头像按上游规则派生为 webp 地址。
+    // 具体样例：安比的归档头像为资源修订内的稳定本地方图路径（含裁切）。
     expect(lookup.get("1011")?.avatarUrl).toBe(
-      "https://static.nanoka.cc/assets/zzz/IconRoleCircle01.webp",
+      `/images/agents/${PINNED_IMAGE_ASSETS_REVISION}/IconRoleCrop01.webp`,
+    );
+    expect(lookup.get("1011")?.avatarCrop).toEqual(
+      agentCatalogData.agents[0]?.iconAsset?.crop ?? null,
     );
   });
 
@@ -464,15 +559,25 @@ describe("目录派生一致性", () => {
       const expected = lookup.get(submission.agentId);
       expect(snapshot.operations[index]?.agentName).toBe(expected?.name);
       expect(snapshot.operations[index]?.agentAvatarUrl).toBe(expected?.avatarUrl);
+      expect(snapshot.operations[index]?.agentAvatarCrop).toEqual(expected?.avatarCrop);
     }
-    // 归档中的头像为按上游规则派生的 webp 地址，不是原始游戏内路径。
+    // 归档中的头像为资源修订内的稳定本地方图路径（含宽幅裁切），不是
+    // 原始游戏内路径，也不是热链远程地址。
     expect(snapshot.operations[0]?.agentId).toBe("1011");
     expect(snapshot.operations[0]?.agentAvatarUrl).toBe(
-      "https://static.nanoka.cc/assets/zzz/IconRoleCircle01.webp",
+      `/images/agents/${PINNED_IMAGE_ASSETS_REVISION}/IconRoleCrop01.webp`,
     );
-    // 缺头像代理人的归档记录保留名称、头像为 null。
+    expect(snapshot.operations[0]?.agentAvatarCrop).toEqual(
+      agentCatalogData.agents[0]?.iconAsset?.crop ?? null,
+    );
+    // 缺 avatarPath 的佩洛伊斯同样拥有方图资源（来自图片资源清单）。
     const pyroisOperation = snapshot.operations.find((operation) => operation.agentId === "1551");
     expect(pyroisOperation?.agentName).toBe("佩洛伊斯");
-    expect(pyroisOperation?.agentAvatarUrl).toBeNull();
+    expect(pyroisOperation?.agentAvatarUrl).toBe(
+      `/images/agents/${PINNED_IMAGE_ASSETS_REVISION}/IconRoleCrop63.webp`,
+    );
+    expect(pyroisOperation?.agentAvatarCrop).toEqual(
+      agentCatalogData.agents.find((entry) => entry.id === "1551")?.iconAsset?.crop ?? null,
+    );
   });
 });

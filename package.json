@@ -14,6 +14,7 @@
     "test:e2e": "vitest run -c vitest.e2e.config.ts",
     "measure:rooms": "vitest run -c vitest.measure.config.ts",
     "generate:agent-catalog": "node scripts/generate-agent-catalog.ts",
+    "import:image-assets": "node scripts/import-image-assets.ts",
     "prepare": "simple-git-hooks"
   },
   "dependencies": {
@@ -38,6 +39,7 @@
     "oxfmt": "^0.71.0",
     "oxlint": "^1.86.0",
     "playwright": "1.63.0",
+    "sharp": "0.35.4",
     "simple-git-hooks": "^2.14.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",

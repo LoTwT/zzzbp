@@ -7,73 +7,146 @@
     "sourceId": "nanoka-zzz",
     "snapshotId": "sha256:ee99ec1e02f16aaef496dbdcb42d6bb20c2b0c7022ad9bf76cfa541daa9f41fe"
   },
+  "imageAssets": {
+    "revision": "2026-10-09",
+    "legacyCircleFileNames": [
+      "IconRoleCircle01.webp",
+      "IconRoleCircle05.webp",
+      "IconRoleCircle09.webp",
+      "IconRoleCircle10.webp",
+      "IconRoleCircle11.webp",
+      "IconRoleCircle12.webp",
+      "IconRoleCircle13.webp",
+      "IconRoleCircle14.webp",
+      "IconRoleCircle15.webp",
+      "IconRoleCircle16.webp",
+      "IconRoleCircle17.webp",
+      "IconRoleCircle18.webp",
+      "IconRoleCircle20.webp",
+      "IconRoleCircle21.webp",
+      "IconRoleCircle22.webp",
+      "IconRoleCircle23.webp",
+      "IconRoleCircle24.webp",
+      "IconRoleCircle25.webp",
+      "IconRoleCircle26.webp",
+      "IconRoleCircle27.webp",
+      "IconRoleCircle28.webp",
+      "IconRoleCircle29.webp",
+      "IconRoleCircle30.webp",
+      "IconRoleCircle31.webp",
+      "IconRoleCircle32.webp",
+      "IconRoleCircle35.webp",
+      "IconRoleCircle36.webp",
+      "IconRoleCircle37.webp",
+      "IconRoleCircle38.webp",
+      "IconRoleCircle39.webp",
+      "IconRoleCircle41.webp",
+      "IconRoleCircle42.webp",
+      "IconRoleCircle43.webp",
+      "IconRoleCircle44.webp",
+      "IconRoleCircle45.webp",
+      "IconRoleCircle46.webp",
+      "IconRoleCircle47.webp",
+      "IconRoleCircle48.webp",
+      "IconRoleCircle49.webp",
+      "IconRoleCircle50.webp",
+      "IconRoleCircle51.webp",
+      "IconRoleCircle52.webp",
+      "IconRoleCircle53.webp",
+      "IconRoleCircle54.webp",
+      "IconRoleCircle55.webp",
+      "IconRoleCircle56.webp",
+      "IconRoleCircle57.webp",
+      "IconRoleCircle58.webp",
+      "IconRoleCircle59.webp",
+      "IconRoleCircle60.webp",
+      "IconRoleCircle61.webp",
+      "IconRoleCircle64.webp",
+      "IconRoleCircle65.webp",
+      "IconRoleCircle66.webp",
+      "IconRoleCircle67.webp"
+    ]
+  },
   "elements": [
     {
       "id": "200",
       "name": "物理",
-      "iconPath": null
+      "iconPath": null,
+      "iconAsset": "IconPhysical"
     },
     {
       "id": "201",
       "name": "火属性",
-      "iconPath": null
+      "iconPath": null,
+      "iconAsset": "IconFire"
     },
     {
       "id": "202",
       "name": "冰属性",
-      "iconPath": null
+      "iconPath": null,
+      "iconAsset": "IconIce"
     },
     {
       "id": "203",
       "name": "电属性",
-      "iconPath": null
+      "iconPath": null,
+      "iconAsset": "IconElectric"
     },
     {
       "id": "204",
       "name": "风属性",
-      "iconPath": null
+      "iconPath": null,
+      "iconAsset": "IconWind"
     },
     {
       "id": "205",
       "name": "以太",
-      "iconPath": null
+      "iconPath": null,
+      "iconAsset": "IconEther"
     },
     {
       "id": "300",
       "name": "流明",
-      "iconPath": null
+      "iconPath": null,
+      "iconAsset": "IconLumiflux"
     }
   ],
   "specialties": [
     {
       "id": "1",
       "name": "强攻",
-      "iconPath": null
+      "iconPath": null,
+      "iconAsset": "IconAttackType"
     },
     {
       "id": "2",
       "name": "击破",
-      "iconPath": null
+      "iconPath": null,
+      "iconAsset": "IconStun"
     },
     {
       "id": "3",
       "name": "异常",
-      "iconPath": null
+      "iconPath": null,
+      "iconAsset": "IconAnomaly"
     },
     {
       "id": "4",
       "name": "支援",
-      "iconPath": null
+      "iconPath": null,
+      "iconAsset": "IconSupport"
     },
     {
       "id": "5",
       "name": "防护",
-      "iconPath": null
+      "iconPath": null,
+      "iconAsset": "IconDefense"
     },
     {
       "id": "6",
       "name": "命破",
-      "iconPath": null
+      "iconPath": null,
+      "iconAsset": "IconRupture"
     }
   ],
   "agents": [
@@ -82,6 +155,13 @@
       "name": "安比",
       "fullName": "安比·德玛拉",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle01.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop01",
+        "crop": {
+          "x": 50,
+          "y": 41
+        }
+      },
       "elementId": "203",
       "specialtyId": "2"
     },
@@ -90,6 +170,13 @@
       "name": "猫又",
       "fullName": "猫宫又奈",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle11.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop11",
+        "crop": {
+          "x": 50,
+          "y": 42
+        }
+      },
       "elementId": "200",
       "specialtyId": "1"
     },
@@ -98,6 +185,13 @@
       "name": "妮可",
       "fullName": "妮可·德玛拉",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle12.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop12",
+        "crop": {
+          "x": 50,
+          "y": 34
+        }
+      },
       "elementId": "205",
       "specialtyId": "4"
     },
@@ -106,6 +200,13 @@
       "name": "「11号」",
       "fullName": "「11号」",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle05.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop05",
+        "crop": {
+          "x": 50,
+          "y": 41
+        }
+      },
       "elementId": "201",
       "specialtyId": "1"
     },
@@ -114,6 +215,13 @@
       "name": "伊德海莉",
       "fullName": "伊德海莉·墨菲",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle52.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop52",
+        "crop": {
+          "x": 50,
+          "y": 43
+        }
+      },
       "elementId": "202",
       "specialtyId": "6"
     },
@@ -122,6 +230,13 @@
       "name": "可琳",
       "fullName": "可琳·威克斯",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle09.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop09",
+        "crop": {
+          "x": 50,
+          "y": 51
+        }
+      },
       "elementId": "200",
       "specialtyId": "1"
     },
@@ -130,6 +245,13 @@
       "name": "凯撒",
       "fullName": "凯撒·金",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle25.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop25",
+        "crop": {
+          "x": 50,
+          "y": 58
+        }
+      },
       "elementId": "200",
       "specialtyId": "5"
     },
@@ -138,6 +260,13 @@
       "name": "比利",
       "fullName": "比利·奇德",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle10.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop10",
+        "crop": {
+          "x": 32,
+          "y": 42
+        }
+      },
       "elementId": "200",
       "specialtyId": "1"
     },
@@ -146,6 +275,13 @@
       "name": "雅",
       "fullName": "星见雅",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle13.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop13",
+        "crop": {
+          "x": 68,
+          "y": 49
+        }
+      },
       "elementId": "202",
       "specialtyId": "3"
     },
@@ -154,6 +290,13 @@
       "name": "珂蕾妲",
       "fullName": "珂蕾妲·贝洛伯格",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle14.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop14",
+        "crop": {
+          "x": 50,
+          "y": 54
+        }
+      },
       "elementId": "201",
       "specialtyId": "2"
     },
@@ -162,6 +305,13 @@
       "name": "安东",
       "fullName": "安东·伊万诺夫",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle15.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop15",
+        "crop": {
+          "x": 50,
+          "y": 49
+        }
+      },
       "elementId": "203",
       "specialtyId": "1"
     },
@@ -170,6 +320,13 @@
       "name": "本",
       "fullName": "本·比格",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle16.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop16",
+        "crop": {
+          "x": 50,
+          "y": 34
+        }
+      },
       "elementId": "201",
       "specialtyId": "5"
     },
@@ -178,6 +335,13 @@
       "name": "苍角",
       "fullName": "苍角",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle17.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop17",
+        "crop": {
+          "x": 50,
+          "y": 51
+        }
+      },
       "elementId": "202",
       "specialtyId": "4"
     },
@@ -186,6 +350,13 @@
       "name": "莱卡恩",
       "fullName": "冯·莱卡恩",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle18.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop18",
+        "crop": {
+          "x": 50,
+          "y": 55
+        }
+      },
       "elementId": "202",
       "specialtyId": "2"
     },
@@ -194,6 +365,13 @@
       "name": "露西",
       "fullName": "露西亚娜·德·蒙特夫",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle27.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop27",
+        "crop": {
+          "x": 69,
+          "y": 54
+        }
+      },
       "elementId": "201",
       "specialtyId": "4"
     },
@@ -202,6 +380,13 @@
       "name": "莱特",
       "fullName": "莱特",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle26.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop26",
+        "crop": {
+          "x": 50,
+          "y": 59
+        }
+      },
       "elementId": "201",
       "specialtyId": "2"
     },
@@ -210,6 +395,13 @@
       "name": "柏妮思",
       "fullName": "柏妮思·怀特",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle32.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop32",
+        "crop": {
+          "x": 50,
+          "y": 49
+        }
+      },
       "elementId": "201",
       "specialtyId": "3"
     },
@@ -218,6 +410,13 @@
       "name": "格莉丝",
       "fullName": "格莉丝·霍华德",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle20.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop20",
+        "crop": {
+          "x": 50,
+          "y": 55
+        }
+      },
       "elementId": "203",
       "specialtyId": "3"
     },
@@ -226,6 +425,13 @@
       "name": "艾莲",
       "fullName": "艾莲·乔",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle21.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop21",
+        "crop": {
+          "x": 71,
+          "y": 51
+        }
+      },
       "elementId": "202",
       "specialtyId": "1"
     },
@@ -234,6 +440,13 @@
       "name": "悠真",
       "fullName": "浅羽悠真",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle35.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop35",
+        "crop": {
+          "x": 50,
+          "y": 54
+        }
+      },
       "elementId": "203",
       "specialtyId": "1"
     },
@@ -242,6 +455,13 @@
       "name": "丽娜",
       "fullName": "亚历山德丽娜·莎芭丝缇安",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle22.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop22",
+        "crop": {
+          "x": 50,
+          "y": 49
+        }
+      },
       "elementId": "203",
       "specialtyId": "4"
     },
@@ -250,6 +470,13 @@
       "name": "柳",
       "fullName": "月城柳",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle31.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop31",
+        "crop": {
+          "x": 30,
+          "y": 52
+        }
+      },
       "elementId": "203",
       "specialtyId": "3"
     },
@@ -258,6 +485,13 @@
       "name": "朱鸢",
       "fullName": "朱鸢",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle23.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop23",
+        "crop": {
+          "x": 50,
+          "y": 55
+        }
+      },
       "elementId": "205",
       "specialtyId": "1"
     },
@@ -266,6 +500,13 @@
       "name": "青衣",
       "fullName": "青衣",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle29.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop29",
+        "crop": {
+          "x": 50,
+          "y": 46
+        }
+      },
       "elementId": "203",
       "specialtyId": "2"
     },
@@ -274,6 +515,13 @@
       "name": "简",
       "fullName": "简·杜",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle24.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop24",
+        "crop": {
+          "x": 28,
+          "y": 49
+        }
+      },
       "elementId": "200",
       "specialtyId": "3"
     },
@@ -282,6 +530,13 @@
       "name": "赛斯",
       "fullName": "赛斯·洛威尔",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle30.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop30",
+        "crop": {
+          "x": 50,
+          "y": 52
+        }
+      },
       "elementId": "203",
       "specialtyId": "5"
     },
@@ -290,6 +545,13 @@
       "name": "派派",
       "fullName": "派派",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle28.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop28",
+        "crop": {
+          "x": 68,
+          "y": 49
+        }
+      },
       "elementId": "200",
       "specialtyId": "3"
     },
@@ -298,6 +560,13 @@
       "name": "雨果",
       "fullName": "雨果·维拉德",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle42.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop42",
+        "crop": {
+          "x": 50,
+          "y": 52
+        }
+      },
       "elementId": "202",
       "specialtyId": "1"
     },
@@ -306,6 +575,13 @@
       "name": "奥菲丝&「鬼火」",
       "fullName": "奥菲丝·马格努森&「鬼火」",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle49.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop49",
+        "crop": {
+          "x": 50,
+          "y": 52
+        }
+      },
       "elementId": "201",
       "specialtyId": "1"
     },
@@ -314,6 +590,13 @@
       "name": "耀嘉音",
       "fullName": "耀嘉音",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle36.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop36",
+        "crop": {
+          "x": 66,
+          "y": 49
+        }
+      },
       "elementId": "205",
       "specialtyId": "4"
     },
@@ -322,6 +605,13 @@
       "name": "伊芙琳",
       "fullName": "伊芙琳 · 舒瓦利耶",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle37.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop37",
+        "crop": {
+          "x": 50,
+          "y": 37
+        }
+      },
       "elementId": "201",
       "specialtyId": "1"
     },
@@ -330,6 +620,13 @@
       "name": "薇薇安",
       "fullName": "薇薇安·班希",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle41.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop41",
+        "crop": {
+          "x": 50,
+          "y": 34
+        }
+      },
       "elementId": "205",
       "specialtyId": "3"
     },
@@ -338,6 +635,13 @@
       "name": "照",
       "fullName": "照",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle56.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop56",
+        "crop": {
+          "x": 50,
+          "y": 46
+        }
+      },
       "elementId": "202",
       "specialtyId": "5"
     },
@@ -346,6 +650,13 @@
       "name": "波可娜",
       "fullName": "波可娜·费雷尼",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle38.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop38",
+        "crop": {
+          "x": 50,
+          "y": 31
+        }
+      },
       "elementId": "200",
       "specialtyId": "2"
     },
@@ -354,6 +665,13 @@
       "name": "「扳机」",
       "fullName": "「扳机」",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle39.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop39",
+        "crop": {
+          "x": 50,
+          "y": 40
+        }
+      },
       "elementId": "203",
       "specialtyId": "2"
     },
@@ -362,6 +680,13 @@
       "name": "仪玄",
       "fullName": "仪玄",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle44.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop44",
+        "crop": {
+          "x": 50,
+          "y": 37
+        }
+      },
       "elementId": "205",
       "specialtyId": "6"
     },
@@ -370,6 +695,13 @@
       "name": "零号·安比",
       "fullName": null,
       "avatarPath": null,
+      "iconAsset": {
+        "icon": "IconRoleCrop40",
+        "crop": {
+          "x": 50,
+          "y": 34
+        }
+      },
       "elementId": "203",
       "specialtyId": "1"
     },
@@ -378,6 +710,13 @@
       "name": "橘福福",
       "fullName": "橘福福",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle43.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop43",
+        "crop": {
+          "x": 50,
+          "y": 46
+        }
+      },
       "elementId": "201",
       "specialtyId": "2"
     },
@@ -386,6 +725,13 @@
       "name": "爱丽丝",
       "fullName": "爱丽丝·泰姆菲尔德",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle46.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop46",
+        "crop": {
+          "x": 50,
+          "y": 40
+        }
+      },
       "elementId": "200",
       "specialtyId": "3"
     },
@@ -394,6 +740,13 @@
       "name": "柚叶",
       "fullName": "浮波柚叶",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle47.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop47",
+        "crop": {
+          "x": 50,
+          "y": 41
+        }
+      },
       "elementId": "200",
       "specialtyId": "4"
     },
@@ -402,6 +755,13 @@
       "name": "潘引壶",
       "fullName": "潘引壶",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle45.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop45",
+        "crop": {
+          "x": 50,
+          "y": 28
+        }
+      },
       "elementId": "200",
       "specialtyId": "5"
     },
@@ -410,6 +770,13 @@
       "name": "叶瞬光",
       "fullName": "叶瞬光",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle55.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop55",
+        "crop": {
+          "x": 50,
+          "y": 37
+        }
+      },
       "elementId": "200",
       "specialtyId": "1"
     },
@@ -418,6 +785,13 @@
       "name": "真斗",
       "fullName": "狛野真斗",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle51.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop51",
+        "crop": {
+          "x": 50,
+          "y": 37
+        }
+      },
       "elementId": "201",
       "specialtyId": "6"
     },
@@ -426,6 +800,13 @@
       "name": "卢西娅",
       "fullName": "卢西娅·艾洛温",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle50.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop50",
+        "crop": {
+          "x": 29,
+          "y": 37
+        }
+      },
       "elementId": "205",
       "specialtyId": "4"
     },
@@ -434,6 +815,13 @@
       "name": "「席德」",
       "fullName": "「席德」",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle48.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop48",
+        "crop": {
+          "x": 50,
+          "y": 40
+        }
+      },
       "elementId": "203",
       "specialtyId": "1"
     },
@@ -442,6 +830,13 @@
       "name": "般岳",
       "fullName": "般岳",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle53.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop53",
+        "crop": {
+          "x": 50,
+          "y": 37
+        }
+      },
       "elementId": "201",
       "specialtyId": "6"
     },
@@ -450,6 +845,13 @@
       "name": "琉音",
       "fullName": "琉音",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle54.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop54",
+        "crop": {
+          "x": 50,
+          "y": 43
+        }
+      },
       "elementId": "200",
       "specialtyId": "2"
     },
@@ -458,6 +860,13 @@
       "name": "千夏",
       "fullName": "千夏",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle58.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop58",
+        "crop": {
+          "x": 50,
+          "y": 40
+        }
+      },
       "elementId": "200",
       "specialtyId": "4"
     },
@@ -466,6 +875,13 @@
       "name": "爱芮",
       "fullName": "爱芮",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle57.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop57",
+        "crop": {
+          "x": 50,
+          "y": 43
+        }
+      },
       "elementId": "205",
       "specialtyId": "3"
     },
@@ -474,6 +890,13 @@
       "name": "南宫羽",
       "fullName": "南宫羽",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle59.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop59",
+        "crop": {
+          "x": 50,
+          "y": 43
+        }
+      },
       "elementId": "205",
       "specialtyId": "2"
     },
@@ -482,6 +905,13 @@
       "name": "希希芙",
       "fullName": "希希芙",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle60.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop60",
+        "crop": {
+          "x": 50,
+          "y": 27
+        }
+      },
       "elementId": "203",
       "specialtyId": "1"
     },
@@ -490,6 +920,13 @@
       "name": "星徽·比利",
       "fullName": null,
       "avatarPath": null,
+      "iconAsset": {
+        "icon": "IconRoleCrop62",
+        "crop": {
+          "x": 50,
+          "y": 45
+        }
+      },
       "elementId": "200",
       "specialtyId": "6"
     },
@@ -498,6 +935,13 @@
       "name": "普罗米娅",
       "fullName": "普罗米娅",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle61.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop61",
+        "crop": {
+          "x": 100,
+          "y": 28
+        }
+      },
       "elementId": "202",
       "specialtyId": "3"
     },
@@ -506,6 +950,13 @@
       "name": "佩洛伊斯",
       "fullName": null,
       "avatarPath": null,
+      "iconAsset": {
+        "icon": "IconRoleCrop63",
+        "crop": {
+          "x": 50,
+          "y": 33
+        }
+      },
       "elementId": "205",
       "specialtyId": "1"
     },
@@ -514,6 +965,13 @@
       "name": "维琳娜",
       "fullName": "维琳娜·艾嘉德",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle64.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop64",
+        "crop": {
+          "x": 0,
+          "y": 51
+        }
+      },
       "elementId": "204",
       "specialtyId": "3"
     },
@@ -522,6 +980,13 @@
       "name": "诺姆",
       "fullName": "诺姆·霍洛维尔",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle65.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop65",
+        "crop": {
+          "x": 50,
+          "y": 42
+        }
+      },
       "elementId": "201",
       "specialtyId": "2"
     },
@@ -530,6 +995,13 @@
       "name": "蕾米埃尔",
       "fullName": "蕾米埃尔·丹",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle67.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop67",
+        "crop": {
+          "x": 50,
+          "y": 58
+        }
+      },
       "elementId": "300",
       "specialtyId": "3"
     },
@@ -538,6 +1010,13 @@
       "name": "希格莉德",
       "fullName": "希格莉德·德拉叙尔",
       "avatarPath": "UI/Sprite/A1DynamicLoad/IconRoleCircle/UnPacker/IconRoleCircle66.png",
+      "iconAsset": {
+        "icon": "IconRoleCrop66",
+        "crop": {
+          "x": 68,
+          "y": 45
+        }
+      },
       "elementId": "202",
       "specialtyId": "1"
     }

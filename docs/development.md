@@ -28,6 +28,7 @@ pnpm 12 另有最小发布年龄（minimum release age）的供应链策略：�
 | `pnpm test:e2e` | Vitest + Playwright：真实浏览器验收，自动启动/回收本地 `cf dev`（见「测试组织」）。 |
 | `pnpm measure:rooms` | 本地资源基准：在真实 workerd + SQLite 上测量消息量、存储与耗时，输出 JSON（按需运行，部署前复核）。 |
 | `pnpm run generate:agent-catalog` | 从固定版本的 `@randomplay/data` 重新生成代理人目录产物；仅在数据版本更新时使用，日常构建与测试不运行（见[代理人数据接入](specs/agent-data.md)）。 |
+| `pnpm run import:image-assets` | 图片资源导入：整理上游已核验图片为 `public/images/` 静态资源、生成缩略图并产出清单；仅在显式资源更新时使用，允许访问公开资源源站（见[代理人数据接入](specs/agent-data.md)）。 |
 | `pnpm build` | 显式串联 `typecheck` 与 `cf build`，产出 `.cloudflare/output/v0/`。 |
 
 `cf` 不会执行 `package.json` 中的脚本，因此 `build` 必须自行串联类型检查；部署
