@@ -8,7 +8,7 @@
 
 本站按 **npm 已发布包** 固定版本，不跟踪仓库 main 分支：
 
-- 当前固定版本 **0.2.1**（2026-10-04 核对仍为 npm `dist-tags.latest`，发布于 2026-09-26），包内声明的游戏数据版本 **3.1**、来源数据集 `nanoka-zzz`、58 名代理人。
+- 当前固定版本 **0.2.1**（2026-10-04 核对、2026-10-12 复核均为 npm `dist-tags.latest`，发布于 2026-09-26），包内声明的游戏数据版本 **3.1**、来源数据集 `nanoka-zzz`、58 名代理人。
 - fairy 仓库 main 分支的 `packages/data/package.json` 版本号同为 0.2.1，但 `integrated/index.json` 的 `source.version` 已推进到 3.2（60 名代理人；[integration.md](https://github.com/LoTwT/fairy/blob/main/docs/specs/data/integration.md) 记录 2026-10-03「Nanoka 3.2 正式版本升级验收」agents +2）。**Git main 与 npm 已发布 tarball 不是同一内容快照**，不能把仓库 main 的最新数据当作安装依赖的内容。
 - 后续 npm 发布新版本时，按下文「版本更新办法」整体升级；不修改 fairy 上游、不拉取未发布的 3.2 数据、不依据缺头像或名单外的判断删改条目。
 
@@ -79,8 +79,10 @@ Workers Static Assets 对静态资源的默认响应头是 `Cache-Control: publi
 导入脚本 `pnpm run import:image-assets`（`scripts/import-image-assets.ts`）只在显式资源更新时运行：
 
 ```sh
-pnpm run import:image-assets -- --sources <已核验来源目录> --crops <裁切校准文件> [-- --revision <id>]
+pnpm run import:image-assets -- --sources <已核验来源目录> --crops <裁切校准文件> [--revision <id>]
 ```
+
+pnpm 将脚本名后的参数透传给脚本；示例中的 `--` 由导入脚本忽略，无需在 `--revision` 前再次添加。
 
 - 方图母图、分类图标与未收录的旧圆图：`--sources` 指定本地已核验来源目录（上游核验缓存，如本机 `~/.cache/zzzbp/` 的验证产物）时从该目录读取（文件名与资源主干一致），缺失即失败、不回退网络；未提供目录则从上游 URL 下载（携带浏览器 UA 与 Referer——普通 HEAD 会被 403，见下文核验记录）。全部来源核验为 WebP（母图 384x384、分类图标 ≤128px）。
 - 128 缩略图由母图离线生成（sharp 固定参数，同版本字节可复现）；不引入需要构建时联网的步骤。
@@ -119,20 +121,20 @@ Fairy 数据版本更新（npm 包新版本）：
 1. 查询 npm 最新版本与发布内容，确认与 Tailwind/工具链无关后，修改 `package.json` 中 `@randomplay/data` 的精确版本并 `pnpm install`（pnpm 供应链策略默认生效，过新版本会被拒绝，不放宽设置）。
 2. 运行 `pnpm run generate:agent-catalog` 重新生成产物（图片资源引用按新名单与现有清单比对；新增代理人/分类缺资源记录时显式失败，先按下一条流程补充图片资源）。
 3. 检查 `shared/agents/catalog.json` 的 diff（数量、名单、分类变化）。
-4. 更新 `tests/rules/agent-catalog.test.ts` 中的固定版本常量与导入概况断言（测试同时校验产物版本与安装依赖一致，防止只升级依赖不重新生成）。
+4. 更新 `tests/rules/agent-catalog.test.ts` 中的固定版本常量与导入概况断言（测试同时校验产物版本与安装依赖一致，防止只升级依赖不重新生成）。名单或 `avatarPath` 变化时，`tests/rules/agent-image-assets.test.ts` 中「旧圆图副本覆盖全部可派生 avatarPath 的代理人」的数量断言与「不应被收录」的圆图边界示例（上游补齐 `avatarPath` 后，`IconRoleCircle40` 一类示例会反转为已收录）也需一并更新。
 5. 运行 `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build` 后提交。
 
 图片资源更新（新角色方图、改图片或改裁切校准）：
 
-1. 准备已核验的母图目录（下载并核对尺寸/哈希/解码；上游 URL 需浏览器 UA 与 Referer），逐角色看图校准宽幅裁切，产出裁切校准文件。
-2. 运行 `pnpm run import:image-assets -- --sources <来源目录> --crops <校准文件> [-- --revision <新修订>]`；产出新的 `public/images/agents/<新修订>/`、`public/images/classifications/<新修订>/` 目录与更新后的 `shared/agents/assets.json`（旧修订目录与 legacy 副本保留；新收录的旧圆图仅追加记录，已收录副本不回写）。
+1. 准备已核验的母图目录（下载并核对尺寸/哈希/解码；上游 URL 需浏览器 UA 与 Referer），逐角色看图校准宽幅裁切，产出裁切校准文件（须覆盖全部主干，含未变化的既有主干）。
+2. 运行 `pnpm run import:image-assets -- --sources <来源目录> --crops <校准文件> --revision <新修订>`；产出新的 `public/images/agents/<新修订>/`、`public/images/classifications/<新修订>/` 目录与更新后的 `shared/agents/assets.json`（旧修订目录与 legacy 副本保留；新收录的旧圆图仅追加记录，已收录副本不回写）。数据包新增分类时，先在导入脚本的 `CLASSIFICATION_ICON_SOURCES` 来源表登记该分类的图标来源，否则导入显式失败。
 3. 运行 `pnpm run generate:agent-catalog` 把新修订引用进目录产物，检查 diff。
-4. 更新 `tests/rules/agent-catalog.test.ts` 的 `PINNED_IMAGE_ASSETS_REVISION` 与图片资源概况断言，跑全量检查后提交。
+4. 更新 `tests/rules/agent-catalog.test.ts` 的 `PINNED_IMAGE_ASSETS_REVISION` 与图片资源概况断言，以及 `tests/rules/agent-image-assets.test.ts` 的旧圆图覆盖数量与收录边界断言，跑全量检查后提交。
 
 上游头像补齐或数据结构变化后同一流程处理；不改写 `fairy` 上游、不发 issue、不另选数据来源。
 
 ## 未验证项
 
 - 图片资源的事实记录（来源 URL、哈希、尺寸、解码）以 2026-10-09 的导入核验为准，`tests/rules/agent-image-assets.test.ts` 校验已提交文件与清单一致。当前目录及已收录的旧圆图使用本站同源静态资源，不依赖上游 URL 的长期可达性；历史快照中未收录或未知的外部 URL 仍按原地址加载，失败时显示占位，规则见「图片资源与公开路径」。
-- 上游 npm 包 0.2.1 之后版本（含 fairy main 已合入但未发布的 3.2 数据，60 名代理人）的破坏性结构变化未验证，发布后按「版本更新办法」重新核对；不接入未发布的两人、不修改 fairy。
+- 上游 npm 包 0.2.1 之后版本（含 fairy main 已合入但未发布的 3.2 数据，60 名代理人）的实际内容未验证，发布后按「版本更新办法」重新核对；不接入未发布的两人、不修改 fairy。2026-10-12 复核 npm 尚无后续发布，历史回放 0.2.0 → 0.2.1 的代理人输入逐字节一致，目录产物仅版本元数据变化。新增代理人和分类、`avatarPath` 补齐、图片修订更新、失败时保留原产物，以及旧 `room_catalog` 与无 `imageAssets` 快照的解释，已在临时副本中用合成输入演练。合成演练验证的是更新流程，不能替代真实新版本验收。
 - 比赛专用白名单未核定（当前为主表全量，不构成功能阻塞）。
