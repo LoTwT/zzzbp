@@ -17,6 +17,8 @@ import { validateTeamName } from "../../lib/form-validation";
 import type { RoomSession } from "../../room/room-session";
 import { isHostManagementView, type RoomView } from "../../room/room-session";
 import type { RoomCatalogModel } from "../../room/room-catalog";
+import { buildLiveExportResult, exportResultFingerprint } from "../../room/result-export";
+import ResultExportActions from "./ResultExportActions.vue";
 import { TeamNameDraft } from "../../room/team-name-draft";
 import { pendingOperationText } from "../../room/operation-feedback";
 import { usePanelDismiss } from "../../room/panel-dismiss";
@@ -319,6 +321,42 @@ function onWindowKeydown(event: KeyboardEvent): void {
  * 原页。选用区固定九格竖排，链接不再携带布局参数。
  */
 const displayHref = computed(() => displayPagePath(props.roomId));
+
+// ---- BP 结果导出（docs/specs/room-layout.md「BP 结果导出」）：已完成、
+// 连接同步且目录就绪才可用；原因短文案在不可用时展示。快照在点击瞬间
+// 由 ResultExportActions 构建，下载前按导出内容指纹校验来源仍一致
+// （无关的成员在线状态变化不取消），组件卸载始终取消。 ----
+
+const exportResult = computed(() => {
+  if (props.view.bpStatus !== "completed") return null;
+  if (!props.connected) return null;
+  if (props.catalogModel === null) return null;
+  return buildLiveExportResult(props.view, props.catalogModel);
+});
+
+const exportUnavailableReason = computed(() => {
+  if (props.view.bpStatus !== "completed") return "BP 完成后可导出结果";
+  if (!props.connected) return "连接同步后可导出结果";
+  if (props.catalogModel === null) return "代理人名单就绪后可导出结果";
+  return null;
+});
+
+function captureExportSource(): unknown {
+  // 点击瞬间的导出内容指纹：只含真正影响导出输出的字段。
+  const result = exportResult.value;
+  return result === null ? null : exportResultFingerprint(result);
+}
+
+function exportSourceStaleness(captured: unknown): string | null {
+  // 最终一致性语义：下载前仍未恢复同步连接时取消；重新同步后按导出内容
+  // 指纹判定——观众加入/上下线等只递增 revision 的无关变化不取消，队名
+  // 或有效结果变化（撤回/重开）取消。面板关闭/页面离开由组件卸载兜底。
+  if (!props.connected) return "连接中断，请重新导出";
+  const current = exportResult.value;
+  if (captured === null || current === null) return "结果已变化，请重新导出";
+  if (exportResultFingerprint(current) !== captured) return "结果已变化，请重新导出";
+  return null;
+}
 
 async function copyRoomLink(): Promise<void> {
   await copy(window.location.href);
@@ -711,6 +749,13 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           <Link2 class="size-4 text-(--text-muted)" aria-hidden="true" />
           {{ copied ? "已复制" : "复制房间链接" }}
         </button>
+        <!-- BP 结果导出：复制结果文本 / 下载结果图片（共用动作组件）。 -->
+        <ResultExportActions
+          :result="exportResult"
+          :unavailable-reason="exportUnavailableReason"
+          :capture-source="captureExportSource"
+          :source-staleness="exportSourceStaleness"
+        />
       </section>
     </div>
 
