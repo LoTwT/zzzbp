@@ -36,7 +36,7 @@
 | 稳定 ID | `data.id` | 来源数值 ID 的规范十进制字符串（如 `"1011"`），与规则层 AgentId 字符串衔接。 |
 | 官方中文名称（简短名） | `details(zh).name` | 中文详情顶层名称原值，作为默认展示名。 |
 | 官方中文全名 | `details(zh).partnerInfo.fullName` | 数据包提供的官方全名（如「星见雅」对应简短名「雅」），与简短名一同参与搜索包含匹配；来源未记录时为 `null`，不推测或合并变体身份。 |
-| 头像路径 | `data.partnerInfo.iconPath`，缺失时 `details(zh).partnerInfo.iconPath` | 数据包已记录的资源路径原样保留；均缺失为 `null`，展示留空，不按图标编号拼接。旧目录快照缺图片资源引用时按本字段派生旧圆图 URL（见下节）。 |
+| 头像路径 `avatarPath` | `data.partnerInfo.iconPath`，缺失时 `details(zh).partnerInfo.iconPath` | 数据包已记录的资源路径原样保留；均缺失为 `null`，不按图标编号拼接。新目录使用 `iconAsset` 方图；旧目录快照缺图片资源引用时才按本字段派生旧圆图 URL，本字段也为空时显示占位（见下节）。 |
 | 图片资源引用 `iconAsset` | `data.icon` + 本站图片资源清单 | 主干按上游消费库已确认规则由 `data.icon` 推导（`IconRole01` → `IconRoleCrop01`，读取实际字段，不是按角色 ID 猜编号），与清单比对后连同宽幅裁切校准值嵌入；当前 58 人全部有引用，缺 `avatarPath` 的 1381/1531/1551 由此获得方图资源，不伪造它们的旧来源路径。 |
 | 属性分类 | `data.classificationIds.elementType[0]` + `details(zh).elementType[id]` | 恰一个取值，多值或缺失视为来源歧义并失败。 |
 | 特性分类 | `data.classificationIds.weaponType[0]` + `details(zh).weaponType[id]` | 同上；上游沿用 weaponType 用词，本站产品概念为「特性」。 |
@@ -61,7 +61,7 @@
 - `toAgentImageUrl(avatarPath)`：按上游已确认规则由来源路径派生远程圆图 URL（`UI/.../IconRoleCircle01.png` → `https://static.nanoka.cc/assets/zzz/IconRoleCircle01.webp`）；`live2_d` 等无图片扩展名的资源标识不适用，无来源路径返回 null。这是旧目录快照的解释路径，不是新资源的来源。
 - `localizeLegacyAgentImageUrl(url, localFileNames)`：把 `toAgentImageUrl` 域内、文件名精确匹配 `IconRoleCircleNN.webp` **且实际已收录**的远程 URL 映射到上述本地副本（文件名保持不变，不按角色 ID 推测、不把旧圆图替换为新方图）；收录名单取目录产物内嵌的 `imageAssets.legacyCircleFileNames` 摘要（由清单生成、经测试对齐，含审计事实的完整清单不进入运行时 bundle），形似而未收录的文件名（如 `IconRoleCircle40.webp`）不重写，与未知 URL 一致原样返回，展示按外部图片处理（contain 展示、失败走占位，不自动重新热链）。legacy 副本跨修订只增不改，当前构建的摘要是历史摘要的超集，旧目录快照与旧归档也按当前摘要判断收录。
 
-新归档保存稳定本地路径：带图片资源引用的条目经 `toAgentDisplayLookup`（`shared/agents/catalog.ts`）保存方图母图路径与宽幅裁切（归档操作的 `agentAvatarUrl`/`agentAvatarCrop` 字段）；旧目录条目保存映射后的旧圆图本地副本路径。旧归档快照按其保存的地址原样解释（远程圆图 URL 在展示时映射到本地副本）。
+新归档中，带图片资源引用的条目经 `toAgentDisplayLookup`（`shared/agents/catalog.ts`）保存稳定的方图母图路径与宽幅裁切（归档操作的 `agentAvatarUrl`/`agentAvatarCrop` 字段）。旧目录条目由 `avatarPath` 派生地址，按上述收录规则映射本地副本或保留原 URL；缺路径时保存 null。旧归档快照按其保存的地址解释，仅已收录的远程圆图映射到本地副本。
 
 ## 图片资源导入流程
 
@@ -122,6 +122,6 @@ Fairy 数据版本更新（npm 包新版本）：
 
 ## 未验证项
 
-- 图片资源的事实记录（来源 URL、哈希、尺寸、解码）以 2026-10-09 的导入核验为准，`tests/rules/agent-image-assets.test.ts` 校验已提交文件与清单一致；上游 URL 的长期可达性不构成运行时依赖（页面只访问本站同源静态资源）。
+- 图片资源的事实记录（来源 URL、哈希、尺寸、解码）以 2026-10-09 的导入核验为准，`tests/rules/agent-image-assets.test.ts` 校验已提交文件与清单一致。当前目录及已收录的旧圆图使用本站同源静态资源，不依赖上游 URL 的长期可达性；历史快照中未收录或未知的外部 URL 仍按原地址加载，失败时显示占位，规则见「图片资源与公开路径」。
 - 上游 npm 包 0.2.1 之后版本（含 fairy main 已合入但未发布的 3.2 数据，60 名代理人）的破坏性结构变化未验证，发布后按「版本更新办法」重新核对；不接入未发布的两人、不修改 fairy。
 - 比赛专用白名单未核定（当前为主表全量，不构成功能阻塞）。
