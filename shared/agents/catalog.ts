@@ -63,8 +63,9 @@ export function toAgentCatalog(data: AgentCatalogData): AgentCatalog {
  * 供 projectArchiveSnapshot（shared/contracts/records.ts）在归档时固定
  * 每步的展示信息。带图片资源引用的条目保存稳定的本地方图路径（含宽幅
  * 裁切位置，归档快照自足解释）；旧目录条目按原始 avatarPath 派生旧圆图
- * URL 并映射到同源本地副本。缺头像代理人为 null，展示走占位，不影响其
- * 身份与禁选结果（见 docs/specs/room-layout.md「代理人头像」）。
+ * URL，仅已收录者映射到同源本地副本。条目同时缺图片资源引用和
+ * avatarPath 时为 null，展示走占位，不影响其身份与禁选结果
+ * （见 docs/specs/room-layout.md「代理人头像」）。
  */
 export function toAgentDisplayLookup(data: AgentCatalogData): AgentDisplayLookup {
   const revision = data.imageAssets?.revision ?? null;
@@ -81,8 +82,8 @@ export function toAgentDisplayLookup(data: AgentCatalogData): AgentDisplayLookup
 
 /**
  * 归档保存的稳定头像 URL：新条目取资源修订内的本地方图路径；旧条目按
- * 原始 avatarPath 派生旧圆图 URL 并映射到同源本地副本（旧圆图不替换为
- * 新方图，归档不保存当前机器地址或热链远程地址）。
+ * 原始 avatarPath 派生旧圆图 URL，已收录者映射到同源本地副本，未收录
+ * 者保留原 URL（旧圆图不替换为新方图，归档不保存当前机器地址）。
  */
 function toArchiveImageUrl(revision: string | null, entry: AgentEntry): string | null {
   if (revision !== null && entry.iconAsset !== undefined) {

@@ -31,15 +31,15 @@ import {
  * 重开与再次开局的一条完整交付线。
  *
  * 视口组合：房主/选手 A/观众 1440×900，选手 B 1280×640（小窗口 + 长昵称
- * 与 32 码点长队名）。缺头像与最长名称代理人纳入 26 步序列（展示后备
- * 不改变操作可用性）。
+ * 与 32 码点长队名）。缺上游头像路径与最长名称代理人纳入 26 步序列；
+ * 前者在新房间中使用方图，此处不覆盖缺图占位。
  */
 
-/** 一局 26 步的代理人分配：目录顺序前 26 名，替换两个代表（缺头像、最长名）。 */
+/** 一局 26 步的代理人分配：目录顺序前 26 名，替换两个代表（缺上游头像路径、最长名）。 */
 function planAgents(): string[] {
   const names = AGENTS.slice(0, 26).map((entry) => entry.name);
   const replace = (index: number, entry: { readonly name: string } | undefined): void => {
-    // 固定目录中缺头像与最长名称代理人均在 26 名之外；防御性检查避免重复。
+    // 固定目录中缺上游头像路径与最长名称代理人均在 26 名之外；防御性检查避免重复。
     if (entry !== undefined && !names.includes(entry.name)) names[index] = entry.name;
   };
   replace(6, NO_AVATAR_AGENTS[0]);

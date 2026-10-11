@@ -122,7 +122,7 @@ describe("真实固定版本加载", () => {
     expect(last).toMatchObject({ id: "1591", name: "希格莉德", fullName: "希格莉德·德拉叙尔" });
   });
 
-  it("官方全名概况：55 名有 fullName，缺头像的三名均无全名", () => {
+  it("官方全名概况：55 名有 fullName，缺 avatarPath 的三名均无全名", () => {
     const withFullName = agentCatalogData.agents.filter((entry) => entry.fullName !== null);
     expect(withFullName).toHaveLength(55);
     const without = agentCatalogData.agents.filter((entry) => entry.fullName === null);
@@ -133,7 +133,7 @@ describe("真实固定版本加载", () => {
     ]);
   });
 
-  it("缺头像代理人保留身份与筛选信息：零号·安比、星徽·比利、佩洛伊斯", () => {
+  it("缺 avatarPath 的代理人保留身份与筛选信息：零号·安比、星徽·比利、佩洛伊斯", () => {
     const missingAvatar = agentCatalogData.agents.filter((entry) => entry.avatarPath === null);
     expect(missingAvatar.map((entry) => `${entry.id}:${entry.name}`)).toEqual([
       "1381:零号·安比",
@@ -523,7 +523,7 @@ describe("目录派生一致性", () => {
   });
 
   it("归档投影使用真实目录：名称与头像来自同一权威目录", () => {
-    // 用真实名单构造一局已完成的房间（含缺头像的佩洛伊斯），再走真实归档投影。
+    // 用真实名单构造一局已完成的房间（含缺 avatarPath 但有方图的佩洛伊斯），再走真实归档投影。
     const pickedAgents = agentCatalogData.agents.slice(0, BP_STEP_COUNT - 1);
     const pyrois = agentCatalogData.agents.find((entry) => entry.id === "1551");
     if (pyrois === undefined) throw new Error("测试前提失败：1551 佩洛伊斯应在目录中");

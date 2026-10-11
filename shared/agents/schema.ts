@@ -37,7 +37,7 @@ export const officialAgentNameSchema = z.string().trim().min(1).max(50);
 /**
  * 资源路径：数据包已记录的原样路径字符串，缺失为 null。
  *
- * 不根据图标编号拼接或推测补写；缺头像不影响 ID、名称与筛选资格
+ * 不根据图标编号拼接或推测补写；来源路径缺失不影响 ID、名称与筛选资格
  * （见 docs/specs/room-layout.md「代理人头像」）。
  */
 export const agentResourcePathSchema = z.string().min(1).nullable();

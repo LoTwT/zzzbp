@@ -10,15 +10,15 @@ import { E2E_BASE_URL } from "./server";
  *
  * 断言使用界面的可访问名称/角色与 sr-only 文案，不依赖布局实现细节；
  * 当前目录的图片为本站同源静态资源（public/images，见
- * docs/specs/agent-data.md），注入的旧式快照沿用远程圆图 URL 并在展示时
- * 映射为本地副本，界面不向第三方资产源发请求；第三方头像 CDN
+ * docs/specs/agent-data.md），本套件注入的旧式快照使用已收录的远程圆图
+ * URL，在展示时映射为本地副本，或以 null 表示缺图；第三方头像 CDN
  * （static.nanoka.cc）在测试上下文中仍统一拦截（防御旧引用），验收不
  * 依赖外部网络，界面渲染也不依赖图片加载成功（失败走占位）。
  */
 
 export const AGENTS: readonly AgentEntry[] = agentCatalogData.agents;
 export const AGENT_DATA_VERSION = agentCatalogData.agentDataVersion;
-/** 缺头像代理人（界面留空后备，不删除、不影响操作）。 */
+/** 上游 avatarPath 为空的代理人：新房间有方图，按旧路径构造的归档夹具缺图。 */
 export const NO_AVATAR_AGENTS = AGENTS.filter((entry) => entry.avatarPath === null);
 /** 名称最长的代理人（长名称展示代表）。 */
 export const LONGEST_NAME_AGENT = AGENTS.reduce((a, b) => (b.name.length > a.name.length ? b : a));
@@ -31,7 +31,7 @@ export function stepOf(slotId: BpSlotId): { team: "A" | "B"; action: "ban" | "pi
   return { team: slotId[0] === "A" ? "A" : "B", action: slotId[1] === "B" ? "ban" : "pick" };
 }
 
-/** 快照/界面共用的头像 URL 派生（供注入合法快照使用）。 */
+/** 由上游头像路径构造旧式归档夹具；路径为空时返回 null，不使用新目录的方图。 */
 export function avatarUrlOf(entry: AgentEntry): string | null {
   return toAgentImageUrl(entry.avatarPath);
 }

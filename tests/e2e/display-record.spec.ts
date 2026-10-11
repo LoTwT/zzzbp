@@ -67,7 +67,7 @@ function recordRows(page: Page) {
 function buildSnapshot(roomId: string, count: number) {
   const archivedAt = "2026-10-05T02:00:00.000Z";
   const operations = BP_ORDER.slice(0, count).map((slotId, index) => {
-    // 前缀内代理人唯一；掺入缺头像与最长名称代理人作为展示代表。
+    // 前缀内代理人唯一；按旧路径构造快照，掺入缺图与最长名称代理人作为展示代表。
     let entry: AgentEntry | undefined = AGENTS[index];
     if (index === 2) entry = NO_AVATAR_AGENTS[0];
     if (index === 5) entry = LONGEST_NAME_AGENT;
@@ -206,7 +206,7 @@ test("展示页：匿名直开、实时同步且不建立成员身份", async ()
     await assertNoSlotNumbers(display.page, "展示页", new Set(AGENTS.map((a) => a.name)));
     // 两侧选用槽位为九行填充卡片，与中央代理人池上下同高。
     await assertPickColumnsMatchPool(display.page, "展示页 1280x640");
-    // 队名与已禁用结果同步（队名在顶部禁用区旁；缺头像代理人正常显示名称）。
+    // 队名与已禁用结果同步（队名在顶部禁用区旁；缺上游头像路径的代理人仍显示名称）。
     await displayCard(display.page, plan[1] ?? "", "已禁用").waitFor({ state: "visible" });
     await assertTeamNameBesideBans(display.page, "展示页", { A: "甲队", B: "乙队" });
 
@@ -298,7 +298,7 @@ test("记录页：完成/未完成快照、终态分流与真实 404", async () 
       "记录页 已完成",
       new Set(completed.operations.map((operation) => operation.agentName)),
     );
-    // 列表首步与末步：连续顺序、左右方动作文案、缺头像/最长名称代表。
+    // 列表首步与末步：连续顺序、左右方动作文案、旧快照缺图/最长名称代表。
     await page.getByText("第 1 步：左方禁用", { exact: false }).first().waitFor();
     await page
       .getByText(`第 26 步：左方选用 ${completed.operations[25]?.agentName ?? ""}`, {

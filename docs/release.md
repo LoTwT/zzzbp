@@ -22,9 +22,10 @@
   上线状态与范围偏差、授权与费用边界、人工验收指南、维护 runbook 与回退方案见
   [预发布部署与操作交接](deployment.md)；账户运行行为（休眠、CPU、日志计费）与 Workers
   计划仍未用真实账户权威核实。
-- 固定数据：代理人目录为 `@randomplay/data` 0.2.1（游戏数据 3.1），58 人、其中 3 人缺头像
-  （零号·安比、星徽·比利、佩洛伊斯）。缺头像留空且不影响操作；属性/特性无结构化图标时以
-  官方名称文字按钮后备。更新流程见[代理人数据接入](specs/agent-data.md)。
+- 固定数据：代理人目录为 `@randomplay/data` 0.2.1（游戏数据 3.1），58 人。新目录的代理人
+  方图与分类图标由本站图片资源清单提供；上游 `avatarPath` 缺失的三人也有方图。旧快照
+  无图时保留占位，缺分类图标引用时显示名称。资源概况、兼容规则与更新流程见
+  [代理人数据接入](specs/agent-data.md)。
 
 ## 验收主线与结论
 
@@ -62,7 +63,7 @@
 
 1. 主线：UI 建房 → 三方入房 → 队名/分席/开局 → 完整 26 步（含公开预选更换与跨页同步）→
    已完成 → 撤回 → 恢复 → 重开 → 再次开局；1440×900 与 1280×640、长队名/长昵称、
-   缺头像与最长名称代理人。
+   缺上游头像路径但新目录已有方图的代理人，以及最长名称代理人。
 2. 断线与恢复：同身份第二页面、部分页面关闭不掉线、刷新恢复身份、最后一页掉线暂停、
    断线期间本地筛选可用且服务端操作禁用、暂停换人、原选手重连降级为观众、结果未知核对
    （确定性注入：代理扣下服务端已提交的成功回执再切断，断言「正在核对结果…」、重连后同
@@ -88,7 +89,7 @@
 | 房间界面、控制面板、搜索筛选（[房间布局](specs/room-layout.md)） | `tests/web/pick-layout`、`host-panels`、`operation-feedback`、`form-validation` | E2E 主线与 resilience；PR6 历史浏览器验收 |
 | 独立展示页（[房间布局](specs/room-layout.md#实时展示页)） | `tests/web/display-*`、`tests/workers/room-websocket` | E2E 展示页（58 人同屏含几何包含断言）；PR8 浏览器验收 |
 | 归档、只读记录、12 小时与 90 天（[房间保留与只读记录](specs/room-roles.md#房间保留与只读记录)） | `tests/workers/room-lifecycle`（受控时间戳 + 真实 Alarm）、`tests/web/record-view` | E2E 记录页（合法快照响应注入）；PR9 浏览器验收 |
-| 代理人数据目录（[代理人数据接入](specs/agent-data.md)） | `tests/rules/agent-catalog` | E2E 缺头像/最长名称代理人 |
+| 代理人数据目录（[代理人数据接入](specs/agent-data.md)） | `tests/rules/agent-catalog` | E2E 缺上游头像路径/最长名称代理人；旧式记录快照的缺图与加载失败占位 |
 | 资源与预算估算（[Cloudflare 部署与预算评估](specs/cloudflare-budget.md)） | `tests/measure/room-resources`（按需运行） | 本地基准数字见预算文档 |
 
 PR1–PR9 的浏览器验收证据保存在提交时的临时目录（`/tmp/zzzbp-pr6-verify` 等），属于一次性
