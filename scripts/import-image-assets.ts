@@ -25,8 +25,9 @@ import { imageCropSchema, type ImageCrop } from "../shared/agents/schema.ts";
  *   图标与未收录的旧圆图都从该目录读取（文件名与资源主干一致），缺失时
  *   显式失败、不回退网络；未提供目录则从上游 URL 下载（携带浏览器 UA 与
  *   Referer，可达性记录见 docs/specs/agent-data.md）。
- * - 缩略图由母图离线生成（sharp，固定参数保证同版本可复现）；母图与缩略
- *   图同资源修订。
+ * - 方图母图不是上游原始字节：来源核验后按 SQUARE_WEBP 固定参数重编码为
+ *   有损 WebP（冷加载优化，见该常量注释）；缩略图直接由核验源生成，母图
+ *   与缩略图都只经过一次有损压缩，同资源修订。
  * - 宽幅裁切校准值来自 --crops 的校准文件（{ "<主干>": {x,y} }）；未提供
  *   时沿用现有清单中同一图标集的裁切值（二者均不可得则显式失败——裁切
  *   必须来自看图校准，不使用猜测默认值）。
@@ -53,6 +54,20 @@ const PUBLIC_ROOT = resolve(ROOT, "public");
 const LEGACY_DIR = "legacy";
 /** 方图母图的固定边长（上游 IconRoleCrop 资源形态）。 */
 const SQUARE_SIZE_PX = 384;
+/**
+ * 方图母图的重编码参数（固定配置，同 sharp 版本字节可复现）。
+ *
+ * 上游母图为无损 VP8L WebP（58 张约 8.4 MiB），是页面冷加载体积的主体；
+ * 池内最大显示 144 CSS px（DPR2 需 288 设备像素），384 已有约 1.3x 余量。
+ * 以有损 WebP quality 90 / effort 6 重编码为同尺寸派生文件（约 2.2 MiB，
+ * 上轮候选对比与看图验收见 docs/specs/agent-data.md「实际导入概况」）：
+ * 真实显示尺寸与 2x 放大下与原图无可辨差异；alphaQuality 100（sharp 默认）
+ * 保持透明通道逐位无损，透明发丝与边缘不退化。清单的 sourceUrl 仍记录
+ * 上游来源事实，square 文件字节/哈希描述的是本派生产物。
+ */
+const SQUARE_WEBP_QUALITY = 90;
+const SQUARE_WEBP_EFFORT = 6;
+const SQUARE_WEBP_ALPHA_QUALITY = 100;
 /** 缩略图边长（顶部禁用区 64 CSS px 在 2x 屏幕的清晰度）。 */
 const THUMB_SIZE_PX = 128;
 /** 缩略图 WebP 编码质量（固定参数保证同 sharp 版本字节可复现）。 */
@@ -283,9 +298,34 @@ function toAssetFile(path: string, data: Buffer, width: number, height: number):
   return { path, bytes: data.byteLength, sha256: sha256Hex(data), width, height };
 }
 
-/** 由母图生成 128x128 缩略图（固定参数，母图与缩略图同修订）。 */
-async function renderThumb(context: string, master: Buffer): Promise<Buffer> {
-  const thumb = await sharp(master)
+/**
+ * 由核验源字节重编码方图母图：同 384x384 尺寸、SQUARE_WEBP_* 固定参数的
+ * 有损 WebP 派生文件（透明通道保持无损）。输入已经过尺寸核验。
+ */
+async function renderSquare(context: string, source: Buffer): Promise<Buffer> {
+  const square = await sharp(source)
+    .webp({
+      quality: SQUARE_WEBP_QUALITY,
+      effort: SQUARE_WEBP_EFFORT,
+      alphaQuality: SQUARE_WEBP_ALPHA_QUALITY,
+    })
+    .toBuffer();
+  const info = await inspectWebp(`${context} 母图`, square);
+  if (info.width !== SQUARE_SIZE_PX || info.height !== SQUARE_SIZE_PX) {
+    fail(
+      `${context} 母图`,
+      `重编码后期望 ${SQUARE_SIZE_PX}x${SQUARE_SIZE_PX}，实际 ${info.width}x${info.height}`,
+    );
+  }
+  return square;
+}
+
+/**
+ * 由核验源字节生成 128x128 缩略图（固定参数）。缩略图直接取核验源而不是
+ * 重编码后的母图，避免有损→有损的逐次压缩。
+ */
+async function renderThumb(context: string, source: Buffer): Promise<Buffer> {
+  const thumb = await sharp(source)
     .resize(THUMB_SIZE_PX, THUMB_SIZE_PX, { fit: "cover" })
     .webp({ quality: THUMB_QUALITY })
     .toBuffer();
@@ -408,29 +448,31 @@ async function main(): Promise<void> {
   const agentsRecord: Record<string, AgentImageAsset> = {};
   for (const row of rows) {
     const context = `代理人 ${row.id}（${row.stem}）`;
-    const master = await readSourceBytes(
-      `${context} 母图`,
+    const source = await readSourceBytes(
+      `${context} 母图来源`,
       options,
       `${row.stem}.webp`,
       `${NANOKA_BASE_URL}${row.stem}.webp`,
     );
-    const masterInfo = await inspectWebp(`${context} 母图`, master);
-    if (masterInfo.width !== SQUARE_SIZE_PX || masterInfo.height !== SQUARE_SIZE_PX) {
+    const sourceInfo = await inspectWebp(`${context} 母图来源`, source);
+    if (sourceInfo.width !== SQUARE_SIZE_PX || sourceInfo.height !== SQUARE_SIZE_PX) {
       fail(
-        `${context} 母图`,
-        `期望 ${SQUARE_SIZE_PX}x${SQUARE_SIZE_PX}，实际 ${masterInfo.width}x${masterInfo.height}`,
+        `${context} 母图来源`,
+        `期望 ${SQUARE_SIZE_PX}x${SQUARE_SIZE_PX}，实际 ${sourceInfo.width}x${sourceInfo.height}`,
       );
     }
-    const thumb = await renderThumb(context, master);
+    // 母图为固定参数重编码的派生文件；缩略图直接由核验源生成（各一次有损）。
+    const square = await renderSquare(context, source);
+    const thumb = await renderThumb(context, source);
     const squarePath = `/images/agents/${options.revision}/${row.stem}.webp`;
     const thumbPath = `/images/agents/${options.revision}/${row.stem}-128.webp`;
-    files.set(squarePath, master);
+    files.set(squarePath, square);
     files.set(thumbPath, thumb);
     agentsRecord[row.stem] = {
       agentIds: [row.id],
       sourceUrl: `${NANOKA_BASE_URL}${row.stem}.webp`,
       crop: crops[row.stem],
-      square: toAssetFile(squarePath, master, masterInfo.width, masterInfo.height),
+      square: toAssetFile(squarePath, square, SQUARE_SIZE_PX, SQUARE_SIZE_PX),
       thumb: toAssetFile(thumbPath, thumb, THUMB_SIZE_PX, THUMB_SIZE_PX),
     };
   }

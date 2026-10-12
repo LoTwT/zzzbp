@@ -317,12 +317,14 @@ it("导入目标被目录占用时，整批预检失败且不写入图片或清�
     const revision = "test-preflight";
     const classifications = join(fixture, "public/images/classifications", revision);
     // 让冲突排在方图之后：若预检误吞读取错误，会先写入大量新图片才失败。
+    // 超时按「重编码 58 张母图 + 整批预检」的真实耗时留足余量（母图自
+    // 2026-10-12-coldload 起为 sharp 固定参数有损重编码，不再是字节复制）。
     await mkdir(join(classifications, "IconWind.webp"), { recursive: true });
     await expect(
       promisify(execFile)(
         process.execPath,
         ["scripts/import-image-assets.ts", "--sources", sources, "--revision", revision],
-        { cwd: fixture, timeout: 10_000 },
+        { cwd: fixture, timeout: 180_000 },
       ),
     ).rejects.toMatchObject({ code: 1 });
     await expect(readdir(join(fixture, "public/images/agents", revision))).rejects.toMatchObject({
@@ -333,4 +335,4 @@ it("导入目标被目录占用时，整批预检失败且不写入图片或清�
   } finally {
     await rm(fixture, { recursive: true, force: true });
   }
-}, 15_000);
+}, 240_000);
