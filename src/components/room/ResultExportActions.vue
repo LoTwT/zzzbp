@@ -76,15 +76,40 @@ function markCopied(): void {
   }, 2000);
 }
 
-/** 剪贴板写入结果：成功标记 + 旧路径打断焦点前的有效焦点目标。 */
+/** 剪贴板写入结果：成功标记 + 旧路径打断焦点前的用户焦点目标。 */
 interface ClipboardOutcome {
   readonly copied: boolean;
   /**
-   * 旧路径 select() 抢占焦点之前的 activeElement（非 BODY 时）：
-   * 用户在写入等待期间主动移到的新目标（如复制房间链接按钮）。
-   * 恢复焦点时优先于最初触发按钮；native 路径不打断焦点，为 null。
+   * 旧路径 select() 抢占焦点之前、用户主动聚焦的目标（等待期间移到的
+   * 新控件，如复制房间链接按钮）：恢复焦点时优先于最初触发按钮。
+   * 非交互容器（见 isUserFocusTarget）不带回；
+   * native 路径不打断焦点，为 null。
    */
   readonly focusTarget: HTMLElement | null;
+}
+
+/**
+ * 用户可通过键盘或点击自然聚焦的交互控件。
+ *
+ * 面板打开时主动聚焦 tabindex="-1" 的 aside；WebKit 中鼠标点击按钮
+ * 不一定把焦点移到按钮，复制期间 activeElement 可能仍是该容器。
+ * 容器不能当作用户选择的新控件，否则复制后会保留或恢复到容器，
+ * 无法回到触发按钮。此判断同时用于旧路径捕获与复制完成后的恢复。
+ */
+function isUserFocusTarget(element: HTMLElement): boolean {
+  if (element.isContentEditable) return true;
+  switch (element.tagName) {
+    case "BUTTON":
+    case "INPUT":
+    case "TEXTAREA":
+    case "SELECT":
+    case "A":
+      return true;
+    default: {
+      const tabIndex = Number.parseInt(element.getAttribute("tabindex") ?? "", 10);
+      return Number.isNaN(tabIndex) ? false : tabIndex >= 0;
+    }
+  }
 }
 
 /**
@@ -96,9 +121,10 @@ interface ClipboardOutcome {
  * 旧路径的临时节点在 try/finally 立即回收，不留隐藏节点。临时节点被
  * 移除后焦点会落到 BODY：此刻触发按钮仍因 busy 禁用、focus() 无效，
  * 因此真正的焦点恢复由调用方在 busy 清除、DOM 更新后兜底（见
- * copyResultText），这里只带回 select() 打断前的焦点目标。isAborted
- * 在 await 之后、创建任何 DOM 之前检查：组件已卸载时不再创建隐藏
- * 节点或触碰新页面焦点。
+ * copyResultText），这里只带回 select() 打断前的焦点目标。非用户目标
+ * 的容器（见 isUserFocusTarget）不作为恢复目标带回。
+ * isAborted 在 await 之后、创建任何 DOM 之前检查：组件已卸载时不再
+ * 创建隐藏节点或触碰新页面焦点。
  */
 async function copyTextToClipboard(
   text: string,
@@ -115,9 +141,14 @@ async function copyTextToClipboard(
   if (isAborted()) return { copied: false, focusTarget: null };
   // select() 会把焦点抢到临时节点：先记下当时有意义的焦点目标——
   // 它可能是用户在等待期间主动移到的新目标，恢复时优先于触发按钮。
+  // 非用户目标（BODY 或非交互容器）不带回复原目标，恢复时回落到
+  // 触发按钮。
+  const activeBeforeLegacy = document.activeElement;
   const focusBeforeLegacy =
-    document.activeElement instanceof HTMLElement && document.activeElement !== document.body
-      ? document.activeElement
+    activeBeforeLegacy instanceof HTMLElement &&
+    activeBeforeLegacy !== document.body &&
+    isUserFocusTarget(activeBeforeLegacy)
+      ? activeBeforeLegacy
       : null;
   const scratch = document.createElement("textarea");
   scratch.value = text;
@@ -137,13 +168,19 @@ async function copyTextToClipboard(
   return { copied: copiedViaLegacy, focusTarget: focusBeforeLegacy };
 }
 
-async function copyResultText(): Promise<void> {
+async function copyResultText(event: MouseEvent): Promise<void> {
   if (disabled.value || props.result === null) return;
   const snapshot = props.result; // 点击瞬间的快照，文本内容不再随后续变化。
-  // 触发元素在进入异步前捕获：await 期间按钮因 busy 禁用会失焦，届时
-  // activeElement 已不能作为恢复依据。
+  // 触发元素以事件目标为准，而非 activeElement：Safari/WebKit 的鼠标点击
+  // 不给按钮聚焦，点击时 activeElement 可能仍是面板容器或先前的控件；
+  // 事件目标在任何引擎下都是被激活的按钮本身（键盘 Enter 同样成立）。
+  // currentTarget 仅在事件派发期间有效，必须在进入异步前同步捕获。
   const triggerElement =
-    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    event.currentTarget instanceof HTMLElement
+      ? event.currentTarget
+      : document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
   busy.value = "text";
   resetFeedback();
   let outcome: ClipboardOutcome | null = null;
@@ -166,15 +203,20 @@ async function copyResultText(): Promise<void> {
     busy.value = null;
   }
   // 复制成功后的焦点收口：等 busy 清除且 Vue 完成 DOM 更新（触发按钮
-  // 重新启用，focus() 才有效）。仅当焦点当前丢失（落在 BODY，如旧路径
-  // 临时节点移除后）才恢复——原生路径通常保持焦点、用户已完成后的焦点
-  // 已在其他元素上时也不抢回；失败路径的焦点由兜底文本框接管（其聚焦
+  // 重新启用，focus() 才有效）。仅当焦点当前不在用户可聚焦的目标上
+  // （BODY 或 tabindex="-1" 的非交互容器）才恢复；焦点已在其他交互
+  // 控件上时不抢回。失败路径的焦点由兜底文本框接管（其聚焦
   // 发生在同一 DOM 更新之后，不受影响）。恢复优先级：旧路径打断前的
-  // 最新有效目标（用户等待期间主动移焦的目标）> 最初触发按钮。
+  // 最新用户目标（等待期间主动移焦的目标）> 最初触发按钮。
   if (outcome !== null && outcome.copied) {
     await nextTick();
     // nextTick 期间组件可能被卸载（面板关闭/页面离开）：再核对一次。
-    if (!disposed && document.activeElement === document.body) {
+    const active = document.activeElement;
+    const focusDisplaced =
+      active === null ||
+      active === document.body ||
+      (active instanceof HTMLElement && !isUserFocusTarget(active));
+    if (!disposed && focusDisplaced) {
       const target = outcome.focusTarget ?? triggerElement;
       if (target !== null && target.isConnected) target.focus();
     }
@@ -243,7 +285,7 @@ async function downloadResultImage(): Promise<void> {
       type="button"
       class="flex items-center gap-2 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring enabled:hover:bg-(--surface-subtle) disabled:cursor-not-allowed disabled:opacity-50"
       :disabled="disabled"
-      @click="copyResultText"
+      @click="copyResultText($event)"
     >
       <ClipboardCopy class="size-4 text-(--text-muted)" aria-hidden="true" />
       {{ busy === "text" ? "正在复制…" : copied ? "已复制" : "复制结果文本" }}

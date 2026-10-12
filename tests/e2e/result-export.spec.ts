@@ -856,6 +856,10 @@ test("记录页：完整/未完成导出、混合图片占位与剪贴板兜底�
     //      A native 拒绝 + legacy 真实成功：未移焦恢复触发按钮；等待中移焦
     //      到「复制房间链接」则保持该按钮（用户主动目标优先）。
     //      B native 成功：未移焦与移焦均保留合理焦点（不抢回）。
+    //      A3/B3 复制期间焦点在面板容器：容器不视作用户目标，成功后
+    //      恢复触发按钮；以程序化移焦覆盖这一恢复分支。
+    //      B4 Safari/WebKit 点击不聚焦按钮的复现（焦点保持容器时程序化
+    //      激活）：触发元素按事件目标解析，成功后恢复触发按钮。
     //      D native 等待中卸载（关闭面板）后再放行拒绝：不走 legacy、
     //      不新增 textarea、不抢焦点（保持面板关闭的入口焦点语义）。 ----
     const contextFocus = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -963,6 +967,49 @@ test("记录页：完整/未完成导出、混合图片占位与剪贴板兜底�
     await release("resolve");
     await expectVisible(panel(focusPage).getByRole("button", { name: "已复制", exact: true }));
     await waitForActiveLabel(["复制房间链接"]);
+
+    // A3/B3：主动构造复制期间焦点在 tabindex="-1" 面板容器的状态。
+    // native 或 legacy 成功后均恢复触发按钮，不把焦点留在（或恢复到）
+    // 非交互容器上。点击不聚焦按钮的事件目标语义另由 B4 覆盖。
+    const focusPanelContainer = (): Promise<void> =>
+      focusPage.evaluate(() => {
+        const dialog = document.querySelector('[role="dialog"][aria-label="控制面板"]');
+        if (dialog instanceof HTMLElement) dialog.focus();
+      });
+
+    // A3：legacy 成功 + 焦点在容器：容器不得被当作恢复目标。
+    await copyButton.click();
+    await expectVisible(copyPending);
+    await focusPanelContainer();
+    await release("reject");
+    await expectVisible(panel(focusPage).getByRole("button", { name: "已复制", exact: true }));
+    expect(await focusPage.evaluate(() => document.querySelectorAll("textarea").length)).toBe(0);
+    await waitForActiveLabel(["已复制", "复制结果文本"]);
+
+    // B3：native 成功 + 焦点在容器：恢复到触发按钮。
+    await copyButton.click();
+    await expectVisible(copyPending);
+    await focusPanelContainer();
+    await release("resolve");
+    await expectVisible(panel(focusPage).getByRole("button", { name: "已复制", exact: true }));
+    await waitForActiveLabel(["已复制", "复制结果文本"]);
+
+    // B4：Safari/WebKit 点击不聚焦按钮的行为复现——焦点保持在容器上时
+    // 程序化激活按钮（等价于 macOS Safari 的鼠标点击）：触发元素按事件
+    // 目标解析（而非 activeElement），成功后恢复到触发按钮。
+    await focusPage.evaluate(() => {
+      const dialog = document.querySelector('[role="dialog"][aria-label="控制面板"]');
+      if (dialog instanceof HTMLElement) dialog.focus();
+      const exportButton = [...document.querySelectorAll("button")].find((button) => {
+        const label = (button.textContent ?? "").trim();
+        return label === "复制结果文本" || label === "已复制";
+      });
+      exportButton?.click();
+    });
+    await expectVisible(copyPending);
+    await release("resolve");
+    await expectVisible(panel(focusPage).getByRole("button", { name: "已复制", exact: true }));
+    await waitForActiveLabel(["已复制", "复制结果文本"]);
 
     // D：native 等待中关闭面板（组件卸载）后再放行拒绝 → 不走 legacy、
     // 不新增 textarea、焦点保持面板关闭的入口语义。
