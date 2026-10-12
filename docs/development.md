@@ -102,6 +102,12 @@ Worker/SQLite），不 mock 建房/入房/命令结果。选型说明：多身�
 Chromium：`pnpm exec playwright install chromium`（CI 加 `--with-deps`）。
 `pnpm test` 不包含 E2E，避免同一条命令重复运行同一套测试；CI 以独立 job 执行。
 
+导出焦点的引擎差异回归复用现有 Chromium 门禁（见 `tests/e2e/result-export.spec.ts`
+焦点契约段的 A3/B3/B4），覆盖点击不聚焦按钮、复制期间焦点在非交互面板容器等状态。
+需要跨浏览器复核时，使用与项目固定 Playwright 版本配套的 Firefox/WebKit，在隔离
+本地服务验证实际复制与降级、PNG 下载和异步取消。WebKit 引擎验收不等同于真实
+Safari 验收；测试构建的剪贴板授权行为也不代表零售版浏览器的默认权限。
+
 本地资源基准（`pnpm measure:rooms`，`tests/measure/` + `vitest.measure.config.ts`）：
 同样在真实 workerd + SQLite 运行，测量典型房间与有界示例规模的消息量、UTF-8
 内容字节、表行数、SQLite 分配大小、SQL 行成本（官方 SQL API 的
