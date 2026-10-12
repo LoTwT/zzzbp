@@ -106,6 +106,17 @@ describe("图片资源清单与文件一致性", () => {
       expect(asset.thumb.path.startsWith(`/images/agents/${manifest.revision}/`)).toBe(true);
     }
   });
+
+  it("方图母图保持有损重编码的冷加载预算", () => {
+    // 母图自 2026-10-12-coldload 修订起为上游无损字节的固定参数有损 WebP
+    // 派生文件（冷加载优化，约 2.2 MiB/58 张、平均 ~40 KB；上游无损约
+    // 8.4 MiB、平均 ~150 KB）。按平均字节设上限，防止后续资源更新时无意
+    // 回退到无损母图导致冷加载体积回升；预算与取舍见
+    // docs/specs/agent-data.md「实际导入概况」。
+    const squares = Object.values(manifest.agents).map((asset) => asset.square.bytes);
+    const average = squares.reduce((sum, bytes) => sum + bytes, 0) / squares.length;
+    expect(average).toBeLessThanOrEqual(48 * 1024);
+  });
 });
 
 describe("图片 URL 构造与旧地址解析", () => {

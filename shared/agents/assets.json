@@ -1,5 +1,5 @@
 {
-  "revision": "2026-10-09",
+  "revision": "2026-10-12-coldload",
   "agents": {
     "IconRoleCrop01": {
       "agentIds": [
@@ -11,14 +11,14 @@
         "y": 41
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop01.webp",
-        "bytes": 133672,
-        "sha256": "4aa59625482b5744bd210fc90a75ff791ff6aa0d39c7c9fd4cc582f4625be277",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop01.webp",
+        "bytes": 39032,
+        "sha256": "5679778a2d531e0e82e264fcc32ce5ef6532d15c31b269192be115e227365b8b",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop01-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop01-128.webp",
         "bytes": 6414,
         "sha256": "100834c422ab7e2a373340da5955ccbe2cd6f2d8bc7f8edb6d1913d43a1a4194",
         "width": 128,
@@ -35,14 +35,14 @@
         "y": 41
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop05.webp",
-        "bytes": 148322,
-        "sha256": "d734ec6de2081e0f6eefc531ffb42ebef1804795a8fb8398ec0e077ef6fabd0a",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop05.webp",
+        "bytes": 36488,
+        "sha256": "82b3e470900b87c309c674a906f2a387d02bef457adfcd050a6b430e26495db8",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop05-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop05-128.webp",
         "bytes": 5542,
         "sha256": "bfe6fb606bc69ddfe8d25b7acc7980881c07a927204e2a866e8f24d01b1ce97c",
         "width": 128,
@@ -59,14 +59,14 @@
         "y": 51
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop09.webp",
-        "bytes": 173958,
-        "sha256": "27267ffb66540491217e04903152aa307c44303092c6b58459134ba6a340ce11",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop09.webp",
+        "bytes": 43500,
+        "sha256": "8752e935b0773e3ff05391d6c535a3e21c308f47809184b5380d04bf304ff5e7",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop09-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop09-128.webp",
         "bytes": 5980,
         "sha256": "616c3cd2eaacbaf0876604f0b5e4e83b15f037c94ac5d1c130df3b6ab74578cb",
         "width": 128,
@@ -83,14 +83,14 @@
         "y": 42
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop10.webp",
-        "bytes": 190266,
-        "sha256": "777353951743ed1e6640b87e249ddb7f4ab4e69c898e41e416718e6c684c7659",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop10.webp",
+        "bytes": 45798,
+        "sha256": "607e0c01b88df37b8c6ec4ef5f96af4a74abc621238267c578a174ac6eae6d35",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop10-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop10-128.webp",
         "bytes": 5780,
         "sha256": "4138c8443c20620c4f032bb6b99b359fd7ef94806b4909c6affa6caef5e00d97",
         "width": 128,
@@ -107,14 +107,14 @@
         "y": 42
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop11.webp",
-        "bytes": 165278,
-        "sha256": "6b65706d7a4cda4bbcb586508efb7fadad564c0fe8ffe37007dcf62675701e6e",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop11.webp",
+        "bytes": 39178,
+        "sha256": "48865f024b49a604dcee63ce5a6c190feb2400becf03429c219c62cda283e141",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop11-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop11-128.webp",
         "bytes": 5998,
         "sha256": "1213b5b29d533bb666528acec8965afdd01f52a724d19486c030f50f6d660795",
         "width": 128,
@@ -131,14 +131,14 @@
         "y": 34
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop12.webp",
-        "bytes": 165766,
-        "sha256": "c08ad17ffff78cbae087ef87478cfa594b784ad884130d77c7ffcb29f45a64a5",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop12.webp",
+        "bytes": 38816,
+        "sha256": "a9126e9d2915c22ad29da7f231e1f050229036059fe93448a786ec85c1837924",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop12-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop12-128.webp",
         "bytes": 6044,
         "sha256": "ff96117d0ba7d717a1f7b1ddc03632f0abcd791637fef0cb9103251b90058861",
         "width": 128,
@@ -155,14 +155,14 @@
         "y": 49
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop13.webp",
-        "bytes": 132658,
-        "sha256": "500ebaa217db5d83ce0ae671625c592c82c61fbfd39b5c88f35661b3396834b0",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop13.webp",
+        "bytes": 30018,
+        "sha256": "08bde427cf1bb77ab4860289b3cc17254859efec563a6d9f469f0edfd112dfbb",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop13-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop13-128.webp",
         "bytes": 4658,
         "sha256": "6d07e11083593c22298fa25467bc84694e9dff3f56b6f564630f1249c90b7305",
         "width": 128,
@@ -179,14 +179,14 @@
         "y": 54
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop14.webp",
-        "bytes": 168062,
-        "sha256": "16fbb59fcc4a39855f3ff1c5801e30262119333ed15cdc2b4aa0e100a7192495",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop14.webp",
+        "bytes": 40866,
+        "sha256": "4fe00e59e0805dd82b61cf9b839e90cc3dd2d59cd28a48d74cf90e05412f2985",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop14-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop14-128.webp",
         "bytes": 5896,
         "sha256": "a0eb837d7ccd0b570e3fbb82e608be19e0dc3d2a98471055929d4a88e4215d4e",
         "width": 128,
@@ -203,14 +203,14 @@
         "y": 49
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop15.webp",
-        "bytes": 164302,
-        "sha256": "54a3207afcf9c35afe9e30f46904e0df0a83186eeb0e2a53942b6e8d695d1ea0",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop15.webp",
+        "bytes": 34992,
+        "sha256": "f876ebf75c83c3b612867a59bdb2a2e69d1dee86a95e43ccbe8e21cd7f7ef7c9",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop15-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop15-128.webp",
         "bytes": 4996,
         "sha256": "371bc2abd547b5555874f29e4ddf7e816948b6f3f07693f9dabd7e93c54a033f",
         "width": 128,
@@ -227,14 +227,14 @@
         "y": 34
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop16.webp",
-        "bytes": 145956,
-        "sha256": "709fb509d44ad622fe10265a713f067b9342182b48181a8c9cb45375e9143d8a",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop16.webp",
+        "bytes": 23550,
+        "sha256": "cdf2ec89f404c3df976818446f7fb38045e87eeb1be9fe3a81feb250050a8563",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop16-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop16-128.webp",
         "bytes": 3200,
         "sha256": "28fcfab5eb38a7f4e9bdc1004225c1c53c3021de8f45b13187c5770afa8ecd27",
         "width": 128,
@@ -251,14 +251,14 @@
         "y": 51
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop17.webp",
-        "bytes": 160164,
-        "sha256": "df777c4a9c93605ca7d9010f7d8b26c96d6e198fdc7b6c3a109d98b0e9864bfa",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop17.webp",
+        "bytes": 42598,
+        "sha256": "6efbefe764da26556b3e39ac8f3acc7a14dcb1acdb5903ec6f69934eba9ddfb1",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop17-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop17-128.webp",
         "bytes": 6834,
         "sha256": "6f0a732c78e158a7b22dc21ef1bba3d7d7ee6c28c62255813abc79abff035002",
         "width": 128,
@@ -275,14 +275,14 @@
         "y": 55
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop18.webp",
-        "bytes": 137608,
-        "sha256": "d1f283966535e60939d25f177a17edd9982cd84f260e1796fa7939c71e8a1630",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop18.webp",
+        "bytes": 37178,
+        "sha256": "f9ca1924525b5921c2f7a246f317639108d271285df7e54a94feb33076f3b37b",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop18-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop18-128.webp",
         "bytes": 5822,
         "sha256": "29f1d4dd960af217dd9f55d02dc5cc429c649adbb9f031895bde18ddb903de53",
         "width": 128,
@@ -299,14 +299,14 @@
         "y": 55
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop20.webp",
-        "bytes": 153660,
-        "sha256": "a57997ece817ada81932687a7f2fcc2148fac37df8da05c6af9406e560cb5551",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop20.webp",
+        "bytes": 37982,
+        "sha256": "7059a38eb53574ae00c152b711383652bb7016638941c932acb77d9d2844e4a4",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop20-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop20-128.webp",
         "bytes": 5488,
         "sha256": "bcabc204bb70417e0d00ae36a3fe827dcab0f9176305081db55d29c050d58112",
         "width": 128,
@@ -323,14 +323,14 @@
         "y": 51
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop21.webp",
-        "bytes": 133592,
-        "sha256": "578e1696e77d20e5997e8022c435af04413b1fb0f0d14e06a56f258e650fba26",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop21.webp",
+        "bytes": 32772,
+        "sha256": "97459d98035ed85b11edfa8a2709d649fa854a7ff9f73942524d0194ba5d7573",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop21-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop21-128.webp",
         "bytes": 5124,
         "sha256": "2f060e167b2e2d23c62dff0e88e2588c73d1e19c5975269bba7df3e9856a6883",
         "width": 128,
@@ -347,14 +347,14 @@
         "y": 49
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop22.webp",
-        "bytes": 141558,
-        "sha256": "e42fbf4e6be0b2cfd733e52c6c99eba977117f8bce41e5fc803729b2b069c77d",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop22.webp",
+        "bytes": 38220,
+        "sha256": "7a3ff93a9b8aebd34e40a54a3e158ef6bb008b7218a8869e1ad463356f900666",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop22-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop22-128.webp",
         "bytes": 5826,
         "sha256": "938245ccd48668bd91dad6aeb08f10b8330160477e6991358a5f08a25659d210",
         "width": 128,
@@ -371,14 +371,14 @@
         "y": 55
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop23.webp",
-        "bytes": 172630,
-        "sha256": "ea35c5777ab6c11df3fd5099f1a8d9d9da9ad38672dd99cf0cf569fe1442114b",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop23.webp",
+        "bytes": 42580,
+        "sha256": "f7e856d729b5eaefe51b954308d3bcfa99d916dab2ae4ea66a95e1d5bb428052",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop23-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop23-128.webp",
         "bytes": 5916,
         "sha256": "689933cf6dbb5b8a3e4d99c126fe599471c9818615ec737526ecbb045b594273",
         "width": 128,
@@ -395,14 +395,14 @@
         "y": 49
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop24.webp",
-        "bytes": 134476,
-        "sha256": "02c359522435e5c963107cd8ce6847f0928ae68a744295b8cea4920fa0222f7e",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop24.webp",
+        "bytes": 33840,
+        "sha256": "2d26d40510e549091182329c065194fafadfb998fe1f982bece7ef5b88916a1b",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop24-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop24-128.webp",
         "bytes": 4808,
         "sha256": "144b7ef6198c3cc09fe66ff8dbdc6bffec1b5168cb3c06d3da21523d08ceb045",
         "width": 128,
@@ -419,14 +419,14 @@
         "y": 58
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop25.webp",
-        "bytes": 145482,
-        "sha256": "2648c01142931055d1e9b2333cf622b2d723973e9daeb0b447697c40c916d0e6",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop25.webp",
+        "bytes": 38794,
+        "sha256": "cbbf65696d95578756c949085d6f70e5744222a00a2f747a62c143d188303245",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop25-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop25-128.webp",
         "bytes": 5944,
         "sha256": "eef677f7ecfbaa7f17b72c1a003e30d7a720a768c72f91158ffb94c100f951ed",
         "width": 128,
@@ -443,14 +443,14 @@
         "y": 59
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop26.webp",
-        "bytes": 138358,
-        "sha256": "6c64a22099c492eebd05e2abd53df7881165f57b6057132bd9cb703ba6fbacc0",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop26.webp",
+        "bytes": 31346,
+        "sha256": "ba1d483f3b35602944a003d5181abd14b998f5a9eb23b1c274a48ca66e95b7ec",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop26-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop26-128.webp",
         "bytes": 4822,
         "sha256": "65f2df2d813998e813c0e81d6157794e9d4bea7f4b26c25e4ab2a7dd4205f44e",
         "width": 128,
@@ -467,14 +467,14 @@
         "y": 54
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop27.webp",
-        "bytes": 155552,
-        "sha256": "feafaaba6bb39e294c7b35b11811b7eec12ae0824b2673bb8e1cb73f16758dab",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop27.webp",
+        "bytes": 42194,
+        "sha256": "6a0a32b5f35b090061b4a487644841708dbf98534aced61d17de03b6f8d64e0b",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop27-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop27-128.webp",
         "bytes": 6200,
         "sha256": "d9939b2a187415d56f9a4c6cfb7d0b1dce34b719b9adcad3a9e0a20276b69e47",
         "width": 128,
@@ -491,14 +491,14 @@
         "y": 49
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop28.webp",
-        "bytes": 140550,
-        "sha256": "ee514e11eee87a2303d95fd7fedf94d02343c30abc3ed5c6f66f486696d87b6c",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop28.webp",
+        "bytes": 36482,
+        "sha256": "7d28309199aeed114fcd30bed0c99c770fa9d1d4bb393d0827232dea8415c94a",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop28-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop28-128.webp",
         "bytes": 5544,
         "sha256": "bfde34f693e14feb34ccea5ef4b610a7f043d1b8a3a64a4e9942a9288dba7c68",
         "width": 128,
@@ -515,14 +515,14 @@
         "y": 46
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop29.webp",
-        "bytes": 146398,
-        "sha256": "6283b047bc1bb231468e1c22079cc8793c676c4c15c9022087db436585bc1404",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop29.webp",
+        "bytes": 36100,
+        "sha256": "5b4bc15796595bf8cdc1b39cc4e8c33ca73de2c7ce44c2a64af1fb77b6488981",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop29-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop29-128.webp",
         "bytes": 5582,
         "sha256": "e365a431dbb91e45ef02d75753ea534f3f162437c85c291b8760f71aee7455eb",
         "width": 128,
@@ -539,14 +539,14 @@
         "y": 52
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop30.webp",
-        "bytes": 128444,
-        "sha256": "44dea69ea5a36a2a14553f10e61ac7c7819e437581ffb73a91b2ce4d99fc76ee",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop30.webp",
+        "bytes": 37318,
+        "sha256": "f7fe45ce38abd5dd2688b1d5e71d338b3d49b33915b8bd0c04ebd16a03d21354",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop30-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop30-128.webp",
         "bytes": 5614,
         "sha256": "3dcfdb400baa4ab88dc892d86dd5fec9cb7b57e483ff1a5993ba61d11a1c6b7b",
         "width": 128,
@@ -563,14 +563,14 @@
         "y": 52
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop31.webp",
-        "bytes": 128950,
-        "sha256": "2cdeae32a90ec20c59af9534d9a6c4bd33c1b0bbf6d8a2a6eb9c7692bba2feef",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop31.webp",
+        "bytes": 33980,
+        "sha256": "201d7b3f72cacae4281e0528cb3f62f1f1e51b88bd203f51eb7ccd7abcfad84a",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop31-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop31-128.webp",
         "bytes": 5124,
         "sha256": "ec6711eb80f5d71dae1bf6e2393f19092c1ca5bd174b574f5b3922bd66978bed",
         "width": 128,
@@ -587,14 +587,14 @@
         "y": 49
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop32.webp",
-        "bytes": 165418,
-        "sha256": "1f8b43ee5ed8ee2100fbecac82cc1a45eb48b853786977cfde28d913b4985dc1",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop32.webp",
+        "bytes": 46038,
+        "sha256": "0628a8828a94be3e04531587f753d7e3bf67b221855bbfc717f2ae83cd4b12cb",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop32-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop32-128.webp",
         "bytes": 6810,
         "sha256": "b68a3d2d3b377adb2b6aa297fbeafdb63338cd06bfc1544cedb17c12f45d705b",
         "width": 128,
@@ -611,14 +611,14 @@
         "y": 54
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop35.webp",
-        "bytes": 111922,
-        "sha256": "657e77fec720126296a82691f352843746a07c000299cc52993fad9cee4b4a37",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop35.webp",
+        "bytes": 30024,
+        "sha256": "fc39e6039308e925f2b1f576a2616b268ddafd2e0bcd7f41306c7ac59d7c937d",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop35-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop35-128.webp",
         "bytes": 5204,
         "sha256": "1eb3ec59c46d2cffa171b5bf052d12b599c557050c1efe77c2299a2fea70d297",
         "width": 128,
@@ -635,14 +635,14 @@
         "y": 49
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop36.webp",
-        "bytes": 136286,
-        "sha256": "cb3eac22a092810fcb02efcf31886a0cf5f4f8bbe3b0684a73089fc8b0d9ab50",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop36.webp",
+        "bytes": 31278,
+        "sha256": "95876c832306fe6afdbbd42cb7409324002f01753162e9f9aa8fc32e94839425",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop36-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop36-128.webp",
         "bytes": 5396,
         "sha256": "f8a7f828af029ea457bc3bbeb3ef50a65ec3b72852b2ddd28b58e3c40687f4d1",
         "width": 128,
@@ -659,14 +659,14 @@
         "y": 37
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop37.webp",
-        "bytes": 137070,
-        "sha256": "84ae391674f0d90e559baddebe8831b26a855e369ef0e87b68436970a989b9f8",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop37.webp",
+        "bytes": 36832,
+        "sha256": "0e40cd717b89f8abded8f65e187b347bb5c2fe12d4c0badb646a343ab8846004",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop37-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop37-128.webp",
         "bytes": 6442,
         "sha256": "00d3bab6f355e8d65434e1155f935eef2c4742eb1723e4c41ecdf20c8cde5785",
         "width": 128,
@@ -683,14 +683,14 @@
         "y": 31
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop38.webp",
-        "bytes": 145984,
-        "sha256": "5ab19873544628588e0f1fc936b7a10ee7cc734f410e9e73bde01a865b964977",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop38.webp",
+        "bytes": 40862,
+        "sha256": "6503886e74aa7273652f18569fadb81fe6320c6d7f93668f7f5de08fb9a90a99",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop38-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop38-128.webp",
         "bytes": 6970,
         "sha256": "4cf7ce462588b834b1c51aa29ab337247371d55d99e1dcf2af357707589fcd9e",
         "width": 128,
@@ -707,14 +707,14 @@
         "y": 40
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop39.webp",
-        "bytes": 149172,
-        "sha256": "d5f50c119447f6343254b035fef1e90d651b513b086865f71116ce28870328ab",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop39.webp",
+        "bytes": 41562,
+        "sha256": "ea5ed5819f6783fe6ebb066a91ceea571079eaa296ae12fb87bbe159872bc18b",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop39-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop39-128.webp",
         "bytes": 6244,
         "sha256": "6aadd6d2618974b5d7903f94537ba7e4e267f0ecd837b7082c78aa4491ba74d4",
         "width": 128,
@@ -731,14 +731,14 @@
         "y": 34
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop40.webp",
-        "bytes": 154120,
-        "sha256": "8e00061c1cddbe72674774e4ba596ff0e6cde655e900ac8c3d64119a9e825a07",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop40.webp",
+        "bytes": 45862,
+        "sha256": "f0aaa3f77dd7a375c003f7a2ee11b9237490ff07ad14ce664a932cb0ae2d43a6",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop40-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop40-128.webp",
         "bytes": 7222,
         "sha256": "21a5ece7d2b4d00b1ae957810a2162b98e638a8f8af456dfa0c8bd5d555e0123",
         "width": 128,
@@ -755,14 +755,14 @@
         "y": 34
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop41.webp",
-        "bytes": 158192,
-        "sha256": "7bbc0edd99d78cc095803c441e013e12fb8f50e44bf3a034d35caae7a433679b",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop41.webp",
+        "bytes": 42340,
+        "sha256": "966a4919dbdc500f4e5f1996b1118faeed471be633bea38511c9131e9ba34975",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop41-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop41-128.webp",
         "bytes": 5616,
         "sha256": "ef74b2d0445d77f8d505e4d8f4a76083a565c74754d5748afd8968dde18d8698",
         "width": 128,
@@ -779,14 +779,14 @@
         "y": 52
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop42.webp",
-        "bytes": 147580,
-        "sha256": "0060814a911b0326e26667cad82104603a1c6d9199dee2c014d50b1b39222662",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop42.webp",
+        "bytes": 39542,
+        "sha256": "96a13257a5d50e5fbfe4a3733c72c48151f2478b0551d96160d4e73693515f97",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop42-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop42-128.webp",
         "bytes": 6286,
         "sha256": "89b9cbfb342898f5a74b60747cfe9ec6af0f98977f0867496a38122755ecfcfd",
         "width": 128,
@@ -803,14 +803,14 @@
         "y": 46
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop43.webp",
-        "bytes": 178720,
-        "sha256": "7dbd956a823b66eab8434964230a19e989ced4a64ca0ec9383a15e55dab9052f",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop43.webp",
+        "bytes": 53182,
+        "sha256": "dfc24da615acd468dc80ec4693af786abfe5365f179b3aabb76ace9b669e7e90",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop43-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop43-128.webp",
         "bytes": 7244,
         "sha256": "a90f02d9e50b2588b5e2890a855863d0d1fea678bf5321e35c22da6cbb8b4720",
         "width": 128,
@@ -827,14 +827,14 @@
         "y": 37
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop44.webp",
-        "bytes": 176132,
-        "sha256": "18eefbfcd3f20f51e8a777bd1dafd2208d91cbc85cc53f9b1c3b1d09f5cb6da4",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop44.webp",
+        "bytes": 49874,
+        "sha256": "95824730cbc1ad4babb7fce23bbb038e73217b349f8bf5eeee30b43a2453eba9",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop44-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop44-128.webp",
         "bytes": 6912,
         "sha256": "49c5bce3c6f451f377734dcba788761e6e809c0e84060fd3890f6cda7d8b188c",
         "width": 128,
@@ -851,14 +851,14 @@
         "y": 28
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop45.webp",
-        "bytes": 136312,
-        "sha256": "82af57aaad31ead701fa78f4a7248e6aaa66a935311ceeac24e7ad36c96bfa87",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop45.webp",
+        "bytes": 35304,
+        "sha256": "30d65d710a48edc01f464862efeea971b9f51207ba0d7da9a0ae0e73e9135ef7",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop45-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop45-128.webp",
         "bytes": 5034,
         "sha256": "1071eb182ce7fc45e5b7e0fb5e27806a50d8355ddef5633b0b41269956699973",
         "width": 128,
@@ -875,14 +875,14 @@
         "y": 40
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop46.webp",
-        "bytes": 124992,
-        "sha256": "6d2361319ae29d644da1295be0c152075053d5d5f157856c9859e3b475573fdd",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop46.webp",
+        "bytes": 35390,
+        "sha256": "a5a8705a145551b2e7582391820567f18be0312364f8ea5fcc206266298a8b5e",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop46-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop46-128.webp",
         "bytes": 5886,
         "sha256": "a14cb101cbc95147eaa1faf42f3a89e77e01c69c8f8d28232a16cab5f6c9c6cf",
         "width": 128,
@@ -899,14 +899,14 @@
         "y": 41
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop47.webp",
-        "bytes": 176106,
-        "sha256": "2d0af4cad0520de308ff7585f294bd467bb04a10a40119b3c3beb1c6abac28db",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop47.webp",
+        "bytes": 45048,
+        "sha256": "a0463bb6c0995f5d371206c3c0fd23b1743f821b55225bb94a8764b91980a21b",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop47-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop47-128.webp",
         "bytes": 5670,
         "sha256": "a6ccad504a5565412ad0f74cb0d4e49f7525bbeaa2921cc8244da885ad919188",
         "width": 128,
@@ -923,14 +923,14 @@
         "y": 40
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop48.webp",
-        "bytes": 130862,
-        "sha256": "ed61a5f931dee29eab420c526f737dc38f4e11970ae23f313e8ed3aa3f0bb8fd",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop48.webp",
+        "bytes": 37380,
+        "sha256": "9e3319b2dbbe053d4c596b8df1035aca25412f275777b5359870dcf9edbdebc0",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop48-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop48-128.webp",
         "bytes": 6062,
         "sha256": "b0961bb80662bbb9adf6634d09f1e94854142bd21fb534a575f6d155e8b2333b",
         "width": 128,
@@ -947,14 +947,14 @@
         "y": 52
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop49.webp",
-        "bytes": 174666,
-        "sha256": "640e70ed426fcdea4fa54888929d6fbc88d9d25cd4f23d4974061a99bdb74482",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop49.webp",
+        "bytes": 48444,
+        "sha256": "10a3cc4f3e53a7f5b0e2c6d02daa1b3086d195bce9e4a75e17c2cf4777f3144c",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop49-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop49-128.webp",
         "bytes": 6556,
         "sha256": "d5ccb65e82db3c92995c751c808639bf2416505a112b921825c5394b712d6046",
         "width": 128,
@@ -971,14 +971,14 @@
         "y": 37
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop50.webp",
-        "bytes": 160318,
-        "sha256": "665eefa7fed516fa12bb491f7a997401ca4b602aa7288dcaff6f00cd9aa12767",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop50.webp",
+        "bytes": 43358,
+        "sha256": "cace7d087ea91eac80b8a5b3f4d846b123fe3fbf4560a67362e7c6ffe5326921",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop50-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop50-128.webp",
         "bytes": 6310,
         "sha256": "4d5361e3587095b32d78ad00ada5e59038c0d84cbbf19265a408c619df79feb0",
         "width": 128,
@@ -995,14 +995,14 @@
         "y": 37
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop51.webp",
-        "bytes": 150328,
-        "sha256": "c49403e024f727122423f6ce6af318807dddabbda7431518806f4458100411a8",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop51.webp",
+        "bytes": 38092,
+        "sha256": "950c2d4bf1339fddc754169fa4b5df4b64b85f5cc3174157dcbc070da0003e02",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop51-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop51-128.webp",
         "bytes": 5534,
         "sha256": "d764b3948ff5959fc42c95eff6eefa8ba1eace041539a9c4d17bbe4045e895ac",
         "width": 128,
@@ -1019,14 +1019,14 @@
         "y": 43
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop52.webp",
-        "bytes": 138734,
-        "sha256": "0f84b7ad2d8f75d3c8c3bd8d7857954fee5591701bc43240b1dd8f31a7723bbd",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop52.webp",
+        "bytes": 35386,
+        "sha256": "9dbf21a8d85819e2dbac809e8beb7abbe7e8bafe7c89801e200426d528bae593",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop52-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop52-128.webp",
         "bytes": 5728,
         "sha256": "1f15582570f10eb16abcc61ce596a47d3217110b26f140dbef735660423d7522",
         "width": 128,
@@ -1043,14 +1043,14 @@
         "y": 37
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop53.webp",
-        "bytes": 148554,
-        "sha256": "8142ea1eeb6408d4fdc38a7915bbeb236153a21cfdbbf9c6019234249fdb4d49",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop53.webp",
+        "bytes": 41326,
+        "sha256": "f9ad746cca1667f5deb7d4138e0099d3753cd938aa831a7a630b64cc8184f2ab",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop53-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop53-128.webp",
         "bytes": 6402,
         "sha256": "e9e106fa175a4c4482329ddb0f45054ac5823d574d7fa0fbe0b1f53f47d633cd",
         "width": 128,
@@ -1067,14 +1067,14 @@
         "y": 43
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop54.webp",
-        "bytes": 148120,
-        "sha256": "d5254a8a8cb7e8820bd1ae0103a3ca51c294c6393824a6b0443b8564435f756b",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop54.webp",
+        "bytes": 39838,
+        "sha256": "81c8ccb447455820674bf0f2cd95ad0288fa08d65b7535470849b56a2c13a42f",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop54-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop54-128.webp",
         "bytes": 6576,
         "sha256": "7e0fec57abc184295436797183f398d06cb26b9a596cd946561c6932c71537e0",
         "width": 128,
@@ -1091,14 +1091,14 @@
         "y": 37
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop55.webp",
-        "bytes": 165780,
-        "sha256": "8de4fa900103c18db067693173a3eb06d862114714609ad7aef9dcc19f4a6b50",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop55.webp",
+        "bytes": 43550,
+        "sha256": "f9793e020fbd76d99343c949517aa5de02ba19eb3326b544f89ba6e79e6ad5ae",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop55-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop55-128.webp",
         "bytes": 6242,
         "sha256": "5355cc49bd58f484bcbf8080f15bfd2b971e523a2d6074c8c107cd2a54a7fdab",
         "width": 128,
@@ -1115,14 +1115,14 @@
         "y": 46
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop56.webp",
-        "bytes": 145588,
-        "sha256": "e11805eed81d80111df4c03ad715a53d87ef6a9d284bbf3e6dc639c2a7559586",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop56.webp",
+        "bytes": 36694,
+        "sha256": "29e15df3addc84f533855da66b25237802b67fbeab4afaec84e58d232cc286d4",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop56-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop56-128.webp",
         "bytes": 5744,
         "sha256": "c0473e3f537a81a13ceed8efbd783ec73750080b2c04fa9e3dcc2513b9d1b60f",
         "width": 128,
@@ -1139,14 +1139,14 @@
         "y": 43
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop57.webp",
-        "bytes": 172880,
-        "sha256": "79e82ead7140c9eed72c820020a1dbf31c888922427657357c55e5cac6c6b136",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop57.webp",
+        "bytes": 42676,
+        "sha256": "60fb9fe1262a80e8c9cc6463333dcf28a66b8019e029f735d16b0ed5ea6d26d0",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop57-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop57-128.webp",
         "bytes": 6790,
         "sha256": "3d77085bcb0e9050c9bfd3694e2020e2be4a3b2564096939e66f15236d1f3ed9",
         "width": 128,
@@ -1163,14 +1163,14 @@
         "y": 40
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop58.webp",
-        "bytes": 172038,
-        "sha256": "3e5406f03b82d1758e16a8182bc90c50ac22f5b629634585b9f3501c9a1ac2dc",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop58.webp",
+        "bytes": 46140,
+        "sha256": "a153bcce34d9552328cc55ae26c88639863849aac5b7156d34df63c120e45073",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop58-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop58-128.webp",
         "bytes": 7062,
         "sha256": "3e457f9603006b4bb418b7d86178217b4ead0f7dfeb2d4264d5394de6a4d7fb8",
         "width": 128,
@@ -1187,14 +1187,14 @@
         "y": 43
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop59.webp",
-        "bytes": 164018,
-        "sha256": "f91b3dd903f6c840d41378b273ff1bf797d6844c66b100fe0ccb4f7d0433d7de",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop59.webp",
+        "bytes": 43672,
+        "sha256": "52ec27b3bf875e64f8ff7980f757aed9287f88c91366d2327d297e8d920a2a5d",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop59-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop59-128.webp",
         "bytes": 7094,
         "sha256": "c12005d16d7f3f7f03a6eeeddc3c060acc11e882966c13cc6179f35ad6b3a06f",
         "width": 128,
@@ -1211,14 +1211,14 @@
         "y": 27
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop60.webp",
-        "bytes": 187698,
-        "sha256": "471768b319398bc331d16855060fa6efc95c68ad05ca441e6c71af1c54c087c1",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop60.webp",
+        "bytes": 50524,
+        "sha256": "832a2f0f1fda5f97b45d6112d031ccebb48bf82e484f7130fb6a7e4f74e6999a",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop60-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop60-128.webp",
         "bytes": 7632,
         "sha256": "c79926c7fb1bc5aeac972a2b7ea803bb6cdc6b0aebde4dba2de9295d61a42d83",
         "width": 128,
@@ -1235,14 +1235,14 @@
         "y": 28
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop61.webp",
-        "bytes": 151020,
-        "sha256": "ee7de82d756ff25989cae5d4de5a5e7e507496a41f60cb51354bb889c835d6ec",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop61.webp",
+        "bytes": 38860,
+        "sha256": "589232ff7a98ea48d8d2f29119dd9e8409ee7c70f61768c7f360e372cf3a08ba",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop61-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop61-128.webp",
         "bytes": 6070,
         "sha256": "76ac81fcc96aaf6171e65ef90d36628b435c60cd7996919dc987996b7dd630ef",
         "width": 128,
@@ -1259,14 +1259,14 @@
         "y": 45
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop62.webp",
-        "bytes": 143638,
-        "sha256": "a2c60b316e757d8374de813e2652eca2033c9b339a17c15a6007cc4fd1e20a4b",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop62.webp",
+        "bytes": 37016,
+        "sha256": "a825bb45c7e8815cc0fb4b78d722bc00c8164deca54b88598eece7af7887f626",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop62-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop62-128.webp",
         "bytes": 5872,
         "sha256": "a181cafc3da096f38ee153ba38613e49263901f01f9e5ccf49938b5474853a0b",
         "width": 128,
@@ -1283,14 +1283,14 @@
         "y": 33
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop63.webp",
-        "bytes": 119564,
-        "sha256": "b1208623be84f86577a2dee474d71279b70e763a4371fef0bfe677131b0bac4c",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop63.webp",
+        "bytes": 33206,
+        "sha256": "0ec8aa5b8b487ca1acc589edbc84f03132b33a361081b125e9661da0621e9f4d",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop63-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop63-128.webp",
         "bytes": 5366,
         "sha256": "c9989b063a88ee21e5670ead6145e64206e92a79d6dacdfed4935221da517ffd",
         "width": 128,
@@ -1307,14 +1307,14 @@
         "y": 51
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop64.webp",
-        "bytes": 163866,
-        "sha256": "26c1b5ec35ab6026b8ae59edd17e480464aeb0f2e01b9a4dcbf9c0ea04234509",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop64.webp",
+        "bytes": 48098,
+        "sha256": "b134a2165e44816bf33feb9542a90e3d257210508f86af31555e1b93d31220a0",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop64-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop64-128.webp",
         "bytes": 7112,
         "sha256": "c4a1a55314e3e894a6d02d7177efc1e16632c31600fdb0c97a2e4f24ca517799",
         "width": 128,
@@ -1331,14 +1331,14 @@
         "y": 42
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop65.webp",
-        "bytes": 189802,
-        "sha256": "1bb9454afde5cec15ab62ecb252d1e8ff2204825b1acfbe9741f912f7c2fb223",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop65.webp",
+        "bytes": 45372,
+        "sha256": "8102a9abf7eb314499d5f5da4850772d15cd20267df7e7b01cc79a0ce26507c4",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop65-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop65-128.webp",
         "bytes": 6324,
         "sha256": "11aa4cf04bc24ee13f84b920230b7fe7f927152ebbf848b904324cae460a1ade",
         "width": 128,
@@ -1355,14 +1355,14 @@
         "y": 45
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop66.webp",
-        "bytes": 178452,
-        "sha256": "b4ac377cf9880b19f229444d3872d0ef8186bdec38fe1ff48421f3a191a287ac",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop66.webp",
+        "bytes": 49990,
+        "sha256": "864f098f87e82cee4de067c55bc7c76bfaaa53f0f2ddca6b2c6040c71b0ced2d",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop66-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop66-128.webp",
         "bytes": 7716,
         "sha256": "3491057a9d390a5ba98908f4d3dc3033524fac9197676ef0f8ce4eccf2eb4663",
         "width": 128,
@@ -1379,14 +1379,14 @@
         "y": 58
       },
       "square": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop67.webp",
-        "bytes": 133054,
-        "sha256": "9efb0543214bcb0a86162b514333428058dc53fc87187631265b43247431ecc7",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop67.webp",
+        "bytes": 39154,
+        "sha256": "7b28d17fc12ce009ba38747223ffee1abfbef1617583c545e595227df7e86398",
         "width": 384,
         "height": 384
       },
       "thumb": {
-        "path": "/images/agents/2026-10-09/IconRoleCrop67-128.webp",
+        "path": "/images/agents/2026-10-12-coldload/IconRoleCrop67-128.webp",
         "bytes": 5794,
         "sha256": "988d3242e9f4aaa172c24b5431f058c5a84213b81efe96a6cd65dec77bd067ea",
         "width": 128,
@@ -1399,7 +1399,7 @@
       "stem": "IconPhysical",
       "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconPhysical.webp",
       "file": {
-        "path": "/images/classifications/2026-10-09/IconPhysical.webp",
+        "path": "/images/classifications/2026-10-12-coldload/IconPhysical.webp",
         "bytes": 682,
         "sha256": "2f03984d9894bb23b5c485291d270415dd765111deed42ad9b3ab18727355f86",
         "width": 62,
@@ -1410,7 +1410,7 @@
       "stem": "IconFire",
       "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconFire.webp",
       "file": {
-        "path": "/images/classifications/2026-10-09/IconFire.webp",
+        "path": "/images/classifications/2026-10-12-coldload/IconFire.webp",
         "bytes": 944,
         "sha256": "e5fc2bdcb529707d4a96935a2f960c8167cac5600221581291a801c117ce1d73",
         "width": 64,
@@ -1421,7 +1421,7 @@
       "stem": "IconIce",
       "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconIce.webp",
       "file": {
-        "path": "/images/classifications/2026-10-09/IconIce.webp",
+        "path": "/images/classifications/2026-10-12-coldload/IconIce.webp",
         "bytes": 712,
         "sha256": "db7330aba9de3fcad4c62e3af239faf1f2efd139b0dc0ed5b71c16c30f9a8084",
         "width": 64,
@@ -1432,7 +1432,7 @@
       "stem": "IconElectric",
       "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconElectric.webp",
       "file": {
-        "path": "/images/classifications/2026-10-09/IconElectric.webp",
+        "path": "/images/classifications/2026-10-12-coldload/IconElectric.webp",
         "bytes": 814,
         "sha256": "88e4540e78731efa530a264d59a9575d4b29baf43f93636e3c19e7e9dc342ec9",
         "width": 63,
@@ -1443,7 +1443,7 @@
       "stem": "IconWind",
       "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconWind.webp",
       "file": {
-        "path": "/images/classifications/2026-10-09/IconWind.webp",
+        "path": "/images/classifications/2026-10-12-coldload/IconWind.webp",
         "bytes": 1110,
         "sha256": "9b6117c80c8ce94234619ae3e4ae2ca336d060e5d2e338a6930e5eebe8bbb75f",
         "width": 60,
@@ -1454,7 +1454,7 @@
       "stem": "IconEther",
       "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconEther.webp",
       "file": {
-        "path": "/images/classifications/2026-10-09/IconEther.webp",
+        "path": "/images/classifications/2026-10-12-coldload/IconEther.webp",
         "bytes": 714,
         "sha256": "73cb5fa6df0b78148f1947e4c5b90e0b544d3e1111acfdc8288dac90901555fb",
         "width": 62,
@@ -1465,7 +1465,7 @@
       "stem": "IconLumiflux",
       "sourceUrl": "https://i.gachabase.net/WZ6dz2m66KusU0_Ir9Fjrtp9kP47RTv9U45GZPL33f8/q:50/f:webp/plain/zzz/assets/1ed527ad8b2d3f7015071c429a92c3ae.png",
       "file": {
-        "path": "/images/classifications/2026-10-09/IconLumiflux.webp",
+        "path": "/images/classifications/2026-10-12-coldload/IconLumiflux.webp",
         "bytes": 804,
         "sha256": "971279cbe726e11aa99df68ba4583ee988d47400709174cd79375f7ebf76ecdd",
         "width": 60,
@@ -1476,7 +1476,7 @@
       "stem": "IconAttackType",
       "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconAttackType.webp",
       "file": {
-        "path": "/images/classifications/2026-10-09/IconAttackType.webp",
+        "path": "/images/classifications/2026-10-12-coldload/IconAttackType.webp",
         "bytes": 4146,
         "sha256": "e3e74f82a8a1f27b17756298af4c3cfcc100269686aab84c23d8970e5579ba3e",
         "width": 54,
@@ -1487,7 +1487,7 @@
       "stem": "IconStun",
       "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconStun.webp",
       "file": {
-        "path": "/images/classifications/2026-10-09/IconStun.webp",
+        "path": "/images/classifications/2026-10-12-coldload/IconStun.webp",
         "bytes": 1730,
         "sha256": "0276e5369cbd39ec7a62cfd999c45dc56f7c9dd84290c1c0f8d8358390161cce",
         "width": 59,
@@ -1498,7 +1498,7 @@
       "stem": "IconAnomaly",
       "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconAnomaly.webp",
       "file": {
-        "path": "/images/classifications/2026-10-09/IconAnomaly.webp",
+        "path": "/images/classifications/2026-10-12-coldload/IconAnomaly.webp",
         "bytes": 1598,
         "sha256": "0a5d750940934db65eb310ea27172a4e1c4f92d0696ab8dda4c84aa066ee745e",
         "width": 58,
@@ -1509,7 +1509,7 @@
       "stem": "IconSupport",
       "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconSupport.webp",
       "file": {
-        "path": "/images/classifications/2026-10-09/IconSupport.webp",
+        "path": "/images/classifications/2026-10-12-coldload/IconSupport.webp",
         "bytes": 1554,
         "sha256": "de800d47e164dace239bda557bb7c9a9277e2439e5f5ee5c7e4c2eeb4875be2c",
         "width": 54,
@@ -1520,7 +1520,7 @@
       "stem": "IconDefense",
       "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconDefense.webp",
       "file": {
-        "path": "/images/classifications/2026-10-09/IconDefense.webp",
+        "path": "/images/classifications/2026-10-12-coldload/IconDefense.webp",
         "bytes": 1554,
         "sha256": "01d1612831393d25f643d7ce391a752101ddff5beea0536b0231b1723d844255",
         "width": 53,
@@ -1531,7 +1531,7 @@
       "stem": "IconRupture",
       "sourceUrl": "https://static.nanoka.cc/assets/zzz/IconRupture.webp",
       "file": {
-        "path": "/images/classifications/2026-10-09/IconRupture.webp",
+        "path": "/images/classifications/2026-10-12-coldload/IconRupture.webp",
         "bytes": 1610,
         "sha256": "a68a64222c8ecffdbfab70054adff86e2d1577518ccc60619aa5f93f45c22bb3",
         "width": 55,

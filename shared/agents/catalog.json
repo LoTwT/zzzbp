@@ -8,7 +8,7 @@
     "snapshotId": "sha256:ee99ec1e02f16aaef496dbdcb42d6bb20c2b0c7022ad9bf76cfa541daa9f41fe"
   },
   "imageAssets": {
-    "revision": "2026-10-09",
+    "revision": "2026-10-12-coldload",
     "legacyCircleFileNames": [
       "IconRoleCircle01.webp",
       "IconRoleCircle05.webp",

@@ -24,7 +24,7 @@ import { roomStateSchema, type RoomState } from "../../shared/room";
 const PINNED_AGENT_DATA_VERSION = "0.2.1";
 
 /** 固定的图片资源修订：更新图片或裁切校准时需有意识地同步更新本常量。 */
-const PINNED_IMAGE_ASSETS_REVISION = "2026-10-09";
+const PINNED_IMAGE_ASSETS_REVISION = "2026-10-12-coldload";
 
 /** 构造可直接通过校验的最小目录，用于失败输入用例的基底。 */
 function minimalCatalog(): AgentCatalogData {
