@@ -164,13 +164,57 @@ export async function joinRoomViaUi(
   await ctx.page.getByRole("heading", { name: "进入房间" }).waitFor({ state: "detached" });
 }
 
-/** 房主面板：保存一队队名（队名行内第 N 个「保存」按钮）。 */
+/**
+ * 房主面板：保存一队队名并等待权威结论（行内「保存」按钮按队伍输入框的
+ * 同级行锚定，不用「保存」文案 + nth 定位：pending 期间文案变为
+ * 「保存中…」，按文案定位会错位到另一行）。
+ *
+ * setTeamName 以 expectedRevision 严格一致为前置条件：房主页已应用视图
+ * 滞后于服务端时（join/presence 递增与面板操作竞态，CI 负载拉宽窗口），
+ * 命令被设计性拒绝（STALE_REVISION「页面状态已更新，请重试」），草稿与
+ * 输入保留、按钮可重按。助手必须等本次保存的权威结算：成功 = 行内无
+ * 错误提示且按钮回到禁用（草稿已与权威一致）；可重试失败按提示的用户
+ * 语义重按保存（有界）；其他失败（校验错误等测试数据问题）直接抛出。
+ */
 export async function saveTeamName(hostPage: Page, team: "A" | "B", name: string): Promise<void> {
   await hostPage.fill(`#team-name-${team}`, name);
-  await panel(hostPage)
-    .getByRole("button", { name: "保存", exact: true })
-    .nth(team === "A" ? 0 : 1)
-    .click();
+  const deadline = Date.now() + 20_000;
+  for (;;) {
+    await hostPage.locator(`#team-name-${team} ~ button`).click();
+    // waitForFunction 返回 JSHandle：jsonValue 取回结算结果对象。
+    const settled = (await (
+      await hostPage.waitForFunction(
+        (teamId) => {
+          const input = document.querySelector(`#${teamId}`);
+          if (!(input instanceof HTMLInputElement)) return null;
+          const group = input.parentElement?.parentElement ?? null;
+          const buttons = [...(group?.querySelectorAll("button") ?? [])];
+          const save = buttons.find((button) => {
+            const label = (button.textContent ?? "").trim();
+            return label === "保存" || label === "保存中…";
+          });
+          if (save === undefined) return null;
+          const pending = (save.textContent ?? "").trim() === "保存中…";
+          const alert = group?.querySelector("p[role='alert']") ?? null;
+          if (pending) return null; // 本次保存尚未结算。
+          return {
+            ok: save.hasAttribute("disabled") && alert === null,
+            error: alert === null ? null : (alert.textContent ?? "").trim(),
+          };
+        },
+        `team-name-${team}`,
+        { timeout: 20_000, polling: 100 },
+      )
+    ).jsonValue()) as { ok: boolean; error: string | null } | null;
+    if (settled !== null && settled.ok) return;
+    const error = settled?.error ?? null;
+    if (error !== null && !error.includes("请重试") && !error.includes("连接中断")) {
+      throw new Error(`队名 ${team} 保存失败且不可重试：${error}`);
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`队名 ${team} 保存未在 20s 内收敛${error === null ? "" : `（${error}）`}`);
+    }
+  }
 }
 
 /** 房主面板：目标队伍的席位入口（空席「选择选手」，已有人「更换选手」）。 */

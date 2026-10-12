@@ -17,6 +17,7 @@ import {
   confirmButton,
   createRoomViaUi,
   expectDisabled,
+  expectEnabled,
   expectHidden,
   expectVisible,
   joinRoomViaUi,
@@ -737,3 +738,84 @@ test("筛选工具栏：分类图标加载失败时恢复可见分类文字且�
     await browser.close();
   }
 }, 240_000);
+
+/**
+ * 开局准备回归（2026-10 main CI ui-details 失败根因）：房主页「已应用
+ * 视图滞后于服务端 revision」时（join/presence 视图应用与面板操作竞态，
+ * CI 负载拉宽窗口），setTeamName 携带旧 revision 被设计性拒绝
+ * （STALE_REVISION，页面提示「页面状态已更新，请重试」，草稿保留）。
+ * saveTeamName 助手必须等待权威结论并按重试语义收敛；否则权威队名保持
+ * 为空，「开始 BP」被「队伍名未填写」blocker 永久禁用，测试在禁用按钮
+ * 上超时。
+ *
+ * 确定性构造（routeWebSocket 逐帧控制，替代时序碰运气）：
+ * 1. host 的 WS 走透传代理：首个服务端帧（首个视图快照）立即放行，
+ *    其余帧在扣留队列；
+ * 2. 先确认宿主区块渲染（首帧已应用、revision 为入房前快照），再加入
+ *    playerA——服务端 revision 递增，入房视图帧被代理扣留；
+ * 3. saveTeamName 发出的命令经代理透传到服务端（代理观察到命令才放行
+ *    扣留帧），命令携带的 expectedRevision 是扣留期间的旧快照——被拒
+ *    与页面/服务端的到达时机无关，完全确定。
+ */
+test("开局准备：视图应用滞后下连发队名保存按重试语义收敛可开局", async () => {
+  const browser = await chromium.launch();
+  try {
+    const host = await newRoomContext(browser, "host", { width: 1440, height: 900 });
+    const playerA = await newRoomContext(browser, "playerA", { width: 1024, height: 768 });
+
+    let sawFirstServerFrame = false;
+    let sawTeamNameSave = false;
+    const heldServerFrames: string[] = [];
+    const flushHeld = (ws: WebSocketRoute): void => {
+      for (const frame of heldServerFrames.splice(0)) ws.send(frame);
+    };
+    await host.page.routeWebSocket(/\/ws$/, (ws) => {
+      const server = ws.connectToServer();
+      ws.onMessage((data) => {
+        const text = typeof data === "string" ? data : data.toString("utf8");
+        if (text.includes('"setTeamName"')) {
+          sawTeamNameSave = true;
+          // 保存命令已从页面发出：放行扣留的入房视图帧（命令携带的旧 revision
+          // 在发送时已固定，随后的拒绝回执按到达顺序正常流动）。
+          flushHeld(ws);
+        }
+        server.send(data);
+      });
+      server.onMessage((data) => {
+        const text = typeof data === "string" ? data : data.toString("utf8");
+        if (!sawFirstServerFrame) {
+          sawFirstServerFrame = true;
+          ws.send(data); // 首个视图快照立即放行（入房前 revision）。
+          return;
+        }
+        if (sawTeamNameSave) {
+          ws.send(data);
+          return;
+        }
+        heldServerFrames.push(text); // 首帧之后、保存命令之前：全部扣留。
+      });
+    });
+
+    const roomUrl = await createRoomViaUi(host, "首版验收·收敛赛", "主办小鱼");
+    await openPanel(host.page);
+    // 宿主区块渲染 ⇔ 首帧已应用（revision 为入房前快照）。
+    await expectVisible(panel(host.page).getByText("比赛控制", { exact: true }));
+    await joinRoomViaUi(playerA, roomUrl, "选手甲");
+    await saveTeamName(host.page, "A", "甲队");
+    await saveTeamName(host.page, "B", "乙队");
+    await assignSeatViaUi(host.page, "A", "选手甲");
+    await assignSeatViaUi(host.page, "B", "主办小鱼");
+
+    // 队名与席位就绪后开始 BP 必须可用并可推进；助手未收敛时会被
+    // 「队伍名未填写」blocker 永久禁用（与本回归的受控时序等价的
+    // 2026-10 main CI 失败形态）。
+    await expectEnabled(host.page.getByRole("button", { name: "开始 BP", exact: true }));
+    await host.page.getByRole("button", { name: "开始 BP", exact: true }).click();
+    await closePanel(host.page);
+    await waitForStatus(playerA.page, "进行中");
+    assertNoPageErrors(host);
+    assertNoPageErrors(playerA);
+  } finally {
+    await browser.close();
+  }
+}, 180_000);
