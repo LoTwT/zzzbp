@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { useClipboard } from "@vueuse/core";
-import { ArrowLeft, Link2, SlidersHorizontal, X } from "@lucide/vue";
+import { ArrowLeft, SlidersHorizontal, X } from "@lucide/vue";
 import type { ArchiveSnapshot } from "../../../shared/contracts/records";
 import AgentStatusAvatar from "./AgentStatusAvatar.vue";
 import PickColumn from "./PickColumn.vue";
 import ResultExportActions from "./ResultExportActions.vue";
+import CopyRoomLink from "./CopyRoomLink.vue";
 import RoomHeader from "./RoomHeader.vue";
 import { usePanelDismiss } from "../../room/panel-dismiss";
 import { buildArchiveExportResult, exportResultFingerprint } from "../../room/result-export";
@@ -62,7 +62,6 @@ const expiryText = computed(() => formatRecordExpiry(props.record.expiresAt));
 const panelOpen = ref(false);
 const panelEntryEl = ref<HTMLElement | null>(null);
 const panelRootEl = ref<HTMLElement | null>(null);
-const { copy, copied } = useClipboard({ legacy: true });
 
 function openPanel(): void {
   panelOpen.value = true;
@@ -99,10 +98,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onWindowKeydown);
 });
-
-async function copyRecordLink(): Promise<void> {
-  await copy(window.location.href);
-}
 
 // ---- BP 结果导出（docs/specs/room-layout.md「BP 结果导出」）：直接导出
 // 保存的最后有效序列；完整/未完成记录都可导出，空槽由快照推导为未提交。
@@ -222,14 +217,7 @@ function recordSourceStaleness(captured: unknown): string | null {
               <!-- 显示与分享（布局固定九格竖排，无可切换项）。 -->
               <section class="flex flex-col gap-2" aria-label="显示与分享">
                 <h4 class="text-xs font-semibold tracking-wide text-(--text-muted)">显示与分享</h4>
-                <button
-                  type="button"
-                  class="flex items-center gap-2 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring hover:bg-(--surface-subtle)"
-                  @click="copyRecordLink"
-                >
-                  <Link2 class="size-4 text-(--text-muted)" aria-hidden="true" />
-                  {{ copied ? "已复制" : "复制房间链接" }}
-                </button>
+                <CopyRoomLink />
                 <!-- BP 结果导出：复制结果文本 / 下载结果图片（共用动作组件）。 -->
                 <ResultExportActions
                   :result="exportResult"
