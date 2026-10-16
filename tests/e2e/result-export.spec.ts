@@ -266,6 +266,10 @@ async function denyClipboardViaDom(page: Page, mode: "return-false" | "throw"): 
       configurable: true,
       value: () => Promise.reject(new DOMException("denied", "NotAllowedError")),
     });
+    Object.defineProperty(navigator.clipboard, "write", {
+      configurable: true,
+      value: () => Promise.reject(new DOMException("denied", "NotAllowedError")),
+    });
     Document.prototype.execCommand =
       m === "throw"
         ? () => {
@@ -285,6 +289,7 @@ async function restoreClipboardViaDom(page: Page): Promise<void> {
     w.__zzzbpClipboardDenied = false;
     // 实例上的遮蔽属性可删除，恢复原型上的真实 writeText。
     Reflect.deleteProperty(navigator.clipboard, "writeText");
+    Reflect.deleteProperty(navigator.clipboard, "write");
     if (w.__zzzbpDeniedExecCommand !== undefined) {
       Document.prototype.execCommand = w.__zzzbpDeniedExecCommand;
     }
@@ -1032,3 +1037,244 @@ test("记录页：完整/未完成导出、混合图片占位与剪贴板兜底�
     await browser.close();
   }
 }, 240_000);
+
+for (const surface of ["实时房间", "归档记录"] as const) {
+  test(`${surface}：房间链接复制真实反馈、手动兜底与异步生命周期`, async () => {
+    const browser = await chromium.launch();
+    try {
+      const ctx = await newRoomContext(browser, `link-${surface}`, { width: 1024, height: 768 });
+      await grantClipboard(ctx.context);
+      const page = ctx.page;
+      if (surface === "实时房间") {
+        await createRoomViaUi(ctx, "链接反馈赛", "房主");
+      } else {
+        const roomId = crypto.randomUUID();
+        await ctx.context.route(`**/api/rooms/${roomId}`, (route) =>
+          route.fulfill({
+            json: {
+              kind: "archived",
+              record: buildRecordSnapshot(roomId, "链接反馈赛", { A: "甲", B: "乙" }, 1),
+            },
+          }),
+        );
+        await page.goto(`${E2E_BASE_URL}/rooms/${roomId}`);
+        await page.getByText("只读记录 · 未完成", { exact: true }).waitFor();
+      }
+      const link = page.url();
+      const copyButton = () =>
+        panel(page).getByRole("button", { name: "复制房间链接", exact: true });
+      const copiedButton = () => panel(page).getByRole("button", { name: "已复制", exact: true });
+      await openPanel(page);
+      await copyButton().click();
+      await copiedButton().waitFor();
+      expect(await readClipboard(page)).toBe(link);
+
+      // 两条路径都失败，重复点击也只显示一个可手动复制且已全选的链接。
+      await closePanel(page);
+      await openPanel(page);
+      await denyClipboardViaDom(page, "return-false");
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await copyButton().click();
+        await panel(page).getByText("复制失败，请手动复制下方链接", { exact: true }).waitFor();
+        const fallback = panel(page).getByRole("textbox", { name: "房间链接", exact: true });
+        expect(await fallback.inputValue()).toBe(link);
+        await expect
+          .poll(() =>
+            fallback.evaluate((element) => {
+              const input = element as HTMLInputElement;
+              return (
+                document.activeElement === input &&
+                input.selectionStart === 0 &&
+                input.selectionEnd === input.value.length
+              );
+            }),
+          )
+          .toBe(true);
+        expect(await copiedButton().count()).toBe(0);
+        expect(await fallback.count()).toBe(1);
+        expect(await page.locator("textarea").count()).toBe(0);
+      }
+      await assertNoOverflow(page, `${surface} 链接兜底 1024×768`);
+      await restoreClipboardViaDom(page);
+
+      // 原生路径拒绝、真实 execCommand 成功。点击不聚焦按钮时也应恢复到触发按钮。
+      await closePanel(page);
+      await openPanel(page);
+      await page.evaluate(() => {
+        Object.defineProperty(navigator.clipboard, "writeText", {
+          configurable: true,
+          value: () => Promise.reject(new DOMException("denied", "NotAllowedError")),
+        });
+      });
+      await copyButton().evaluate((button) =>
+        button.addEventListener("mousedown", (event) => event.preventDefault(), { once: true }),
+      );
+      await copyButton().click();
+      await copiedButton().waitFor();
+      expect(await readClipboard(page)).toBe(link);
+      await expect
+        .poll(() => copiedButton().evaluate((button) => document.activeElement === button))
+        .toBe(true);
+      expect(await page.locator("textarea").count()).toBe(0);
+
+      // 延迟原生复制：busy 挡住重复派发；完成时保留用户主动选中的新控件焦点。
+      await closePanel(page);
+      await openPanel(page);
+      await page.evaluate(() => {
+        const probe = { calls: 0, legacy: 0, resolve: () => {}, reject: () => {} };
+        Object.assign(window, { __linkCopyProbe: probe });
+        Object.defineProperty(navigator.clipboard, "writeText", {
+          configurable: true,
+          value: () => {
+            probe.calls += 1;
+            return new Promise<void>((resolve, reject) => {
+              probe.resolve = resolve;
+              probe.reject = () => reject(new DOMException("denied", "NotAllowedError"));
+            });
+          },
+        });
+        const original = document.execCommand.bind(document);
+        Document.prototype.execCommand = (...args) => {
+          probe.legacy += 1;
+          return original(...args);
+        };
+      });
+      await copyButton().evaluate((button) => {
+        button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      await expectDisabled(panel(page).getByRole("button", { name: "正在复制链接…", exact: true }));
+      const close = panel(page).getByRole("button", { name: "关闭控制面板", exact: true });
+      await close.focus();
+      await page.evaluate(() => {
+        const w = window as typeof window & { __linkCopyProbe: { calls: number; resolve(): void } };
+        if (w.__linkCopyProbe.calls !== 1) throw new Error("复制被重复提交");
+        w.__linkCopyProbe.resolve();
+      });
+      await copiedButton().waitFor();
+      expect(await close.evaluate((button) => document.activeElement === button)).toBe(true);
+
+      // 卸载后 resolve/reject 都不得创建兜底、执行旧复制或抢回焦点。
+      for (const settlement of ["resolve", "reject"] as const) {
+        await closePanel(page);
+        await openPanel(page);
+        await copyButton().click();
+        await expectDisabled(
+          panel(page).getByRole("button", { name: "正在复制链接…", exact: true }),
+        );
+        await closePanel(page);
+        await page.evaluate(async (method) => {
+          const w = window as typeof window & {
+            __linkCopyProbe: { resolve(): void; reject(): void };
+          };
+          w.__linkCopyProbe[method]();
+          // 跨过本次 promise 的所有微任务与 Vue DOM 提交，不用固定 sleep 猜完成。
+          await new Promise(requestAnimationFrame);
+        }, settlement);
+        expect(
+          await page.evaluate(
+            () =>
+              (window as typeof window & { __linkCopyProbe: { legacy: number } }).__linkCopyProbe
+                .legacy,
+          ),
+        ).toBe(0);
+        expect(await page.locator("textarea").count()).toBe(0);
+        expect(await page.getByLabel("房间链接", { exact: true }).count()).toBe(0);
+        expect(
+          await page
+            .getByRole("button", { name: "控制面板", exact: true })
+            .evaluate((button) => document.activeElement === button),
+        ).toBe(true);
+        await openPanel(page);
+        await copyButton().waitFor();
+        expect(await copiedButton().count()).toBe(0);
+      }
+      expect(ctx.errors).toEqual([]);
+    } finally {
+      await browser.close();
+    }
+  });
+}
+
+test("永久挂起的同源图片在等待上限内以占位导出，并回收下载资源", async () => {
+  const browser = await chromium.launch();
+  const artifacts = makeArtifactsDir();
+  let hanging: HangHandle | null = null;
+  try {
+    const ctx = await newRoomContext(browser, "image-timeout", { width: 1440, height: 900 });
+    const page = ctx.page;
+    const roomId = crypto.randomUUID();
+    let record = buildRecordSnapshot(roomId, "图片等待上限", { A: "甲", B: "乙" }, 6);
+    await ctx.context.route(`**/api/rooms/${roomId}`, (route) =>
+      route.fulfill({ json: { kind: "archived", record } }),
+    );
+    await page.goto(`${E2E_BASE_URL}/rooms/${roomId}`);
+    await page.getByText("只读记录 · 未完成", { exact: true }).waitFor();
+    await openPanel(page);
+    await page.evaluate(() => {
+      const urls = new Set<string>();
+      Object.assign(window, { __exportUrls: urls });
+      const create = URL.createObjectURL.bind(URL);
+      const revoke = URL.revokeObjectURL.bind(URL);
+      URL.createObjectURL = (blob) => {
+        const url = create(blob);
+        urls.add(url);
+        return url;
+      };
+      URL.revokeObjectURL = (url) => {
+        urls.delete(url);
+        revoke(url);
+      };
+    });
+    // 第六步是选用的方图母图。请求确实到达后一直扣留，下载前绝不 release。
+    hanging = await hangAgentMasterImage(page, AGENTS[5]?.name ?? "");
+    const held = hanging;
+    const [download] = await Promise.all([
+      // 5 秒素材上限 + 编码/CI 调度余量；一小时变体必须在此失败，不能等其完成。
+      page.waitForEvent("download", { timeout: 10_000 }),
+      (async () => {
+        await panel(page).getByRole("button", { name: "下载结果图片", exact: true }).click();
+        await waitForHeld(held);
+      })(),
+    ]);
+    expect(held.held()).toBeGreaterThan(0);
+    const hungPng = join(artifacts.dir, "image-timeout.png");
+    await download.saveAs(hungPng);
+    await assertValidPng(browser, hungPng, "挂起图片占位");
+    await expectEnabled(panel(page).getByRole("button", { name: "下载结果图片", exact: true }));
+    expect(
+      await page.evaluate(
+        () => (window as typeof window & { __exportUrls: Set<string> }).__exportUrls.size,
+      ),
+    ).toBe(1);
+    await closePanel(page);
+    expect(
+      await page.evaluate(
+        () => (window as typeof window & { __exportUrls: Set<string> }).__exportUrls.size,
+      ),
+    ).toBe(0);
+    expect(await page.locator("a[download]").count()).toBe(0);
+    await held.release();
+    hanging = null;
+
+    // 与同一快照明确缺图的 PNG 对照，证明超时结果使用占位且保留其它内容。
+    record = {
+      ...record,
+      operations: record.operations.map((operation, index) =>
+        index === 5 ? { ...operation, agentAvatarUrl: null, agentAvatarCrop: null } : operation,
+      ),
+    };
+    await page.reload();
+    await openPanel(page);
+    const referenceDownload = page.waitForEvent("download");
+    await panel(page).getByRole("button", { name: "下载结果图片", exact: true }).click();
+    const referencePng = join(artifacts.dir, "image-missing-reference.png");
+    await (await referenceDownload).saveAs(referencePng);
+    expect((await readFile(hungPng)).equals(await readFile(referencePng))).toBe(true);
+    expect(ctx.errors).toEqual([]);
+  } finally {
+    await hanging?.release();
+    await browser.close();
+    if (artifacts.owned) rmSync(artifacts.dir, { recursive: true, force: true });
+  }
+});

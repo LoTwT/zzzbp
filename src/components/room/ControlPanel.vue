@@ -1,16 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import { useClipboard } from "@vueuse/core";
-import {
-  ArrowLeft,
-  ChevronRight,
-  ExternalLink,
-  Link2,
-  RotateCcw,
-  Undo2,
-  Users,
-  X,
-} from "@lucide/vue";
+import { ArrowLeft, ChevronRight, ExternalLink, RotateCcw, Undo2, Users, X } from "@lucide/vue";
 import type { BpTeam } from "../../../shared/bp/steps";
 import type { HostManagementView, ManagedMember } from "../../../shared/contracts/views";
 import { validateTeamName } from "../../lib/form-validation";
@@ -19,6 +9,7 @@ import { isHostManagementView, type RoomView } from "../../room/room-session";
 import type { RoomCatalogModel } from "../../room/room-catalog";
 import { buildLiveExportResult, exportResultFingerprint } from "../../room/result-export";
 import ResultExportActions from "./ResultExportActions.vue";
+import CopyRoomLink from "./CopyRoomLink.vue";
 import { TeamNameDraft } from "../../room/team-name-draft";
 import { pendingOperationText } from "../../room/operation-feedback";
 import { usePanelDismiss } from "../../room/panel-dismiss";
@@ -110,7 +101,6 @@ const teamDrafts = reactive<{ A: TeamNameDraft; B: TeamNameDraft }>({
 
 const isHost = computed(() => isHostManagementView(props.view));
 const hostView = computed(() => (isHostManagementView(props.view) ? props.view : null));
-const { copy, copied } = useClipboard({ legacy: true });
 
 // 面板根元素：打开时聚焦，返回焦点由父组件管理。
 const rootEl = ref<HTMLElement | null>(null);
@@ -356,10 +346,6 @@ function exportSourceStaleness(captured: unknown): string | null {
   if (captured === null || current === null) return "结果已变化，请重新导出";
   if (exportResultFingerprint(current) !== captured) return "结果已变化，请重新导出";
   return null;
-}
-
-async function copyRoomLink(): Promise<void> {
-  await copy(window.location.href);
 }
 
 function commandButtonState(
@@ -741,14 +727,7 @@ function seatRowButtonText(team: BpTeam, memberId: string): string {
           <ExternalLink class="size-4 text-(--text-muted)" aria-hidden="true" />
           打开展示页
         </a>
-        <button
-          type="button"
-          class="flex items-center gap-2 rounded-lg border border-(--border-default) px-3 py-2 text-sm font-medium focus-ring hover:bg-(--surface-subtle)"
-          @click="copyRoomLink"
-        >
-          <Link2 class="size-4 text-(--text-muted)" aria-hidden="true" />
-          {{ copied ? "已复制" : "复制房间链接" }}
-        </button>
+        <CopyRoomLink />
         <!-- BP 结果导出：复制结果文本 / 下载结果图片（共用动作组件）。 -->
         <ResultExportActions
           :result="exportResult"

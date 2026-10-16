@@ -1,4 +1,4 @@
-import { evictDurableObject } from "cloudflare:test";
+import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { agentCatalogData } from "../../shared/agents/catalog";
@@ -485,6 +485,69 @@ async function injectFillerReceipts(roomId: string, count: number): Promise<void
 }
 
 describe("operationId 持久化去重回执", () => {
+  it("基线旧字节回执跨实现重放：字段乱序仍幂等，真实载荷变化仍冲突", async () => {
+    const host = await createRoomViaHttp("旧回执兼容赛", "房主");
+    const client = await TestWsClient.connectMember(host.roomId, host.secret);
+    await client.next("hostView");
+    // ede0800 的固定旧格式字节（Astra canonical-baseline.json）；禁止用当前
+    // canonicalCommandJson 生成夹具，否则普通 JSON.stringify 变体也能自洽通过。
+    const legacyPayloadJson =
+      '{"expectedBpVersion":7,"expectedRevision":19,"operationId":"审查-\\"\\\\\\n-😀","team":"A","teamName":"中文😀队","type":"setTeamName"}';
+    const legacyCommand = JSON.parse(legacyPayloadJson) as Record<string, unknown>;
+    const operationId = String(legacyCommand.operationId);
+    const receipt = {
+      kind: "commandResult",
+      operationId,
+      ok: true,
+      error: null,
+      bpVersion: 7,
+      revision: 20,
+    };
+    try {
+      await runInDurableObject(
+        exports.Room.get(exports.Room.idFromName(host.roomId)),
+        (_room, state) => {
+          state.storage.transactionSync(() => {
+            state.storage.sql.exec("UPDATE room_meta SET bp_version = 7, revision = 20");
+            state.storage.sql.exec("UPDATE team_names SET name = ? WHERE team = 'A'", "中文😀队");
+            state.storage.sql.exec(
+              "INSERT INTO command_receipts (member_id, operation_id, payload_json, ok, error_code, error_message, bp_version, revision, created_at) VALUES (?, ?, ?, 1, NULL, NULL, 7, 20, ?)",
+              host.memberId,
+              operationId,
+              legacyPayloadJson,
+              "2026-10-15T00:00:00.000Z",
+            );
+          });
+        },
+      );
+      for (const payload of [
+        legacyCommand,
+        {
+          ...Object.fromEntries(Object.entries(legacyCommand).reverse()),
+          teamName: "  中文😀队  ",
+        },
+      ]) {
+        client.send(payload);
+        expect(await client.commandResult(operationId)).toEqual(receipt);
+      }
+      client.send({ ...legacyCommand, teamName: "不同队名" });
+      const conflict = await client.commandResult(operationId);
+      expect(conflict.ok).toBe(false);
+      expect(conflict.error?.code).toBe("OPERATION_ID_CONFLICT");
+      expect(
+        await queryRoomRows(host.roomId, "SELECT revision, bp_version FROM room_meta"),
+      ).toEqual([{ revision: 20, bp_version: 7 }]);
+      expect(
+        await queryRoomRows(host.roomId, "SELECT name FROM team_names WHERE team = 'A'"),
+      ).toEqual([{ name: "中文😀队" }]);
+      expect(await queryRoomRows(host.roomId, "SELECT payload_json FROM command_receipts")).toEqual(
+        [{ payload_json: legacyPayloadJson }],
+      );
+    } finally {
+      client.close();
+    }
+  });
+
   it("同一载荷重发返回原结果；同 ID 不同载荷被拒；键序不同不算不同载荷", async () => {
     const room = await startBpRoom("去重赛");
     const operationId = "dedup-team-name";

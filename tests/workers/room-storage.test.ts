@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { toAgentCatalog, toAgentDisplayLookup } from "../../shared/agents/catalog";
 import { agentCatalogSchema, type AgentCatalogData } from "../../shared/agents/schema";
 import { apiErrorResponseBodySchema, createRoomResponseSchema } from "../../shared/contracts/http";
+import type { Room } from "../../server/room";
+import { EMPTY_ROOM_RETENTION_MS } from "../../shared/contracts/records";
 import { ensureRoomSchema } from "../../server/persistence";
 
 // Workers 集成测试：房间 Durable Object 的 SQLite 持久化与固定目录。
@@ -62,7 +64,7 @@ function queryRows(
 async function businessTableNames(roomId: string): Promise<string[]> {
   const rows = await queryRows(
     roomId,
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'",
   );
   return rows.map((row) => String(row.name)).sort();
 }
@@ -546,5 +548,110 @@ describe("SQL 故障下的事务回滚", () => {
     expect(retry.headers.get("Set-Cookie")).not.toBeNull();
     expect(await queryRows(roomId, "SELECT COUNT(*) AS n FROM members")).toEqual([{ n: 2 }]);
     expect((await queryRows(roomId, "SELECT revision FROM room_meta"))[0]?.revision).toBe(1);
+  });
+});
+
+describe("建房 Alarm 故障边界", () => {
+  for (const fault of ["preset", "align"] as const) {
+    it(
+      fault === "preset"
+        ? "预设 Alarm 失败即拒绝建房，不留下业务表"
+        : "提交后 Alarm 对齐失败仍交付房间，保留持久兜底 Alarm",
+      async () => {
+        const roomId = `create-alarm-${fault}-${crypto.randomUUID()}`;
+        const stub = roomStub(roomId);
+        const input = {
+          roomId,
+          name: "建房故障验证",
+          hostMemberId: crypto.randomUUID(),
+          nickname: "房主",
+          credentialDigest: "a".repeat(64),
+          ruleVersion: "test-rule",
+          catalogJson: JSON.stringify(controlledCatalog("9.9.9-alarm", false)),
+        };
+        const observed = await runInDurableObject(stub, async (room: Room, state) => {
+          const original = state.storage.setAlarm.bind(state.storage);
+          let preset: number | null = null;
+          let injected = false;
+          state.storage.setAlarm = async (time) => {
+            const committed =
+              state.storage.sql
+                .exec("SELECT name FROM sqlite_master WHERE name = 'room_meta'")
+                .toArray().length > 0;
+            if (fault === "preset" || committed) {
+              injected = true;
+              throw new Error("injected create setAlarm failure");
+            }
+            // 模拟预设与事务创建时刻的间隔，保证后续确需对齐，不依赖毫秒竞态。
+            preset = Number(time) - 1000;
+            await original(preset);
+          };
+          try {
+            if (fault === "preset") {
+              await expect(room.createRoom(input)).rejects.toThrow(
+                "injected create setAlarm failure",
+              );
+            } else {
+              expect((await room.createRoom(input)).kind).toBe("created");
+            }
+            return { preset, injected, alarm: await state.storage.getAlarm() };
+          } finally {
+            state.storage.setAlarm = original;
+          }
+        });
+        expect(observed.injected).toBe(true);
+        if (fault === "preset") {
+          expect(await businessTableNames(roomId)).toEqual([]);
+          expect(observed.alarm).toBeNull();
+        } else {
+          expect(observed.preset).not.toBeNull();
+          expect(observed.alarm).toBe(observed.preset);
+          const rows = await queryRows(roomId, "SELECT name, created_at FROM room_meta");
+          expect(rows[0]?.name).toBe(input.name);
+          expect(observed.alarm!).toBeLessThanOrEqual(
+            Date.parse(String(rows[0]?.created_at)) + EMPTY_ROOM_RETENTION_MS,
+          );
+          await evictDurableObject(stub);
+          expect(await currentAlarm(roomId)).toBe(observed.preset);
+          expect((await roomStub(roomId).getRoomCatalog()).kind).toBe("catalog");
+        }
+      },
+    );
+  }
+});
+
+describe("高版本存储拒绝加载", () => {
+  it("schema 999 的读取与入房按 INTERNAL 拒绝，原数据与 Alarm 不被改写", async () => {
+    const { body } = await createRoomViaHttp("未来版本房");
+    const roomId = body.roomId;
+    await runInDurableObject(roomStub(roomId), (_room, state) => {
+      state.storage.sql.exec("UPDATE schema_meta SET version = 999 WHERE id = 1");
+    });
+    const storedRows = async () => {
+      const names = await businessTableNames(roomId);
+      return Object.fromEntries(
+        await Promise.all(
+          names.map(async (name) => [name, await queryRows(roomId, `SELECT * FROM "${name}"`)]),
+        ),
+      );
+    };
+    const before = await storedRows();
+    const alarm = await currentAlarm(roomId);
+    for (const request of [
+      new Request(`${BASE_URL}/api/rooms/${roomId}`),
+      new Request(`${BASE_URL}/api/rooms/${roomId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname: "不应写入" }),
+      }),
+    ]) {
+      const response = await exports.default.fetch(request);
+      expect(response.status).toBe(500);
+      expect(apiErrorResponseBodySchema.parse(await response.json()).error.code).toBe("INTERNAL");
+      expect(response.headers.has("Set-Cookie")).toBe(false);
+    }
+    expect(await storedRows()).toEqual(before);
+    expect(await queryRows(roomId, "SELECT version FROM schema_meta")).toEqual([{ version: 999 }]);
+    expect(await currentAlarm(roomId)).toBe(alarm);
   });
 });

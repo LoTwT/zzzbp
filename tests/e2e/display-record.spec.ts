@@ -106,6 +106,8 @@ function watchNetwork(page: Page, sink: Array<{ url: string; method: string }>):
  * 边界）无滚动溢出，网格与末卡片完整落在容器矩形内（±1px 取整容差）。
  */
 async function assertDisplayPoolFits(page: Page, label: string): Promise<void> {
+  // WS 视图与九格占位可能先到；等 /catalog 的全部代理人实际渲染后再量几何。
+  await expectCount(page.locator('ul[aria-label="代理人池"] > li'), AGENTS.length);
   const geometry = await page.evaluate(() => {
     const section = document.querySelector('section[aria-label="代理人池"]');
     const container = section?.firstElementChild;

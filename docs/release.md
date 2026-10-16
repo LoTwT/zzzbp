@@ -73,13 +73,14 @@
 |---|---|---|
 | 26 步顺序、代理人互斥、预选/确认/撤回/重开（[单局常规 BP](specs/single-game-bp.md)） | `tests/rules/bp-*`、`tests/workers/room-commands` | [mainline.spec.ts](../tests/e2e/mainline.spec.ts)：完整 26 步、公开预选与双页面同步、撤回/重开 |
 | 身份、Cookie、权限、房主兼任、换人（[房间角色](specs/room-roles.md)） | `tests/workers/rooms`、`room-websocket`、`room-presence` | [mainline.spec.ts](../tests/e2e/mainline.spec.ts)、[resilience.spec.ts](../tests/e2e/resilience.spec.ts)：隔离身份、权限、换人与兼任 |
-| 多页面、掉线暂停、重连核对（[房间角色](specs/room-roles.md)、[单局常规 BP](specs/single-game-bp.md)） | `tests/web/room-session`、`tests/workers/room-presence`、`room-commands` | [resilience.spec.ts](../tests/e2e/resilience.spec.ts)：部分页面关闭不掉线、末页关闭暂停、同 operationId 回执丢失重放只推进一次 |
+| 多页面、掉线暂停、重连核对（[房间角色](specs/room-roles.md)、[单局常规 BP](specs/single-game-bp.md)） | `tests/web/room-session`、`tests/workers/room-presence`、`room-commands` | [resilience.spec.ts](../tests/e2e/resilience.spec.ts)：部分页面关闭不掉线、末页关闭暂停、同 operationId 回执丢失重放只推进一次；[room-navigation.spec.ts](../tests/e2e/room-navigation.spec.ts)：跨房间历史导航的画面、写入目标与旧连接清理（含展示页） |
 | 桌面布局、筛选与控制面板（[房间布局](specs/room-layout.md)） | `tests/web/pick-layout`、`host-panels`、`operation-feedback`、`form-validation`、`team-name-draft` | [ui-details.spec.ts](../tests/e2e/ui-details.spec.ts)：身份提示、长队名、面板滚动/关闭/焦点、外部长按与拖动不穿透、分类图标失败；队名保存竞态回归 |
 | 本机最近参与与清单管理（[最近参与](specs/room-layout.md#最近参与)） | `tests/web/room-history`、`history-status` | [home-history.spec.ts](../tests/e2e/home-history.spec.ts)：记录时机、匿名状态读取、状态分流、移除/清空、存储不可用与迟到响应 |
-| 独立展示页（[实时展示页](specs/room-layout.md#实时展示页)） | `tests/web/display-*`、`tests/workers/room-websocket` | [display-record.spec.ts](../tests/e2e/display-record.spec.ts)：全量同屏几何断言、仅展示 WS、零 POST/零身份 Cookie |
+| 独立展示页（[实时展示页](specs/room-layout.md#实时展示页)） | `tests/web/display-*`、`tests/workers/room-websocket` | [display-record.spec.ts](../tests/e2e/display-record.spec.ts)：等待目录实际渲染后的全量同屏几何断言、仅展示 WS、零 POST/零身份 Cookie |
 | 归档、只读记录、12 小时与 90 天（[房间保留与只读记录](specs/room-roles.md#房间保留与只读记录)） | `tests/workers/room-lifecycle`、`room-presence`：受控时间戳 + 真实 Alarm、跨 await 到期重裁决、故障补偿与终态收口；`tests/web/record-view` | [display-record.spec.ts](../tests/e2e/display-record.spec.ts)：合法快照注入、完成/未完成记录、到期信息、零业务 WS/POST、终态分流与真实 404 |
 | 数据目录、同源图片与旧快照（[代理人数据接入](specs/agent-data.md)） | `tests/rules/agent-catalog`、`agent-image-assets`、`agent-image-import`、`tests/web/record-view` | [mainline.spec.ts](../tests/e2e/mainline.spec.ts)：缺上游 `avatarPath` 的新目录代理人纳入主线，验证名称与流程；[display-record.spec.ts](../tests/e2e/display-record.spec.ts)：旧图加载失败占位；[result-export.spec.ts](../tests/e2e/result-export.spec.ts)：混合图片占位下导出；图片缓存/冷加载、旧修订兼容及数据升级演练见下文专项证据 |
-| 文本/PNG 结果导出（[BP 结果导出](specs/room-layout.md#bp-结果导出)） | `tests/web/result-export` | [result-export.spec.ts](../tests/e2e/result-export.spec.ts)：多角色实时导出、完整/未完成归档、混合图片占位、剪贴板降级与焦点、内容变化/关闭面板/离页的异步取消 |
+| 文本/PNG 结果导出（[BP 结果导出](specs/room-layout.md#bp-结果导出)） | `tests/web/result-export` | [result-export.spec.ts](../tests/e2e/result-export.spec.ts)：多角色实时导出、完整/未完成归档、混合图片占位、永久挂起素材的有界导出与资源回收、剪贴板降级与焦点、实时/归档链接复制失败兜底、内容变化/关闭面板/离页的异步取消 |
+| 持久化故障与升级兼容（[架构与协议](architecture.md)） | `tests/workers/room-storage`：建房 Alarm 预设/对齐故障、高版本 schema 拒绝且不改写；`tests/workers/room-commands`：固定旧字节回执重放、字段乱序幂等与不同载荷冲突 | 真实 workerd + SQLite 与 WS；不代表真实云端跨版本升级演练 |
 | 资源与预算估算（[Cloudflare 部署与预算评估](specs/cloudflare-budget.md)） | `tests/measure/room-resources`（按需运行） | 本地基准数字见预算文档 |
 
 首版早期浏览器验收属于一次性证据，不作为维护入口；其中仍有效的验收事实（多身份 Cookie
